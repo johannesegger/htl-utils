@@ -8,17 +8,23 @@ open Saturn
 open Shared
 
 open Giraffe.Serialization
+open System.Diagnostics
 
 let publicPath = Path.GetFullPath "../Client/public"
 let port = 8085us
 
-let getInitCounter () : Task<Counter> = task { return 42 }
+let sendWakeUpCommand() = task {
+    let p = Process.Start("wakeonlan", "20:CF:30:81:37:03")
+    p.WaitForExit()
+    if p.ExitCode <> 0 then ()
+    else failwith "Error while running `wakeonlan`"
+}
 
 let webApp = scope {
-    get "/api/init" (fun next ctx ->
+    get "/api/send-wakeup-command" (fun next ctx ->
         task {
-            let! counter = getInitCounter()
-            return! Successful.OK counter next ctx
+            do! sendWakeUpCommand()
+            return! Successful.OK () next ctx
         })
 }
 

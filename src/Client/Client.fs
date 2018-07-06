@@ -7,90 +7,60 @@ open Fable.Helpers.React
 open Fable.Helpers.React.Props
 open Fable.PowerPack.Fetch
 
-open Shared
-
 open Fulma
 
+type WakeUpCommandResponse =
+    | Succeeded
+    | Failed of string
 
-type Model = Counter option
+type Model = {
+    WakeUpCommandResponse: WakeUpCommandResponse option
+}
 
 type Msg =
-| Increment
-| Decrement
-| Init of Result<Counter, exn>
+    | SendWakeUpCommand
+    | SendWakeUpResponse of Result<unit, exn>
 
+let init() =
+    { WakeUpCommandResponse = None }, Cmd.none
 
-
-let init () : Model * Cmd<Msg> =
-    let model = None
-    let cmd =
+let update msg model =
+    match msg with
+    | SendWakeUpCommand ->
+        model,
         Cmd.ofPromise
-            (fetchAs<int> "/api/init")
+            (fetchAs<unit> "/api/send-wakeup-command")
             []
-            (Ok >> Init)
-            (Error >> Init)
-    model, cmd
-
-let update (msg : Msg) (model : Model) : Model * Cmd<Msg> =
-    let model' =
-        match model,  msg with
-        | Some x, Increment -> Some (x + 1)
-        | Some x, Decrement -> Some (x - 1)
-        | None, Init (Ok x) -> Some x
-        | _ -> None
-    model', Cmd.none
-
-let safeComponents =
-    let intersperse sep ls =
-        List.foldBack (fun x -> function
-            | [] -> [x]
-            | xs -> x::sep::xs) ls []
-
-    let components =
-        [
-            "Saturn", "https://saturnframework.github.io/docs/"
-            "Fable", "http://fable.io"
-            "Elmish", "https://elmish.github.io/elmish/"
-            "Fulma", "https://mangelmaxime.github.io/Fulma"
-        ]
-        |> List.map (fun (desc,link) -> a [ Href link ] [ str desc ] )
-        |> intersperse (str ", ")
-        |> span [ ]
-
-    p [ ]
-        [ strong [] [ str "SAFE Template" ]
-          str " powered by: "
-          components ]
-
-let show = function
-| Some x -> string x
-| None -> "Loading..."
-
-let button txt onClick =
-    Button.button
-        [ Button.IsFullWidth
-          Button.Color IsPrimary
-          Button.OnClick onClick ]
-        [ str txt ]
+            (Ok >> SendWakeUpResponse)
+            (Error >> SendWakeUpResponse)
+    | SendWakeUpResponse (Error e) ->
+        { model with
+            WakeUpCommandResponse = Failed e.Message |> Some },
+        Cmd.none
+    | SendWakeUpResponse (Ok ()) ->
+        { model with
+            WakeUpCommandResponse = Some Succeeded },
+        Cmd.none
 
 let view (model : Model) (dispatch : Msg -> unit) =
     div []
-        [ Navbar.navbar [ Navbar.Color IsPrimary ]
+        [ Navbar.navbar [ Navbar.Color IsWarning ]
             [ Navbar.Item.div [ ]
-                [ Heading.h2 [ ]
-                    [ str "SAFE Template" ] ] ]
+                [ Heading.h2 [ Heading.Props [ Style [ FontVariant "small-caps" ] ] ]
+                    [ str "Eggj utils" ] ] ]
 
-          Container.container []
-              [ Content.content [ Content.Modifiers [ Modifier.TextAlignment (Screen.All, TextAlignment.Centered) ] ]
-                    [ Heading.h3 [] [ str ("Press buttons to manipulate counter: " + show model) ] ]
-                Columns.columns []
-                    [ Column.column [] [ button "-" (fun _ -> dispatch Decrement) ]
-                      Column.column [] [ button "+" (fun _ -> dispatch Increment) ] ] ]
-
-          Footer.footer [ ]
-                [ Content.content [ Content.Modifiers [ Modifier.TextAlignment (Screen.All, TextAlignment.Centered) ] ]
-                    [ safeComponents ] ] ]
-
+          Container.container [ Container.Props [ Style [ MarginTop "1rem" ] ] ]
+              [ Content.content [ ]
+                  [ Button.list [ Button.List.IsCentered ]
+                      [ Button.button
+                            [ Button.IsLink
+                              Button.OnClick (fun _evt -> dispatch SendWakeUpCommand)
+                            ]
+                            [ str "Wake up PC-EGGJ" ]
+                      ]
+                  ]
+              ]
+        ]
 
 #if DEBUG
 open Elmish.Debug
