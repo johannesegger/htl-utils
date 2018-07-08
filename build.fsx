@@ -100,7 +100,7 @@ Target.create "Bundle" (fun _ ->
   let publicDir = clientDir </> "public"
   let imageDir  = clientDir </> "Images"
 
-  let publishArgs = sprintf "publish -c Release -o \"%s\"" serverDir
+  let publishArgs = sprintf "publish -r linux-arm -c Release -o \"%s\"" serverDir
   runDotNet publishArgs serverPath
 
   !! "src/Client/public/**/*.*" |> Shell.copyFiles publicDir
