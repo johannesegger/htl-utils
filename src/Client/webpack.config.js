@@ -65,7 +65,24 @@ module.exports = {
                     loader: 'babel-loader',
                     options: babelOptions
                 },
-            }
+            },
+            {
+                test: /\.s(a|c)ss$/,
+                use: [
+                  "style-loader",
+                  "css-loader",
+                  "sass-loader"
+                ]
+              },
+              {
+                test: /\.(eot|svg|ttf|woff|woff2)(\?|$)/,
+                use: {
+                  loader: 'url-loader',
+                  options: {
+                    name: '[path][name].[ext]'
+                  }
+                }
+              }
         ]
     },
     plugins: isProduction ? [] : [

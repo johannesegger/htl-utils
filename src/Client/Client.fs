@@ -3,11 +3,15 @@ module Client
 open Elmish
 open Elmish.React
 
+open Fable.Core.JsInterop
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
 open Fable.PowerPack.Fetch
 
 open Fulma
+open Fulma.FontAwesome
+
+importAll "./Styles/main.sass"
 
 type WakeUpCommandResponse =
     | Succeeded
@@ -56,7 +60,10 @@ let view (model : Model) (dispatch : Msg -> unit) =
                             [ Button.IsLink
                               Button.OnClick (fun _evt -> dispatch SendWakeUpCommand)
                             ]
-                            [ str "Wake up PC-EGGJ" ]
+                            [ Icon.faIcon [ Icon.Size IsSmall ]
+                                [ Fa.icon Fa.I.Bed ]
+                              span [] [ str "Wake up PC-EGGJ" ]
+                            ]
                       ]
                   ]
               ]
