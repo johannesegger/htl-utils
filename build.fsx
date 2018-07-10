@@ -11,8 +11,6 @@ open System
 open Fake.Core
 open Fake.DotNet
 open Fake.IO
-open Fake.IO.FileSystemOperators
-open Fake.IO.Globbing.Operators
 
 let serverPath = Path.getFullName "./src/Server"
 let clientPath = Path.getFullName "./src/Client"
@@ -94,34 +92,25 @@ Target.create "Run" (fun _ ->
 )
 
 Target.create "Bundle" (fun _ ->
-  let serverDir = deployDir </> "Server"
-  let clientDir = deployDir </> "Client"
-  
-  let publicDir = clientDir </> "public"
-  let imageDir  = clientDir </> "Images"
+    let serverDir = Path.combine deployDir "Server"
+    let clientDir = Path.combine deployDir "Client"
+    let publicDir = Path.combine clientDir "public"
 
-  let publishArgs = sprintf "publish -c Release -o \"%s\"" serverDir
-  runDotNet publishArgs serverPath
+    let publishArgs = sprintf "publish -c Release -o \"%s\"" serverDir
+    runDotNet publishArgs serverPath
 
-  !! "src/Client/public/**/*.*" |> Shell.copyFiles publicDir
-  !! "src/Client/Images/**/*.*" |> Shell.copyFiles imageDir
-
-  !! "src/Client/index.html"
-  ++ "src/Client/*.css"
-  |> Shell.copyFiles clientDir 
+    Shell.copyDir publicDir "src/Client/public" FileFilter.allFiles
 )
 
-let dockerUser = "htlvb"
-let dockerImageName = "wake-up"
-
-let dockerFullName = sprintf "%s/%s" dockerUser dockerImageName
 
 Target.create "Docker" (fun _ ->
-  let buildArgs = sprintf "build -t %s ." dockerFullName
-  runTool "docker" buildArgs "."
+    let imageName = "johannesegger/htl-utils"
 
-  let tagArgs = sprintf "tag %s %s" dockerFullName dockerFullName
-  runTool "docker" tagArgs "."
+    let buildArgs = sprintf "build -t %s ." imageName
+    runTool "docker" buildArgs "."
+
+    let tagArgs = sprintf "tag %s %s" imageName imageName
+    runTool "docker" tagArgs "."
 )
 
 open Fake.Core.TargetOperators
