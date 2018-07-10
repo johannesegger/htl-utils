@@ -5,6 +5,7 @@ group Server
     nuget FSharp.Core
     nuget Saturn
     nuget Fable.JsonConverter
+    nuget WakeOnLan
 
 group Client
     storage: none
