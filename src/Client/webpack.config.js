@@ -69,20 +69,27 @@ module.exports = {
             {
                 test: /\.s(a|c)ss$/,
                 use: [
-                  "style-loader",
-                  "css-loader",
-                  "sass-loader"
+                    "style-loader",
+                    "css-loader",
+                    "sass-loader"
                 ]
-              },
-              {
+            },
+            {
+                test: /\.css$/,
+                use: [
+                    "style-loader",
+                    "css-loader"
+                ]
+            },
+            {
                 test: /\.(eot|svg|ttf|woff|woff2)(\?|$)/,
                 use: {
-                  loader: 'url-loader',
-                  options: {
-                    name: '[path][name].[ext]'
-                  }
+                    loader: 'url-loader',
+                    options: {
+                        name: '[path][name].[ext]'
+                    }
                 }
-              }
+            }
         ]
     },
     plugins: isProduction ? [] : [

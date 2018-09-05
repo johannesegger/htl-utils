@@ -16,6 +16,7 @@ group Client
     nuget Fable.Elmish.React
     nuget Fable.Elmish.HMR
     nuget Fulma
+    nuget Thoth.Elmish.Toast
 
     clitool dotnet-fable
 
@@ -27,4 +28,3 @@ group Build
     nuget Fake.Core.Target
     nuget Fake.DotNet.Cli
     nuget Fake.IO.FileSystem
-

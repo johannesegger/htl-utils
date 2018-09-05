@@ -2,14 +2,16 @@ module Client
 
 open Elmish
 open Elmish.React
-
+open Fable.Core
 open Fable.Core.JsInterop
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
+open Fable.Import
+open Fable.PowerPack
 open Fable.PowerPack.Fetch
-
 open Fulma
 open Fulma.FontAwesome
+open Thoth.Elmish
 
 importAll "./Styles/main.sass"
 
@@ -17,34 +19,56 @@ type WakeUpCommandResponse =
     | Succeeded
     | Failed of string
 
-type Model = {
-    WakeUpCommandResponse: WakeUpCommandResponse option
-}
+type Model = unit
 
 type Msg =
     | SendWakeUpCommand
     | SendWakeUpResponse of Result<unit, exn>
 
 let init() =
-    { WakeUpCommandResponse = None }, Cmd.none
+    (), Cmd.none
+
+[<PassGenerics>]
+let private fetchAs<'a> url init =
+    GlobalFetch.fetch(RequestInfo.Url url, requestProps init)
+    |> Promise.bind (fun response ->
+        if response.Ok then
+            Promise.lift response
+        else promise {
+            let! text = response.text()
+            return failwith text
+        })
+    |> Promise.bind (fun fetched -> fetched.text())
+    |> Promise.map ofJson<'a>
+
+let private toast title message =
+    Toast.message message
+    |> Toast.title title
+    |> Toast.position Toast.TopRight
+    |> Toast.noTimeout
+    |> Toast.withCloseButton
+    |> Toast.dismissOnClick
 
 let update msg model =
     match msg with
     | SendWakeUpCommand ->
-        model,
-        Cmd.ofPromise
-            (fetchAs<unit> "/api/send-wakeup-command")
-            []
-            (Ok >> SendWakeUpResponse)
-            (Error >> SendWakeUpResponse)
+        let cmd =
+            Cmd.ofPromise
+                (fetchAs<unit> "/api/send-wakeup-command")
+                []
+                (Ok >> SendWakeUpResponse)
+                (Error >> SendWakeUpResponse)
+        model, cmd
     | SendWakeUpResponse (Error e) ->
-        { model with
-            WakeUpCommandResponse = Failed e.Message |> Some },
-        Cmd.none
+        let cmd =
+            toast "Wake up" e.Message
+            |> Toast.error
+        (), cmd
     | SendWakeUpResponse (Ok ()) ->
-        { model with
-            WakeUpCommandResponse = Some Succeeded },
-        Cmd.none
+        let cmd =
+            toast "Wake up" "Wake up signal successfully sent"
+            |> Toast.success
+        (), cmd
 
 let view (model : Model) (dispatch : Msg -> unit) =
     div []
@@ -79,6 +103,7 @@ Program.mkProgram init update view
 |> Program.withConsoleTrace
 |> Program.withHMR
 #endif
+|> Toast.Program.withToast Toast.renderFulma
 |> Program.withReact "elmish-app"
 #if DEBUG
 |> Program.withDebugger

@@ -13,9 +13,9 @@ let publicPath = Path.GetFullPath "../Client/public"
 let port = 8085us
 
 type WakeUpError =
-    | HostResolutionError of exn
-    | GetIpAddressFromHostNameError of IPAddress list
-    | WakeOnLanError of exn
+    | HostResolutionError of string
+    | GetIpAddressFromHostNameError of string * IPAddress list
+    | WakeOnLanError of IPAddress * PhysicalAddress
 
 let sendWakeUpCommand (hostName: string) (macAddress: PhysicalAddress) = Result.result {
     let! hostEntry =
@@ -23,21 +23,21 @@ let sendWakeUpCommand (hostName: string) (macAddress: PhysicalAddress) = Result.
             Dns.GetHostEntry hostName
             |> Ok
         with e ->
-            HostResolutionError e
+            HostResolutionError hostName
             |> Error
-            
+
     let! ipAddress =
         hostEntry.AddressList
         |> Seq.tryFind (fun p -> p.AddressFamily = AddressFamily.InterNetwork)
         |> Option.orElse (Seq.tryHead hostEntry.AddressList)
-        |> Result.ofOption (GetIpAddressFromHostNameError (List.ofArray hostEntry.AddressList))
+        |> Result.ofOption (GetIpAddressFromHostNameError (hostName, List.ofArray hostEntry.AddressList))
 
     return!
         try
             ipAddress.SendWol macAddress
             Ok ()
         with e ->
-            WakeOnLanError e
+            WakeOnLanError (ipAddress, macAddress)
             |> Error
 }
 
@@ -48,12 +48,12 @@ let webApp = scope {
             return!
                 match result with
                 | Ok () -> Successful.OK () next ctx
-                | Error (HostResolutionError e) ->
-                    ServerErrors.INTERNAL_ERROR (sprintf "Error while resolving host name: %O" e) next ctx
-                | Error (GetIpAddressFromHostNameError addresses) ->
-                    ServerErrors.INTERNAL_ERROR (sprintf "Error while getting IP address from host name. Address candidates: %A" addresses) next ctx
-                | Error (WakeOnLanError e) ->
-                    ServerErrors.INTERNAL_ERROR (sprintf "Error while sending WoL magic packet: %O" e) next ctx
+                | Error (HostResolutionError hostName) ->
+                    ServerErrors.internalError (setBodyFromString (sprintf "Error while resolving host name \"%s\"" hostName)) next ctx
+                | Error (GetIpAddressFromHostNameError (hostName, addresses)) ->
+                    ServerErrors.internalError (setBodyFromString (sprintf "Error while getting IP address from host name \"%s\". Address candidates: %A" hostName addresses)) next ctx
+                | Error (WakeOnLanError (ipAddress, physicalAddress)) ->
+                    ServerErrors.internalError (setBodyFromString (sprintf "Error while sending WoL magic packet to %O (MAC address %O)" ipAddress physicalAddress)) next ctx
         })
 }
 
