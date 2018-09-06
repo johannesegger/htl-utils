@@ -5,3 +5,6 @@ Web-based collection of utilities for teaching at HTL.
 ```
 docker run -d -p 80:8085 johannesegger/htl-utils
 ```
+
+## Acknowledgements
+Hammer icon by George Patterson from the Noun Project
