@@ -3,7 +3,9 @@ group Server
     source https://api.nuget.org/v3/index.json
 
     nuget FSharp.Core
+    nuget MySqlConnector
     nuget Saturn
+    nuget Saturn.Extensions.HttpSys
     nuget Fable.JsonConverter
     nuget WakeOnLan
 
@@ -16,6 +18,7 @@ group Client
     nuget Fable.Elmish.React
     nuget Fable.Elmish.HMR
     nuget Fulma
+    nuget Fulma.Extensions
     nuget Thoth.Elmish.Toast
 
     clitool dotnet-fable

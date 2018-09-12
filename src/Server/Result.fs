@@ -6,6 +6,19 @@ let ofOption e = function
     | Some o -> Ok o
     | None -> Error e
 
+let bindAsync fn = function
+    | Ok v -> fn v
+    | Error v -> async { return Error v }
+
+
+let partition l =
+    let folder t (a, b) =
+        match t with
+        | Ok item -> (item :: a), b
+        | Error item -> a, (item :: b)
+
+    List.foldBack folder l ([], [])
+
 // http://www.fssnip.net/7UJ/title/ResultBuilder-Computational-Expression
 type ResultBuilder() =
     member __.Return(x) = Ok x

@@ -6,6 +6,14 @@ open Fulma
 open Fulma.FontAwesome
 open Thoth.Elmish
 
+let toast title message =
+    Toast.message message
+    |> Toast.title title
+    |> Toast.position Toast.TopRight
+    |> Toast.noTimeout
+    |> Toast.withCloseButton
+    |> Toast.dismissOnClick
+
 // https://github.com/MangelMaxime/Thoth/blob/master/demos/Thoth.Elmish.Demo/src/Toast.fs#L24-L68
 let renderFulma =
     { new Toast.IRenderer<Fa.I.FontAwesomeIcons> with

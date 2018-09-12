@@ -2,73 +2,46 @@ module Client
 
 open Elmish
 open Elmish.React
-open Fable.Core
 open Fable.Core.JsInterop
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
-open Fable.Import
-open Fable.PowerPack
-open Fable.PowerPack.Fetch
 open Fulma
-open Fulma.FontAwesome
+open Fulma.Extensions
 open Thoth.Elmish
+open Shared
 
 importAll "./Styles/main.sass"
 
-type WakeUpCommandResponse =
-    | Succeeded
-    | Failed of string
-
-type Model = unit
+type Model =
+    { WakeUp: WakeUp.Model
+      CreateStudentDirectories: CreateStudentDirectories.Model }
 
 type Msg =
-    | SendWakeUpCommand
-    | SendWakeUpResponse of Result<unit, exn>
-
-let init() =
-    (), Cmd.none
-
-[<PassGenerics>]
-let private fetchAs<'a> url init =
-    GlobalFetch.fetch(RequestInfo.Url url, requestProps init)
-    |> Promise.bind (fun response ->
-        if response.Ok then
-            Promise.lift response
-        else promise {
-            let! text = response.text()
-            return failwith text
-        })
-    |> Promise.bind (fun fetched -> fetched.text())
-    |> Promise.map ofJson<'a>
-
-let private toast title message =
-    Toast.message message
-    |> Toast.title title
-    |> Toast.position Toast.TopRight
-    |> Toast.noTimeout
-    |> Toast.withCloseButton
-    |> Toast.dismissOnClick
+    | WakeUpMsg of WakeUp.Msg
+    | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
 
 let update msg model =
     match msg with
-    | SendWakeUpCommand ->
-        let cmd =
-            Cmd.ofPromise
-                (fetchAs<unit> "/api/send-wakeup-command")
-                []
-                (Ok >> SendWakeUpResponse)
-                (Error >> SendWakeUpResponse)
-        model, cmd
-    | SendWakeUpResponse (Error e) ->
-        let cmd =
-            toast "Wake up" e.Message
-            |> Toast.error
-        (), cmd
-    | SendWakeUpResponse (Ok ()) ->
-        let cmd =
-            toast "Wake up" "Wake up signal successfully sent"
-            |> Toast.success
-        (), cmd
+    | WakeUpMsg msg ->
+        let subModel, subCmd = WakeUp.update msg model.WakeUp
+        { model with WakeUp = subModel }, Cmd.map WakeUpMsg subCmd
+    | CreateStudentDirectoriesMsg msg ->
+        let subModel, subCmd = CreateStudentDirectories.update msg model.CreateStudentDirectories
+        { model with CreateStudentDirectories = subModel }, Cmd.map CreateStudentDirectoriesMsg subCmd
+
+let init() =
+    let wakeUpModel, wakeUpCmd = WakeUp.init()
+    let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init()
+    let model =
+        { WakeUp = wakeUpModel
+          CreateStudentDirectories = createStudentDirectoriesModel }
+
+    let cmd' =
+        Cmd.batch
+            [ Cmd.map WakeUpMsg wakeUpCmd
+              Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd ]
+    model, cmd'
+            
 
 let view (model : Model) (dispatch : Msg -> unit) =
     div []
@@ -76,21 +49,10 @@ let view (model : Model) (dispatch : Msg -> unit) =
             [ Navbar.Item.div [ ]
                 [ Heading.h2 [ Heading.Props [ Style [ FontVariant "small-caps" ] ] ]
                     [ str "Eggj utils" ] ] ]
-
-          Container.container [ Container.Props [ Style [ MarginTop "1rem" ] ] ]
-              [ Content.content [ ]
-                  [ Button.list [ Button.List.IsCentered ]
-                      [ Button.button
-                            [ Button.IsLink
-                              Button.OnClick (fun _evt -> dispatch SendWakeUpCommand)
-                            ]
-                            [ Icon.faIcon [ Icon.Size IsSmall ]
-                                [ Fa.icon Fa.I.Bed ]
-                              span [] [ str "Wake up PC-EGGJ" ]
-                            ]
-                      ]
-                  ]
-              ]
+          
+          WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
+          Divider.divider [ Divider.Label "Create student directories" ]
+          CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch)
         ]
 
 #if DEBUG

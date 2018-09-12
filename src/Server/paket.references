@@ -1,5 +1,7 @@
 group Server
     FSharp.Core
     Saturn
+    Saturn.Extensions.HttpSys
     Fable.JsonConverter
     WakeOnLan
+    MySqlConnector

@@ -4,6 +4,7 @@
         "babel-polyfill": "6.26.0",
         "babel-runtime": "6.26.0",
         "bulma": "^0.7.1",
+        "bulma-divider": "2.0.1",
         "font-awesome": "^4.7.0",
         "react": "16.4.0",
         "react-bootstrap": "0.32.1",
