@@ -19,7 +19,14 @@ let port = 8085us
 
 let requiresUser username authFailedHandler =
     evaluateUserPolicy
-        (fun user -> user.HasClaim(ClaimTypes.Name, username))
+        (fun user ->
+            user.Claims
+            |> Seq.map (fun claim -> sprintf "* %s: <%s> (%s)" claim.Type claim.Value claim.ValueType)
+            |> String.concat Environment.NewLine
+            |> printfn "== Claims: %s%s" Environment.NewLine
+
+            user.HasClaim(ClaimTypes.Name, username)
+        )
         authFailedHandler
 
 let requiresEggj: HttpHandler =
@@ -144,7 +151,9 @@ let main argv =
         use_static publicPath
         service_config configureSerialization
         use_gzip
-        // use_httpsys_windows_auth false
+#if !DEBUG
+        use_httpsys_windows_auth false
+#endif
     }
     run app
     0
