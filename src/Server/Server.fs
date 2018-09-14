@@ -13,21 +13,43 @@ open ClassList
 open StudentDirectories
 open System.Security.Claims
 open Saturn.ControllerHelpers
+open Microsoft.Extensions.Primitives
+open System.DirectoryServices.AccountManagement
+open Novell.Directory.Ldap
 
 let publicPath = Path.GetFullPath "../Client/public"
 let port = 8085us
 
-let requiresUser username authFailedHandler =
-    evaluateUserPolicy
-        (fun user ->
-            user.Claims
-            |> Seq.map (fun claim -> sprintf "* %s: <%s> (%s)" claim.Type claim.Value claim.ValueType)
-            |> String.concat Environment.NewLine
-            |> printfn "== Claims: %s%s" Environment.NewLine
+let ldapAuth username password =
+    use connection = new LdapConnection()
+    try
+        connection.Connect("schulserver.schule.intern", 389)
+        connection.Bind(username, password)
+        let claims = [| Claim("name", username); Claim(ClaimTypes.Role, "Teacher") |]
+        ClaimsIdentity(claims, "Basic") |> Ok
+    with e -> Error e
 
-            user.HasClaim(ClaimTypes.Name, username)
-        )
-        authFailedHandler
+let requiresUser username authFailedHandler : HttpHandler =
+    fun next ctx ->
+        let authHeader = ctx.Request.Headers.["Authorization"].ToString()
+        if not <| isNull authHeader && authHeader.StartsWith("basic", StringComparison.OrdinalIgnoreCase)
+        then
+            let token = authHeader.Substring("Basic ".Length).Trim()
+            let credentials =
+                Convert.FromBase64String token
+                |> Encoding.UTF8.GetString
+                |> String.split ":"
+            match ldapAuth credentials.[0] credentials.[1] with
+            | Ok identity ->
+                ctx.User <- ClaimsPrincipal(identity)
+                next ctx
+            | Error e ->
+                printfn "LDAP auth failed: %O" e
+                authFailedHandler next ctx
+        else
+            ctx.Response.StatusCode <- 401
+            ctx.Response.Headers.["WWW-Authenticate"] <- StringValues("Basic")
+            task { return Some ctx }
 
 let requiresEggj: HttpHandler =
 #if DEBUG
@@ -151,9 +173,6 @@ let main argv =
         use_static publicPath
         service_config configureSerialization
         use_gzip
-#if !DEBUG
-        use_httpsys_windows_auth false
-#endif
     }
     run app
     0

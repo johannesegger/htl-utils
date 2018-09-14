@@ -4,8 +4,8 @@ group Server
 
     nuget FSharp.Core
     nuget MySqlConnector
+    nuget Novell.Directory.Ldap.NETStandard
     nuget Saturn
-    nuget Saturn.Extensions.HttpSys
     nuget Fable.JsonConverter
     nuget WakeOnLan
 
