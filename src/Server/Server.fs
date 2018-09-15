@@ -156,26 +156,33 @@ let createStudentDirectories baseDirectories getStudents : HttpHandler =
                 ServerErrors.internalError (setBodyFromString message) next ctx
     }
 
+let getEnvVarOrFail name =
+    let value = Environment.GetEnvironmentVariable name
+    if isNull value
+    then failwithf "Environment variable \"%s\" not set" name
+    else value
+
 [<EntryPoint>]
 let main argv =
-    let connectionString = Environment.GetEnvironmentVariable "SISDB_CONNECTION_STRING"
+    let connectionString = getEnvVarOrFail "SISDB_CONNECTION_STRING"
     let getClassListFromDb = Db.getClassList connectionString
     let getStudentsFromDb = Db.getStudents connectionString
     let createDirectoriesBaseDirectory =
-        Environment.GetEnvironmentVariable "CREATE_DIRECTORIES_BASE_DIRECTORIES"
+        getEnvVarOrFail "CREATE_DIRECTORIES_BASE_DIRECTORIES"
         |> String.split ";"
         |> Seq.chunkBySize 2
         |> Seq.map (fun s -> s.[0], s.[1])
         |> Map.ofSeq
 
-    let ldapHost = Environment.GetEnvironmentVariable "LDAP_HOST"
-    let ldapPort = Environment.GetEnvironmentVariable "LDAP_PORT" |> int
-    let ldapDnTemplate = fun (cn: string) -> System.String.Format(Environment.GetEnvironmentVariable "LDAP_DN_TEMPLATE", cn)
-    let auth = ldapAuth ldapHost ldapPort ldapDnTemplate
     let requiresEggj : HttpHandler =
 #if DEBUG
         fun next ctx -> next ctx
 #else
+        let ldapHost = getEnvVarOrFail "LDAP_HOST"
+        let ldapPort = getEnvVarOrFail "LDAP_PORT" |> int
+        let ldapDnTemplateString = getEnvVarOrFail "LDAP_DN_TEMPLATE"
+        let ldapDnTemplate = fun (cn: string) -> System.String.Format(ldapDnTemplateString, cn)
+        let auth = ldapAuth ldapHost ldapPort ldapDnTemplate
         requiresUser auth "eggj"
 #endif
 
