@@ -12,24 +12,39 @@ open WakeUp
 open ClassList
 open StudentDirectories
 open System.Security.Claims
-open Saturn.ControllerHelpers
-open Microsoft.Extensions.Primitives
-open System.DirectoryServices.AccountManagement
 open Novell.Directory.Ldap
 
 let publicPath = Path.GetFullPath "../Client/public"
 let port = 8085us
 
-let ldapAuth username password =
+let private tryFn fn =
+    try
+        Ok (fn())
+    with e -> Error e
+
+let private searchResultsToList (searchResults: LdapSearchResults) =
+    [
+        while searchResults.hasMore() do
+        match tryFn searchResults.next with
+        | Ok e -> yield e
+        | Error e -> printfn "Error: %O" e
+    ]
+
+let private ldapAuth host port dnTemplate username password =
     use connection = new LdapConnection()
     try
-        connection.Connect("schulserver.schule.intern", 389)
-        connection.Bind(username, password)
-        let claims = [| Claim("name", username); Claim(ClaimTypes.Role, "Teacher") |]
+        connection.Connect(host, port)
+        let dn = dnTemplate (sprintf "CN=%s,OU=Lehrer,OU=Teacher,OU=Automatisch,OU=Benutzer,OU=VirtualSchool,DC=schule,DC=intern" username)
+        connection.Bind(dn, password)
+
+        let claims = [| Claim(ClaimTypes.Name, username); Claim(ClaimTypes.Role, "Teacher") |]
         ClaimsIdentity(claims, "Basic") |> Ok
     with e -> Error e
 
-let requiresUser username authFailedHandler : HttpHandler =
+let authenticateBasic : HttpHandler =
+    RequestErrors.unauthorized "Basic" "HTLVB-EGGJ" (setBody [||])
+
+let requiresUser (auth: string -> string -> Result<ClaimsIdentity, exn>) username : HttpHandler =
     fun next ctx ->
         let authHeader = ctx.Request.Headers.["Authorization"].ToString()
         if not <| isNull authHeader && authHeader.StartsWith("basic", StringComparison.OrdinalIgnoreCase)
@@ -39,24 +54,17 @@ let requiresUser username authFailedHandler : HttpHandler =
                 Convert.FromBase64String token
                 |> Encoding.UTF8.GetString
                 |> String.split ":"
-            match ldapAuth credentials.[0] credentials.[1] with
-            | Ok identity ->
+            match auth credentials.[0] credentials.[1] with
+            | Ok identity when identity.HasClaim(ClaimTypes.Name, username) ->
                 ctx.User <- ClaimsPrincipal(identity)
                 next ctx
-            | Error e ->
-                printfn "LDAP auth failed: %O" e
-                authFailedHandler next ctx
+            | Ok identity ->
+                ctx.User <- ClaimsPrincipal(identity)
+                RequestErrors.FORBIDDEN "Accessing this API it not allowed" next ctx
+            | Error _ ->
+                authenticateBasic next ctx
         else
-            ctx.Response.StatusCode <- 401
-            ctx.Response.Headers.["WWW-Authenticate"] <- StringValues("Basic")
-            task { return Some ctx }
-
-let requiresEggj: HttpHandler =
-#if DEBUG
-    fun next ctx -> next ctx
-#else
-    requiresUser "eggj" (RequestErrors.FORBIDDEN "Accessing this API is not allowed")
-#endif
+            authenticateBasic next ctx
 
 let readStream (stream: Stream) = task {
     use reader = new StreamReader(stream, Encoding.UTF8)
@@ -159,6 +167,17 @@ let main argv =
         |> Seq.chunkBySize 2
         |> Seq.map (fun s -> s.[0], s.[1])
         |> Map.ofSeq
+
+    let ldapHost = Environment.GetEnvironmentVariable "LDAP_HOST"
+    let ldapPort = Environment.GetEnvironmentVariable "LDAP_PORT" |> int
+    let ldapDnTemplate = fun (cn: string) -> System.String.Format(Environment.GetEnvironmentVariable "LDAP_DN_TEMPLATE", cn)
+    let auth = ldapAuth ldapHost ldapPort ldapDnTemplate
+    let requiresEggj : HttpHandler =
+#if DEBUG
+        fun next ctx -> next ctx
+#else
+        requiresUser auth "eggj"
+#endif
 
     let webApp = router {
         post "/api/wakeup/send" (requiresEggj >=> sendWakeUpCommand)
