@@ -3,7 +3,16 @@ Web-based collection of utilities for teaching at HTL.
 
 ## Run in Docker
 ```
-docker run -d -p 80:8085 johannesegger/htl-utils
+docker run -d `
+    -e SISDB_CONNECTION_STRING="Server=localhost;Database=default-db;User=root;Password=1234" `
+    -e CREATE_DIRECTORIES_BASE_DIRECTORIES="X:/home/pi/x;Y:;/home/pi/y" `
+    -e LDAP_HOST="..." `
+    -e LDAP_PORT="389" `
+    -e LDAP_DN_TEMPLATE="CN={0},DC=..." `
+    -p 80:8085 `
+    --name htl-utils
+    johannesegger/htl-utils
+
 ```
 
 ## Acknowledgements
