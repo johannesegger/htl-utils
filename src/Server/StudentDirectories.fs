@@ -17,6 +17,7 @@ type CreateStudentDirectoriesError =
     | CreatingSomeDirectoriesFailed of CreateDirectoriesErrorInfo
 
 let createStudentDirectories getStudents baseDirectory className = async {
+    printfn "Creating student directories for %s in %s" className baseDirectory
     let! students = async {
         try
             let! students = getStudents className

@@ -105,17 +105,25 @@ let getChildDirectories baseDirectories : HttpHandler =
         let response =
             match body with
             | []
-            | [ "" ] -> baseDirectories |> Map.toList |> List.map fst
+            | [ "" ] ->
+                printfn "Returning base directories"
+                baseDirectories |> Map.toList |> List.map fst
             | baseDir :: children ->
                 match Map.tryFind baseDir baseDirectories with
                 | Some dir ->
+                    let path = Path.Combine([| yield dir; yield! children |])
+                    printfn "Returning child directories of %s" path
                     try
-                        Path.Combine([| yield dir; yield! children |])
+                        path
                         |> Directory.GetDirectories
                         |> Seq.map Path.GetFileName
                         |> Seq.toList
-                    with _ -> []
-                | None -> []
+                    with e ->
+                        eprintfn "Couldn't get child directories: %O" e
+                        []
+                | None ->
+                    eprintfn "Invalid base directory \"%s\"" baseDir
+                    []
 
         return! json response next ctx
     }
