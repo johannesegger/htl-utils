@@ -34,8 +34,7 @@ let private ldapAuth host port dnTemplate username password =
     use connection = new LdapConnection()
     try
         connection.Connect(host, port)
-        let dn = dnTemplate (sprintf "CN=%s,OU=Lehrer,OU=Teacher,OU=Automatisch,OU=Benutzer,OU=VirtualSchool,DC=schule,DC=intern" username)
-        connection.Bind(dn, password)
+        connection.Bind(dnTemplate username, password)
 
         let claims = [| Claim(ClaimTypes.Name, username); Claim(ClaimTypes.Role, "Teacher") |]
         ClaimsIdentity(claims, "Basic") |> Ok
