@@ -12,58 +12,23 @@ open WakeUp
 open ClassList
 open StudentDirectories
 open System.Security.Claims
-open Novell.Directory.Ldap
 
 let publicPath = Path.GetFullPath "../Client/public"
 let port = 8085us
 
-let private tryFn fn =
-    try
-        Ok (fn())
-    with e -> Error e
+let requiresUser preferredUsername : HttpHandler =
+    evaluateUserPolicy
+        (fun user ->
+            user.HasClaim("preferred_username", preferredUsername)
+        )
+        (RequestErrors.FORBIDDEN "Accessing this API is not allowed")
 
-let private searchResultsToList (searchResults: LdapSearchResults) =
-    [
-        while searchResults.hasMore() do
-        match tryFn searchResults.next with
-        | Ok e -> yield e
-        | Error e -> printfn "Error: %O" e
-    ]
-
-let private ldapAuth host port dnTemplate username password =
-    use connection = new LdapConnection()
-    try
-        connection.Connect(host, port)
-        connection.Bind(dnTemplate username, password)
-
-        let claims = [| Claim(ClaimTypes.Name, username); Claim(ClaimTypes.Role, "Teacher") |]
-        ClaimsIdentity(claims, "Basic") |> Ok
-    with e -> Error e
-
-let authenticateBasic : HttpHandler =
-    RequestErrors.unauthorized "Basic" "HTLVB-EGGJ" (setBody [||])
-
-let requiresUser (auth: string -> string -> Result<ClaimsIdentity, exn>) username : HttpHandler =
-    fun next ctx ->
-        let authHeader = ctx.Request.Headers.["Authorization"].ToString()
-        if not <| isNull authHeader && authHeader.StartsWith("basic", StringComparison.OrdinalIgnoreCase)
-        then
-            let token = authHeader.Substring("Basic ".Length).Trim()
-            let credentials =
-                Convert.FromBase64String token
-                |> Encoding.UTF8.GetString
-                |> String.split ":"
-            match auth credentials.[0] credentials.[1] with
-            | Ok identity when identity.HasClaim(ClaimTypes.Name, username) ->
-                ctx.User <- ClaimsPrincipal(identity)
-                next ctx
-            | Ok identity ->
-                ctx.User <- ClaimsPrincipal(identity)
-                RequestErrors.FORBIDDEN "Accessing this API it not allowed" next ctx
-            | Error _ ->
-                authenticateBasic next ctx
-        else
-            authenticateBasic next ctx
+let requiresGroup groupId : HttpHandler =
+    evaluateUserPolicy
+        (fun user ->
+            user.HasClaim("groups", groupId)
+        )
+        (RequestErrors.FORBIDDEN "Accessing this API is not allowed")
 
 let readStream (stream: Stream) = task {
     use reader = new StreamReader(stream, Encoding.UTF8)
@@ -181,24 +146,16 @@ let main argv =
         |> Seq.map (fun s -> s.[0], s.[1])
         |> Map.ofSeq
 
-    let requiresEggj : HttpHandler =
-#if DEBUG
-        fun next ctx -> next ctx
-#else
-        let ldapHost = getEnvVarOrFail "LDAP_HOST"
-        let ldapPort = getEnvVarOrFail "LDAP_PORT" |> int
-        let ldapDnTemplateString = getEnvVarOrFail "LDAP_DN_TEMPLATE"
-        let ldapDnTemplate = fun (cn: string) -> System.String.Format(ldapDnTemplateString, cn)
-        let auth = ldapAuth ldapHost ldapPort ldapDnTemplate
-        requiresUser auth "eggj"
-#endif
+    let requiresEggj : HttpHandler = requiresUser "EGGJ@htlvb.at"
+    let requiresTeacher : HttpHandler = requiresGroup "2d1c8785-5350-4a3b-993c-62dc9bc30980"
 
     let webApp = router {
         post "/api/wakeup/send" (requiresEggj >=> sendWakeUpCommand)
-        get "/api/students/classes" (getClassList getClassListFromDb)
+        get "/api/students/classes" (requiresTeacher >=> getClassList getClassListFromDb)
         post "/api/create-student-directories/child-directories" (requiresEggj >=> getChildDirectories createDirectoriesBaseDirectory)
         post "/api/create-student-directories/create" (requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory getStudentsFromDb)
     }
+    let clientId = "f2ac1c2a-f1cf-40cb-891b-192c74a096a4"
     let app = application {
         url ("http://+:" + port.ToString() + "/")
         use_router webApp
@@ -206,6 +163,12 @@ let main argv =
         use_static publicPath
         service_config configureSerialization
         use_gzip
+        use_jwt_authentication_with_config (fun options ->
+            Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII <- true
+            options.Audience <- clientId
+            options.Authority <- "https://login.microsoftonline.com/htlvb.at/v2.0/"
+            options.TokenValidationParameters.ValidateIssuer <- false
+        )
     }
     run app
     0

@@ -6,7 +6,9 @@
     <ItemGroup>
         <Compile Include="..\Shared\Shared.fs" />
         <Compile Include="List.fs" />
+        <Compile Include="Msal.fs" />
         <Compile Include="Toast.fs" />
+        <Compile Include="Authentication.fs" />
         <Compile Include="WakeUp.fs" />
         <Compile Include="CreateStudentDirectories.fs" />
         <Compile Include="Client.fs" />

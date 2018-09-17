@@ -3,6 +3,7 @@ module WakeUp
 open Elmish
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
+open Fable.PowerPack
 open Fable.PowerPack.Fetch
 open Fulma
 open Fulma.FontAwesome
@@ -14,13 +15,13 @@ type Msg =
     | SendWakeUpCommand
     | SendWakeUpResponse of Result<unit, exn>
 
-let update msg model =
+let update getAuthHeader msg model =
     match msg with
     | SendWakeUpCommand ->
         let cmd =
             Cmd.ofPromise
-                (postRecord "/api/wakeup/send" ())
-                []
+                (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/wakeup/send" ()))
+                ()
                 (ignore >> Ok >> SendWakeUpResponse)
                 (Error >> SendWakeUpResponse)
         model, cmd

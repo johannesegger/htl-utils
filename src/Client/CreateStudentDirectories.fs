@@ -100,13 +100,13 @@ let rec private getSelectedDirectory directory =
             |> Option.orElse (Some directory)
         | _ -> Some directory
 
-let rec update msg model =
+let rec update getAuthHeader msg model =
     match msg with
     | LoadClassList ->
         let cmd =
             Cmd.ofPromise
-                (fetchAs<string list> "/api/students/classes")
-                []
+                (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> fetchAs<string list> "/api/students/classes"))
+                ()
                 (Ok >> LoadClassListResponse)
                 (Error >> LoadClassListResponse)
         model, cmd
@@ -125,14 +125,20 @@ let rec update msg model =
         // TODO don't load if already loaded?
         let cmd =
             Cmd.ofPromise
-                (postRecord "/api/create-student-directories/child-directories" (List.rev path) >> Promise.bind (fun r -> r.json<string list>()))
-                []
+                (getAuthHeader
+                    >> Promise.bind (
+                        List.singleton
+                        >> requestHeaders
+                        >> List.singleton
+                        >> postRecord "/api/create-student-directories/child-directories" (List.rev path))
+                    >> Promise.bind (fun r -> r.json<string list>()))
+                ()
                 ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
                 (Error >> LoadChildDirectoriesResponse)
         model, cmd
     | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
         let model' = { model with Directory = setChildDirectories path childDirectories model.Directory }
-        update (SelectDirectory path) model'
+        update getAuthHeader (SelectDirectory path) model'
     | LoadChildDirectoriesResponse (Error e) ->
         let cmd =
             Toast.toast "Loading directories" e.Message
@@ -150,7 +156,7 @@ let rec update msg model =
             { model with
                 Directory = addChildDirectory path name model.Directory
                 NewDirectoryNames = model.NewDirectoryNames |> Map.remove path }
-        update (LoadChildDirectories (name :: path)) model'
+        update getAuthHeader (LoadChildDirectories (name :: path)) model'
     | CreateDirectories ->
         let cmd =
             match getSelectedDirectory model.Directory, model.SelectedClass with
@@ -159,8 +165,8 @@ let rec update msg model =
                 | baseDir :: path ->
                     let record = { ClassName = className; Path = baseDir, path }
                     Cmd.ofPromise
-                        (postRecord "/api/create-student-directories/create" record)
-                        []
+                        (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/create-student-directories/create" record))
+                        ()
                         (ignore >> Ok >> CreateDirectoriesResponse)
                         (Error >> CreateDirectoriesResponse)
                 | _ -> Cmd.none
@@ -177,7 +183,7 @@ let rec update msg model =
             |> Toast.success
         model, cmd
 
-let init() =
+let init getAuthHeader =
     let model =
         { ClassList = []
           SelectedClass = None
@@ -186,8 +192,8 @@ let init() =
               IsSelected = true
               Children = NotLoadedDirectoryChildren }
           NewDirectoryNames = Map.empty }
-    let model', cmd' = update (LoadChildDirectories []) model
-    let model'', cmd'' = update LoadClassList model'
+    let model', cmd' = update getAuthHeader (LoadChildDirectories []) model
+    let model'', cmd'' = update getAuthHeader LoadClassList model'
     model'', Cmd.batch [ cmd'; cmd'' ]
 
 let view model dispatch =
