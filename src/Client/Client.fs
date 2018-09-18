@@ -5,8 +5,6 @@ open Elmish.React
 open Fable.Core.JsInterop
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
-open Fable.PowerPack
-open Fable.PowerPack.Fetch
 open Fulma
 open Fulma.Extensions
 open Thoth.Elmish
@@ -24,37 +22,33 @@ type Msg =
     | WakeUpMsg of WakeUp.Msg
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
 
-let getToken() = promise {
-    let scope = [| "f2ac1c2a-f1cf-40cb-891b-192c74a096a4" |]
-    try
-        return! Authentication.userAgentApplication.acquireTokenSilent !!scope
-    with _error ->
-        try
-            return! Authentication.userAgentApplication.acquireTokenPopup !!scope
-        with _error -> return "" // TODO fail? request doesn't have to be sent
-}
+let rec updateIfSignedIn auth (model, cmd) =
+    match auth, model.Authentication with
+    | Authentication.NotAuthenticated, Authentication.Authenticated _ ->
+        let model', cmd' = update (CreateStudentDirectoriesMsg (CreateStudentDirectories.LoadChildDirectories [])) model
+        let model'', cmd'' = update (CreateStudentDirectoriesMsg CreateStudentDirectories.LoadClassList) model'
+        model'', Cmd.batch [ cmd; cmd'; cmd'' ]
+    | _ -> model, cmd
 
-let getAuthHeader() = promise {
-    let! token = getToken()
-    return Authorization ("Bearer " + token)
-}
-
-let update msg model =
+and update msg model =
+    let authHeaderOptFn = Authentication.authHeaderOptFn model.Authentication
     match msg with
     | AuthenticationMsg msg ->
         let subModel, subCmd = Authentication.update msg model.Authentication
         { model with Authentication = subModel }, Cmd.map AuthenticationMsg subCmd
     | WakeUpMsg msg ->
-        let subModel, subCmd = WakeUp.update getAuthHeader msg model.WakeUp
+        let subModel, subCmd = WakeUp.update authHeaderOptFn msg model.WakeUp
         { model with WakeUp = subModel }, Cmd.map WakeUpMsg subCmd
     | CreateStudentDirectoriesMsg msg ->
-        let subModel, subCmd = CreateStudentDirectories.update getAuthHeader msg model.CreateStudentDirectories
+        let subModel, subCmd = CreateStudentDirectories.update authHeaderOptFn msg model.CreateStudentDirectories
         { model with CreateStudentDirectories = subModel }, Cmd.map CreateStudentDirectoriesMsg subCmd
+    |> updateIfSignedIn model.Authentication
 
 let init() =
     let authModel, authCmd = Authentication.init()
     let wakeUpModel, wakeUpCmd = WakeUp.init()
-    let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init getAuthHeader
+    let authHeaderOptFn = Authentication.authHeaderOptFn authModel
+    let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
     let model =
         { Authentication = authModel
           WakeUp = wakeUpModel

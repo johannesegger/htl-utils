@@ -15,15 +15,18 @@ type Msg =
     | SendWakeUpCommand
     | SendWakeUpResponse of Result<unit, exn>
 
-let update getAuthHeader msg model =
+let update authHeaderOptFn msg model =
     match msg with
     | SendWakeUpCommand ->
         let cmd =
-            Cmd.ofPromise
-                (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/wakeup/send" ()))
-                ()
-                (ignore >> Ok >> SendWakeUpResponse)
-                (Error >> SendWakeUpResponse)
+            match authHeaderOptFn with
+            | Some getAuthHeader ->
+                Cmd.ofPromise
+                    (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/wakeup/send" ()))
+                    ()
+                    (ignore >> Ok >> SendWakeUpResponse)
+                    (Error >> SendWakeUpResponse)
+            | None -> Cmd.none
         model, cmd
     | SendWakeUpResponse (Error e) ->
         let cmd =
@@ -45,12 +48,7 @@ let view model dispatch =
             [ Button.list [ Button.List.IsCentered ]
                 [ Button.button
                     [ Button.IsLink
-                      Button.OnClick (fun _evt -> dispatch SendWakeUpCommand)
-                    ]
+                      Button.OnClick (fun _evt -> dispatch SendWakeUpCommand) ]
                     [ Icon.faIcon [ Icon.Size IsSmall ]
                         [ Fa.icon Fa.I.Bed ]
-                      span [] [ str "Wake up PC-EGGJ" ]
-                    ]
-                ]
-            ]
-        ]
+                      span [] [ str "Wake up PC-EGGJ" ] ] ] ] ]

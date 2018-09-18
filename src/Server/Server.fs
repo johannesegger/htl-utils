@@ -151,7 +151,7 @@ let main argv =
 
     let webApp = router {
         post "/api/wakeup/send" (requiresEggj >=> sendWakeUpCommand)
-        get "/api/students/classes" (requiresTeacher >=> getClassList getClassListFromDb)
+        get "/api/students/classes" (getClassList getClassListFromDb)
         post "/api/create-student-directories/child-directories" (requiresEggj >=> getChildDirectories createDirectoriesBaseDirectory)
         post "/api/create-student-directories/create" (requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory getStudentsFromDb)
     }

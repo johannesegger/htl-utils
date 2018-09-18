@@ -100,13 +100,13 @@ let rec private getSelectedDirectory directory =
             |> Option.orElse (Some directory)
         | _ -> Some directory
 
-let rec update getAuthHeader msg model =
+let rec update authHeaderOptFn msg model =
     match msg with
     | LoadClassList ->
         let cmd =
             Cmd.ofPromise
-                (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> fetchAs<string list> "/api/students/classes"))
-                ()
+                (fetchAs<string list> "/api/students/classes")
+                []
                 (Ok >> LoadClassListResponse)
                 (Error >> LoadClassListResponse)
         model, cmd
@@ -115,7 +115,7 @@ let rec update getAuthHeader msg model =
         model', Cmd.none
     | LoadClassListResponse (Error e) ->
         let cmd =
-            Toast.toast "Loading list of classes" e.Message
+            Toast.toast "Loading list of classes failed" e.Message
             |> Toast.error
         model, cmd
     | SelectClass name ->
@@ -124,24 +124,27 @@ let rec update getAuthHeader msg model =
     | LoadChildDirectories path ->
         // TODO don't load if already loaded?
         let cmd =
-            Cmd.ofPromise
-                (getAuthHeader
-                    >> Promise.bind (
-                        List.singleton
-                        >> requestHeaders
-                        >> List.singleton
-                        >> postRecord "/api/create-student-directories/child-directories" (List.rev path))
-                    >> Promise.bind (fun r -> r.json<string list>()))
-                ()
-                ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
-                (Error >> LoadChildDirectoriesResponse)
+            match authHeaderOptFn with
+            | Some getAuthHeader ->
+                Cmd.ofPromise
+                    (getAuthHeader
+                        >> Promise.bind (
+                            List.singleton
+                            >> requestHeaders
+                            >> List.singleton
+                            >> postRecord "/api/create-student-directories/child-directories" (List.rev path))
+                        >> Promise.bind (fun r -> r.json<string list>()))
+                    ()
+                    ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
+                    (Error >> LoadChildDirectoriesResponse)
+            | None -> Cmd.none
         model, cmd
     | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
         let model' = { model with Directory = setChildDirectories path childDirectories model.Directory }
-        update getAuthHeader (SelectDirectory path) model'
+        update authHeaderOptFn (SelectDirectory path) model'
     | LoadChildDirectoriesResponse (Error e) ->
         let cmd =
-            Toast.toast "Loading directories" e.Message
+            Toast.toast "Loading directories failed" e.Message
             |> Toast.error
         model, cmd
     | SelectDirectory path ->
@@ -156,7 +159,7 @@ let rec update getAuthHeader msg model =
             { model with
                 Directory = addChildDirectory path name model.Directory
                 NewDirectoryNames = model.NewDirectoryNames |> Map.remove path }
-        update getAuthHeader (LoadChildDirectories (name :: path)) model'
+        update authHeaderOptFn (LoadChildDirectories (name :: path)) model'
     | CreateDirectories ->
         let cmd =
             match getSelectedDirectory model.Directory, model.SelectedClass with
@@ -164,11 +167,14 @@ let rec update getAuthHeader msg model =
                 match List.rev selectedDirectory.Path with
                 | baseDir :: path ->
                     let record = { ClassName = className; Path = baseDir, path }
-                    Cmd.ofPromise
-                        (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/create-student-directories/create" record))
-                        ()
-                        (ignore >> Ok >> CreateDirectoriesResponse)
-                        (Error >> CreateDirectoriesResponse)
+                    match authHeaderOptFn with
+                    | Some getAuthHeader ->
+                        Cmd.ofPromise
+                            (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/create-student-directories/create" record))
+                            ()
+                            (ignore >> Ok >> CreateDirectoriesResponse)
+                            (Error >> CreateDirectoriesResponse)
+                    | None -> Cmd.none
                 | _ -> Cmd.none
             | _ -> Cmd.none
         model, cmd
@@ -183,7 +189,7 @@ let rec update getAuthHeader msg model =
             |> Toast.success
         model, cmd
 
-let init getAuthHeader =
+let init authHeaderOptFn =
     let model =
         { ClassList = []
           SelectedClass = None
@@ -192,8 +198,8 @@ let init getAuthHeader =
               IsSelected = true
               Children = NotLoadedDirectoryChildren }
           NewDirectoryNames = Map.empty }
-    let model', cmd' = update getAuthHeader (LoadChildDirectories []) model
-    let model'', cmd'' = update getAuthHeader LoadClassList model'
+    let model', cmd' = update authHeaderOptFn (LoadChildDirectories []) model
+    let model'', cmd'' = update authHeaderOptFn LoadClassList model'
     model'', Cmd.batch [ cmd'; cmd'' ]
 
 let view model dispatch =
@@ -255,10 +261,16 @@ let view model dispatch =
     Container.container []
         [ yield classListView
           yield Divider.divider []
-          yield!
-            mapDirectory directoryView model.Directory
-            |> List.choose id
-            |> List.intersperse (Divider.divider [])
+          match model.Directory.Children with
+          | LoadedDirectoryChildren _ ->
+            yield!
+                mapDirectory directoryView model.Directory
+                |> List.choose id
+                |> List.intersperse (Divider.divider [])
+          | NotLoadedDirectoryChildren ->
+            yield Notification.notification [ Notification.Color IsWarning ]
+                [ Icon.faIcon [] [ Fa.icon Fa.I.ExclamationTriangle ]
+                  span [] [ str "Sign in to view directories" ] ]
           yield Divider.divider []
           yield Button.button
             [ Button.Color IsSuccess

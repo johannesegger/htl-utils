@@ -3,6 +3,8 @@ module Authentication
 open Elmish
 open Fable.Core.JsInterop
 open Fable.Helpers.React
+open Fable.PowerPack
+open Fable.PowerPack.Fetch
 open Fulma
 open Fulma.FontAwesome
 
@@ -31,6 +33,27 @@ let userAgentApplication =
         //printfn "===== TOKEN RECEIVED: %s - %s - %s - %s - %s" errorDesc token error tokenType userState
         ()
     Msal.UserAgentApplication.Create(clientId, Some authority, tokenReceivedCallBack)
+
+let authHeaderOptFn model =
+    let getToken() = promise {
+        let scope = [| "f2ac1c2a-f1cf-40cb-891b-192c74a096a4" |]
+        try
+            return! userAgentApplication.acquireTokenSilent !!scope
+        with _error ->
+            try
+                return! userAgentApplication.acquireTokenPopup !!scope
+            with _error ->
+                return failwith "Please sign in using your Microsoft account."
+    }
+
+    let getAuthHeader() = promise {
+        let! token = getToken()
+        return Authorization ("Bearer " + token)
+    }
+
+    match model with
+    | NotAuthenticated -> None
+    | Authenticated _ -> Some getAuthHeader
 
 let mapToUser (msalUser: Msal.User) =
     { Name = msalUser.name }
