@@ -12,12 +12,18 @@ open Shared
 
 importAll "./Styles/main.sass"
 
+type Tab =
+    | General
+    | CreateStudentDirectories
+
 type Model =
-    { Authentication: Authentication.Model
+    { ActiveTab: Tab
+      Authentication: Authentication.Model
       WakeUp: WakeUp.Model
       CreateStudentDirectories: CreateStudentDirectories.Model }
 
 type Msg =
+    | ActivateTab of Tab
     | AuthenticationMsg of Authentication.Msg
     | WakeUpMsg of WakeUp.Msg
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
@@ -32,6 +38,9 @@ let rec updateIfSignedIn auth (model, cmd) =
 and update msg model =
     let authHeaderOptFn = Authentication.authHeaderOptFn model.Authentication
     match msg with
+    | ActivateTab tabItem ->
+        let model' = { model with ActiveTab = tabItem }
+        model', Cmd.none
     | AuthenticationMsg msg ->
         let subModel, subCmd = Authentication.update msg model.Authentication
         { model with Authentication = subModel }, Cmd.map AuthenticationMsg subCmd
@@ -49,7 +58,8 @@ let init() =
     let authHeaderOptFn = Authentication.authHeaderOptFn authModel
     let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
     let model =
-        { Authentication = authModel
+        { ActiveTab = General
+          Authentication = authModel
           WakeUp = wakeUpModel
           CreateStudentDirectories = createStudentDirectoriesModel }
     let cmd =
@@ -60,18 +70,31 @@ let init() =
     model, cmd
 
 let view (model : Model) (dispatch : Msg -> unit) =
+    let tabs =
+        let tabItems =
+            [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch) ]
+              CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]  ]
+        [ yield Tabs.tabs []
+            [ for (tabItem, tabName, _tabView) in tabItems ->
+                Tabs.tab [ Tabs.Tab.IsActive (model.ActiveTab = tabItem) ]
+                    [ a [ OnClick (fun _ev -> dispatch (ActivateTab tabItem)) ]
+                        [ str tabName ] ] ]
+          yield!
+            tabItems
+            |> List.choose (fun (tabItem, _, tabView) ->
+                if model.ActiveTab = tabItem
+                then Some tabView
+                else None)
+            |> List.collect id ]
     div []
-        [ Navbar.navbar [ Navbar.Color IsWarning ]
+        [ yield Navbar.navbar [ Navbar.Color IsWarning ]
             [ Navbar.Item.div []
                 [ Heading.h2 [ Heading.Props [ Style [ FontVariant "small-caps" ] ] ]
                     [ str "Eggj utils" ] ]
               Navbar.End.div []
                 [ Navbar.Item.div []
                     [ Authentication.view model.Authentication (AuthenticationMsg >> dispatch) ] ] ]
-          
-          WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
-          Divider.divider [ Divider.Label "Create student directories" ]
-          CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]
+          yield! tabs ]
 
 #if DEBUG
 open Elmish.Debug
