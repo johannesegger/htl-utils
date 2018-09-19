@@ -25,6 +25,7 @@ type Model =
       NewDirectoryNames: Map<string list, string> }
 
 type Msg =
+    | Init
     | LoadClassList
     | LoadClassListResponse of Result<string list, exn>
     | SelectClass of string
@@ -102,6 +103,10 @@ let rec private getSelectedDirectory directory =
 
 let rec update authHeaderOptFn msg model =
     match msg with
+    | Init ->
+        let model', loadChildDirectoriesCmd = update authHeaderOptFn (LoadChildDirectories []) model
+        let model'', loadClassListCmd = update authHeaderOptFn LoadClassList model'
+        model'', Cmd.batch [ loadChildDirectoriesCmd; loadClassListCmd ]
     | LoadClassList ->
         let cmd =
             Cmd.ofPromise
@@ -198,9 +203,7 @@ let init authHeaderOptFn =
               IsSelected = true
               Children = NotLoadedDirectoryChildren }
           NewDirectoryNames = Map.empty }
-    let model', cmd' = update authHeaderOptFn (LoadChildDirectories []) model
-    let model'', cmd'' = update authHeaderOptFn LoadClassList model'
-    model'', Cmd.batch [ cmd'; cmd'' ]
+    update authHeaderOptFn Init model
 
 let view model dispatch =
     let classListView =

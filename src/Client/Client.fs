@@ -25,9 +25,8 @@ type Msg =
 let rec updateIfSignedIn auth (model, cmd) =
     match auth, model.Authentication with
     | Authentication.NotAuthenticated, Authentication.Authenticated _ ->
-        let model', cmd' = update (CreateStudentDirectoriesMsg (CreateStudentDirectories.LoadChildDirectories [])) model
-        let model'', cmd'' = update (CreateStudentDirectoriesMsg CreateStudentDirectories.LoadClassList) model'
-        model'', Cmd.batch [ cmd; cmd'; cmd'' ]
+        let model', cmd' = update (CreateStudentDirectoriesMsg CreateStudentDirectories.Init) model
+        model', Cmd.batch [ cmd; cmd' ]
     | _ -> model, cmd
 
 and update msg model =
