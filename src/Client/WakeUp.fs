@@ -30,7 +30,7 @@ let update authHeaderOptFn msg model =
         model, cmd
     | SendWakeUpResponse (Error e) ->
         let cmd =
-            Toast.toast "Wake up" e.Message
+            Toast.toast "Wake up failed" e.Message
             |> Toast.error
         model, cmd
     | SendWakeUpResponse (Ok ()) ->
