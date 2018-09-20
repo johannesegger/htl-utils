@@ -20,12 +20,14 @@ type Model =
     { ActiveTab: Tab
       Authentication: Authentication.Model
       WakeUp: WakeUp.Model
+      ImportTeacherContacts: ImportTeacherContacts.Model
       CreateStudentDirectories: CreateStudentDirectories.Model }
 
 type Msg =
     | ActivateTab of Tab
     | AuthenticationMsg of Authentication.Msg
     | WakeUpMsg of WakeUp.Msg
+    | ImportTeacherContactsMsg of ImportTeacherContacts.Msg
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
 
 let rec updateIfSignedIn auth (model, cmd) =
@@ -47,6 +49,9 @@ and update msg model =
     | WakeUpMsg msg ->
         let subModel, subCmd = WakeUp.update authHeaderOptFn msg model.WakeUp
         { model with WakeUp = subModel }, Cmd.map WakeUpMsg subCmd
+    | ImportTeacherContactsMsg msg ->
+        let subModel, subCmd = ImportTeacherContacts.update authHeaderOptFn msg model.ImportTeacherContacts
+        { model with ImportTeacherContacts = subModel }, Cmd.map ImportTeacherContactsMsg subCmd
     | CreateStudentDirectoriesMsg msg ->
         let subModel, subCmd = CreateStudentDirectories.update authHeaderOptFn msg model.CreateStudentDirectories
         { model with CreateStudentDirectories = subModel }, Cmd.map CreateStudentDirectoriesMsg subCmd
@@ -55,24 +60,27 @@ and update msg model =
 let init() =
     let authModel, authCmd = Authentication.init()
     let wakeUpModel, wakeUpCmd = WakeUp.init()
+    let importTeacherContactsModel, importTeacherContactsCmd = ImportTeacherContacts.init()
     let authHeaderOptFn = Authentication.authHeaderOptFn authModel
     let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
     let model =
         { ActiveTab = General
           Authentication = authModel
           WakeUp = wakeUpModel
+          ImportTeacherContacts = importTeacherContactsModel
           CreateStudentDirectories = createStudentDirectoriesModel }
     let cmd =
         Cmd.batch
             [ Cmd.map AuthenticationMsg authCmd
               Cmd.map WakeUpMsg wakeUpCmd
+              Cmd.map ImportTeacherContactsMsg importTeacherContactsCmd
               Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd ]
     model, cmd
 
 let view (model : Model) (dispatch : Msg -> unit) =
     let tabs =
         let tabItems =
-            [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch) ]
+            [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch); ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
               CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]  ]
         [ yield Tabs.tabs []
             [ for (tabItem, tabName, _tabView) in tabItems ->

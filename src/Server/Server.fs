@@ -12,6 +12,9 @@ open WakeUp
 open ClassList
 open StudentDirectories
 open System.Security.Claims
+open Microsoft.Identity.Client
+open Microsoft.Graph
+open System.Net.Http.Headers
 
 let publicPath = Path.GetFullPath "../Client/public"
 let port = 8085us
@@ -52,6 +55,35 @@ let sendWakeUpCommand : HttpHandler =
                 ServerErrors.internalError (text (sprintf "Error while getting IP address from host name \"%s\". Address candidates: %A" hostName addresses)) next ctx
             | Error (WakeOnLanError (ipAddress, physicalAddress)) ->
                 ServerErrors.internalError (text (sprintf "Error while sending WoL magic packet to %O (MAC address %O)" ipAddress physicalAddress)) next ctx
+    }
+
+let getGraphApiAccessToken (clientApp: ConfidentialClientApplication) (user: ClaimsPrincipal) scopes = async {
+    let identity = Seq.head user.Identities
+    let userAccessToken = identity.BootstrapContext :?> string
+    let! graphApiAcquireTokenResult =
+        clientApp.AcquireTokenOnBehalfOfAsync(scopes, UserAssertion userAccessToken)
+        |> Async.AwaitTask
+    return graphApiAcquireTokenResult.AccessToken
+}
+
+let getGraphApiClient accessToken =
+    DelegateAuthenticationProvider(
+        fun requestMessage ->
+            requestMessage.Headers.Authorization <- AuthenticationHeaderValue("Bearer", accessToken)
+            System.Threading.Tasks.Task.CompletedTask
+        )
+    |> GraphServiceClient
+
+let importTeacherContacts (clientApp: ConfidentialClientApplication) getTeachers : HttpHandler =
+    fun next ctx -> task {
+        let! teachers = getTeachers
+
+        let! graphApiAccessToken = getGraphApiAccessToken clientApp ctx.User [| "contacts.readwrite" |]
+        let graphApiClient = getGraphApiClient graphApiAccessToken
+
+        do! Teachers.import graphApiClient teachers
+
+        return! Successful.OK () next ctx
     }
 
 let getClassList classList : HttpHandler =
@@ -137,25 +169,39 @@ let getEnvVarOrFail name =
 [<EntryPoint>]
 let main argv =
     let connectionString = getEnvVarOrFail "SISDB_CONNECTION_STRING"
-    let getClassListFromDb = Db.getClassList connectionString
-    let getStudentsFromDb = Db.getStudents connectionString
+    let classList = Db.getClassList connectionString
+    let students = Db.getStudents connectionString
+    let teachers =
+        let dbTeachers = Db.getTeachers connectionString
+        let dbContacts = Db.getContacts connectionString
+        let teacherImageDir = getEnvVarOrFail "TEACHER_IMAGE_DIR"
+        Teachers.mapDbTeachers teacherImageDir dbContacts dbTeachers
     let createDirectoriesBaseDirectory =
         getEnvVarOrFail "CREATE_DIRECTORIES_BASE_DIRECTORIES"
         |> String.split ";"
         |> Seq.chunkBySize 2
         |> Seq.map (fun s -> s.[0], s.[1])
         |> Map.ofSeq
+    let clientId = "9fb9b79b-6e66-4007-a94f-571d7e3b68c5"
+    let clientApp =
+        let authority = "https://login.microsoftonline.com/htlvb.at/"
+        let redirectUri = "https://localhost:8080" // TODO adapt for production env?
+        let clientCredential = ClientCredential(getEnvVarOrFail "APP_KEY")
+        let userTokenCache = TokenCache()
+        let appTokenCache = TokenCache()
+        ConfidentialClientApplication(clientId, authority, redirectUri, clientCredential, userTokenCache, appTokenCache) 
 
     let requiresEggj : HttpHandler = requiresUser "EGGJ@htlvb.at"
     let requiresTeacher : HttpHandler = requiresGroup "2d1c8785-5350-4a3b-993c-62dc9bc30980"
 
     let webApp = router {
         post "/api/wakeup/send" (requiresEggj >=> sendWakeUpCommand)
-        get "/api/students/classes" (getClassList getClassListFromDb)
+        post "/api/teachers/import-contacts" (requiresTeacher >=> importTeacherContacts clientApp teachers)
+        get "/api/students/classes" (getClassList classList)
         post "/api/create-student-directories/child-directories" (requiresEggj >=> getChildDirectories createDirectoriesBaseDirectory)
-        post "/api/create-student-directories/create" (requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory getStudentsFromDb)
+        post "/api/create-student-directories/create" (requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory students)
     }
-    let clientId = "f2ac1c2a-f1cf-40cb-891b-192c74a096a4"
+
     let app = application {
         url ("http://+:" + port.ToString() + "/")
         use_router webApp
@@ -166,8 +212,9 @@ let main argv =
         use_jwt_authentication_with_config (fun options ->
             Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII <- true
             options.Audience <- clientId
-            options.Authority <- "https://login.microsoftonline.com/htlvb.at/v2.0/"
+            options.Authority <- "https://login.microsoftonline.com/htlvb.at/"
             options.TokenValidationParameters.ValidateIssuer <- false
+            options.TokenValidationParameters.SaveSigninToken <- true
         )
     }
     run app

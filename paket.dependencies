@@ -4,10 +4,13 @@ group Server
 
     nuget FSharp.Core
     nuget Microsoft.AspNetCore.Authentication.AzureAD.UI
+    nuget Microsoft.Graph
     nuget Microsoft.Identity.Client
     nuget MySqlConnector
+    nuget Polly
     nuget Saturn
     nuget Fable.JsonConverter
+    nuget SixLabors.ImageSharp
     nuget WakeOnLan
 
 group Client

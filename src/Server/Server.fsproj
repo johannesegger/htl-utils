@@ -8,9 +8,11 @@
     <ItemGroup>
         <Compile Include="..\Shared\Shared.fs" />
         <Compile Include="String.fs" />
+        <Compile Include="DateTime.fs" />
         <Compile Include="Result.fs" />
         <Compile Include="Db.fs" />
         <Compile Include="WakeUp.fs" />
+        <Compile Include="Teachers.fs" />
         <Compile Include="ClassList.fs" />
         <Compile Include="StudentDirectories.fs" />
         <Compile Include="Server.fs" />

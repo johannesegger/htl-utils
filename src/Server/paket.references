@@ -6,3 +6,6 @@ group Server
     MySqlConnector
     Microsoft.AspNetCore.Authentication.AzureAD.UI
     Microsoft.Identity.Client
+    Microsoft.Graph
+    SixLabors.ImageSharp
+    Polly

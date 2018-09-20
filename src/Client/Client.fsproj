@@ -10,6 +10,7 @@
         <Compile Include="Toast.fs" />
         <Compile Include="Authentication.fs" />
         <Compile Include="WakeUp.fs" />
+        <Compile Include="ImportTeacherContacts.fs" />
         <Compile Include="CreateStudentDirectories.fs" />
         <Compile Include="Client.fs" />
     </ItemGroup>

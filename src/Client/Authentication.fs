@@ -25,18 +25,18 @@ type Msg =
     | SignOut
     | SignOutResult of Result<unit, exn>
 
+let appId = "9fb9b79b-6e66-4007-a94f-571d7e3b68c5"
 let userAgentApplication =
-    let clientId = "f2ac1c2a-f1cf-40cb-891b-192c74a096a4"
-    let authority = "https://login.microsoftonline.com/htlvb.at"
+    let authority = "https://login.microsoftonline.com/htlvb.at/"
     // Not called with `loginPopup`
     let tokenReceivedCallBack errorDesc token error tokenType userState =
         //printfn "===== TOKEN RECEIVED: %s - %s - %s - %s - %s" errorDesc token error tokenType userState
         ()
-    Msal.UserAgentApplication.Create(clientId, Some authority, tokenReceivedCallBack)
+    Msal.UserAgentApplication.Create(appId, Some authority, tokenReceivedCallBack)
 
 let authHeaderOptFn model =
     let getToken() = promise {
-        let scope = [| "f2ac1c2a-f1cf-40cb-891b-192c74a096a4" |]
+        let scope = [| appId |]
         try
             return! userAgentApplication.acquireTokenSilent !!scope
         with _error ->
@@ -69,7 +69,7 @@ let rec update msg model =
         let cmd =
             Cmd.ofPromise
                 userAgentApplication.loginPopup
-                !![| "contacts.readwrite"; "calendars.readwrite" |]
+                !![| "contacts.readwrite" |]
                 ((fun _ -> userAgentApplication.getUser()) >> mapToUser >> Ok >> SignInResult)
                 (Error >> SignInResult)
         model, cmd
