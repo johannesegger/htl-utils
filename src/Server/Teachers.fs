@@ -49,11 +49,11 @@ let mapDbTeachers teacherImageDir dbContacts dbTeachers = async {
     return List.map (mapDbTeacher contacts photos) dbTeachers
 }
 
-let private retry fn arg =
+let private retryGraphApiRequest (fn: 'a -> System.Threading.Tasks.Task<_>) arg =
     Policy
         .HandleInner<ServiceException>()
         .WaitAndRetryAsync(
-            5,
+            6,
             Func<_, _, _, _>(fun (i: int) (ex: exn) ctx ->
                 (ex :?> ServiceException).ResponseHeaders.RetryAfter
                 |> Option.ofObj
@@ -61,21 +61,21 @@ let private retry fn arg =
                 |> Option.defaultValue (TimeSpan.FromSeconds (pown 2. i))
             ),
             Func<_, _, _, _, _>(fun ex t i ctx -> System.Threading.Tasks.Task.CompletedTask))
-        .ExecuteAsync(fun () -> fn arg |> Async.StartAsTask)
+        .ExecuteAsync(fun () -> fn arg)
     |> Async.AwaitTask
 
 let getOrCreateContactsFolder (graphApiClient: GraphServiceClient) folderName = async {
     let! folders =
-        retry
-            (graphApiClient.Me.ContactFolders.Request().Filter(sprintf "displayName eq '%s'" folderName).GetAsync >> Async.AwaitTask)
+        retryGraphApiRequest
+            (graphApiClient.Me.ContactFolders.Request().Filter(sprintf "displayName eq '%s'" folderName).GetAsync)
             CancellationToken.None
     match Seq.tryHead folders with
     | Some folder -> return folder.Id
     | None ->
         let folder = ContactFolder(DisplayName = folderName)
         let! folder =
-            retry
-                (graphApiClient.Me.ContactFolders.Request().AddAsync >> Async.AwaitTask)
+            retryGraphApiRequest
+                (graphApiClient.Me.ContactFolders.Request().AddAsync)
                 folder
         return folder.Id
 }
@@ -84,7 +84,7 @@ let rec readAll (initialRequest: 'req) (getItems: 'req -> System.Threading.Tasks
     let rec fetchNextItems currentItems allItems = async {
         match getNextRequest currentItems |> Option.ofObj with
         | Some request ->
-            let! nextItems = retry (getItems >> Async.AwaitTask) request
+            let! nextItems = retryGraphApiRequest getItems request
             return!
                 nextItems
                 |> Seq.toList
@@ -110,8 +110,8 @@ let clearFolder (graphApiClient: GraphServiceClient) folderId = async {
     do!
         existingContacts
         |> Seq.map (fun c ->
-            retry
-                (graphApiClient.Me.ContactFolders.[folderId].Contacts.[c.Id].Request().DeleteAsync >> Async.AwaitTask)
+            retryGraphApiRequest
+                (graphApiClient.Me.ContactFolders.[folderId].Contacts.[c.Id].Request().DeleteAsync >> Async.AwaitTask >> Async.StartAsTask)
                 CancellationToken.None
         )
         |> Async.Parallel
@@ -169,16 +169,16 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) folderId tea
                 |> addContactInfos teacher.Contacts
             
             let! contact =
-                retry
-                    (graphApiClient.Me.ContactFolders.[folderId].Contacts.Request().AddAsync >> Async.AwaitTask)
+                retryGraphApiRequest
+                    (graphApiClient.Me.ContactFolders.[folderId].Contacts.Request().AddAsync)
                     contact
 
             match teacher.PhotoPath with
             | Some photoPath ->
                 do!
                     use photoStream = resizePhoto photoPath
-                    retry
-                        (graphApiClient.Me.ContactFolders.[folderId].Contacts.[contact.Id].Photo.Content.Request().PutAsync >> Async.AwaitTask)
+                    retryGraphApiRequest
+                        (graphApiClient.Me.ContactFolders.[folderId].Contacts.[contact.Id].Photo.Content.Request().PutAsync)
                         photoStream
                     |> Async.Ignore
             | None -> ()
@@ -189,8 +189,8 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) folderId tea
 
 let private getBirthdayCalendarId (graphApiClient: GraphServiceClient) = async {
     let! calendars =
-        retry
-            (graphApiClient.Me.Calendars.Request().Select("id,name").GetAsync >> Async.AwaitTask)
+        retryGraphApiRequest
+            (graphApiClient.Me.Calendars.Request().Select("id,name").GetAsync)
             CancellationToken.None
 
     return
@@ -221,11 +221,11 @@ let private turnOffBirthdayReminders (graphApiClient: GraphServiceClient) = asyn
     do!
         birthdayEvents
         |> Seq.map (fun event -> async {
-            event.IsReminderOn <- Nullable<_> false
+            let event' = Event(IsReminderOn = Nullable<_> false)
             return!
-                retry
-                    (graphApiClient.Me.Calendars.[birthdayCalendarId].Events.[event.Id].Request().UpdateAsync >> Async.AwaitTask)
-                    event
+                retryGraphApiRequest
+                    (graphApiClient.Me.Calendars.[birthdayCalendarId].Events.[event.Id].Request().UpdateAsync)
+                    event'
         })
         |> Async.Parallel
         |> Async.Ignore
@@ -233,7 +233,7 @@ let private turnOffBirthdayReminders (graphApiClient: GraphServiceClient) = asyn
 
 let import graphApiClient teachers = async {
     let! folderId = getOrCreateContactsFolder graphApiClient "HTLVB"
-    // do! clearFolder graphApiClient folderId
-    // do! addTeacherContacts graphApiClient folderId teachers
+    do! clearFolder graphApiClient folderId
+    do! addTeacherContacts graphApiClient folderId teachers
     do! turnOffBirthdayReminders graphApiClient
 }
