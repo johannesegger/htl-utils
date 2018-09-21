@@ -100,10 +100,14 @@ let rec readAll (initialRequest: 'req) (getItems: 'req -> System.Threading.Tasks
 
 let clearFolder (graphApiClient: GraphServiceClient) folderId = async {
     let! existingContacts =
-        readAll
-            (graphApiClient.Me.ContactFolders.[folderId].Contacts.Request().Select("id"))
-            (fun r -> r.GetAsync())
-            (fun items -> items.NextPageRequest)
+        retryGraphApiRequest
+            (fun () ->
+                readAll
+                    (graphApiClient.Me.ContactFolders.[folderId].Contacts.Request().Select("id"))
+                    (fun r -> r.GetAsync())
+                    (fun items -> items.NextPageRequest)
+                |> Async.StartAsTask)
+            ()
 
     List.length existingContacts
     |> printfn "Deleting existing contacts (%d)"
@@ -211,10 +215,14 @@ let private getBirthdayCalendarId (graphApiClient: GraphServiceClient) = async {
 let private turnOffBirthdayReminders (graphApiClient: GraphServiceClient) = async {
     let! birthdayCalendarId = getBirthdayCalendarId graphApiClient
     let! birthdayEvents =
-        readAll
-            (graphApiClient.Me.Calendars.[birthdayCalendarId].Events.Request())
-            (fun r -> r.GetAsync())
-            (fun items -> items.NextPageRequest)
+        retryGraphApiRequest
+            (fun () ->
+                readAll
+                    (graphApiClient.Me.Calendars.[birthdayCalendarId].Events.Request())
+                    (fun r -> r.GetAsync())
+                    (fun items -> items.NextPageRequest)
+                |> Async.StartAsTask)
+            ()
 
     List.length birthdayEvents
     |> printfn "Turning off reminders for all birthday events (%d)."
