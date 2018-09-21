@@ -55,9 +55,10 @@ let private retryGraphApiRequest (fn: 'a -> System.Threading.Tasks.Task<_>) arg 
         .WaitAndRetryAsync(
             6,
             Func<_, _, _, _>(fun (i: int) (ex: exn) ctx ->
-                (ex :?> ServiceException).ResponseHeaders.RetryAfter
-                |> Option.ofObj
-                |> Option.bind (fun p -> Option.ofNullable p.Delta)
+                ex :?> ServiceException |> Option.ofObj
+                |> Option.bind (fun p -> p.ResponseHeaders |> Option.ofObj)
+                |> Option.bind (fun p -> p.RetryAfter |> Option.ofObj) 
+                |> Option.bind (fun p -> p.Delta |> Option.ofNullable)
                 |> Option.defaultValue (TimeSpan.FromSeconds (pown 2. i))
             ),
             Func<_, _, _, _, _>(fun ex t i ctx -> System.Threading.Tasks.Task.CompletedTask))
