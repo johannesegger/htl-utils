@@ -15,19 +15,21 @@ type Msg =
     | Import
     | ImportResponse of Result<unit, exn>
 
-let update authHeaderOptFn msg model =
+let rec update authHeaderOptFn msg model =
     match msg with
     | Import ->
-        let cmd =
-            match authHeaderOptFn with
-            | Some getAuthHeader ->
+        match authHeaderOptFn with
+        | Some getAuthHeader ->
+            let cmd =
                 Cmd.ofPromise
                     (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/teachers/import-contacts" ()))
                     ()
                     (ignore >> Ok >> ImportResponse)
                     (Error >> ImportResponse)
-            | None -> Cmd.none
-        model, cmd
+            model, cmd
+        | None ->
+            let msg = exn "Please sign in using your Microsoft account." |> Error |> ImportResponse
+            update authHeaderOptFn msg model
     | ImportResponse (Error e) ->
         let cmd =
             Toast.toast "Import teacher contacts failed" e.Message

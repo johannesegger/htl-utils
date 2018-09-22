@@ -166,23 +166,25 @@ let rec update authHeaderOptFn msg model =
                 NewDirectoryNames = model.NewDirectoryNames |> Map.remove path }
         update authHeaderOptFn (LoadChildDirectories (name :: path)) model'
     | CreateDirectories ->
-        let cmd =
-            match getSelectedDirectory model.Directory, model.SelectedClass with
-            | Some selectedDirectory, Some className ->
-                match List.rev selectedDirectory.Path with
-                | baseDir :: path ->
-                    let record = { ClassName = className; Path = baseDir, path }
-                    match authHeaderOptFn with
-                    | Some getAuthHeader ->
+        match getSelectedDirectory model.Directory, model.SelectedClass with
+        | Some selectedDirectory, Some className ->
+            match List.rev selectedDirectory.Path with
+            | baseDir :: path ->
+                let record = { ClassName = className; Path = baseDir, path }
+                match authHeaderOptFn with
+                | Some getAuthHeader ->
+                    let cmd =
                         Cmd.ofPromise
                             (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/create-student-directories/create" record))
                             ()
                             (ignore >> Ok >> CreateDirectoriesResponse)
                             (Error >> CreateDirectoriesResponse)
-                    | None -> Cmd.none
-                | _ -> Cmd.none
-            | _ -> Cmd.none
-        model, cmd
+                    model, cmd
+                | None ->
+                    let msg = exn "Please sign in using your Microsoft account." |> Error |> CreateDirectoriesResponse
+                    update authHeaderOptFn msg model
+            | _ -> model, Cmd.none
+        | _ -> model, Cmd.none
     | CreateDirectoriesResponse (Ok ()) ->
         let cmd =
             Toast.toast "Creating student directories" "Successfully created student directories"
