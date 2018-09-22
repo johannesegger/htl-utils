@@ -80,7 +80,8 @@ let init() =
 let view (model : Model) (dispatch : Msg -> unit) =
     let tabs =
         let tabItems =
-            [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch); ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
+            [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
+                                    ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
               CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]  ]
         [ yield Tabs.tabs []
             [ for (tabItem, tabName, _tabView) in tabItems ->
