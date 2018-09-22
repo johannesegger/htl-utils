@@ -36,6 +36,8 @@ module.exports = {
         modules: [resolve("../../node_modules/")]
     },
     devServer: {
+        host: '0.0.0.0',
+        port: 8080,
         proxy: {
             '/api/*': {
                 target: 'http://localhost:' + port,
