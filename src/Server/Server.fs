@@ -1,11 +1,13 @@
 open System
 open System.IO
 open System.Text
+open System.Net
 open System.Net.Http.Headers
 open System.Net.NetworkInformation
 open System.Security.Claims
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Identity.Client
 open Microsoft.Graph
@@ -18,7 +20,7 @@ open ClassList
 open StudentDirectories
 
 let publicPath = Path.GetFullPath "../Client/public"
-let port = 8085us
+let port = 8085
 
 let requiresUser preferredUsername : HttpHandler =
     evaluateUserPolicy
@@ -161,14 +163,19 @@ let createStudentDirectories baseDirectories getStudents : HttpHandler =
                 ServerErrors.internalError (setBodyFromString message) next ctx
     }
 
+let getEnvVar name =
+    Environment.GetEnvironmentVariable name
+
 let getEnvVarOrFail name =
-    let value = Environment.GetEnvironmentVariable name
+    let value = getEnvVar name
     if isNull value
     then failwithf "Environment variable \"%s\" not set" name
     else value
 
 [<EntryPoint>]
 let main argv =
+    let sslCertPath = getEnvVar "SSL_CERT_PATH"
+    let sslCertPassword = getEnvVar "SSL_CERT_PASSWORD"
     let connectionString = getEnvVarOrFail "SISDB_CONNECTION_STRING"
     let classList = Db.getClassList connectionString
     let students = Db.getStudents connectionString
@@ -204,7 +211,6 @@ let main argv =
     }
 
     let app = application {
-        url ("https://+:" + port.ToString() + "/")
         use_router webApp
         memory_cache
         use_static publicPath
@@ -216,6 +222,17 @@ let main argv =
             options.Authority <- "https://login.microsoftonline.com/htlvb.at/"
             options.TokenValidationParameters.ValidateIssuer <- false
             options.TokenValidationParameters.SaveSigninToken <- true
+        )
+        host_config(fun host ->
+            host.UseKestrel(fun options ->
+                options.Listen(IPAddress.Any, port, fun listenOptions ->
+#if DEBUG
+                    listenOptions.UseHttps() |> ignore
+#else
+                    listenOptions.UseHttps(sslCertPath, sslCertPassword) |> ignore
+#endif
+                )
+            )
         )
         app_config(fun app ->
 #if DEBUG

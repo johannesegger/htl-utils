@@ -5,6 +5,7 @@ group Server
     nuget FSharp.Core
     nuget Microsoft.AspNetCore.Authentication.AzureAD.UI
     nuget Microsoft.AspNetCore.HttpsPolicy
+    nuget Microsoft.AspNetCore.Server.Kestrel
     nuget Microsoft.Graph
     nuget Microsoft.Identity.Client
     nuget MySqlConnector
@@ -18,7 +19,7 @@ group Client
     storage: none
     source https://api.nuget.org/v3/index.json
 
-    nuget Fable.Core
+    nuget Fable.Core ~> 1
     nuget Fable.Elmish.Debugger
     nuget Fable.Elmish.React
     nuget Fable.Elmish.HMR
