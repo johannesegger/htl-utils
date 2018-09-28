@@ -5,6 +5,7 @@ group Server
     WakeOnLan
     MySqlConnector
     Microsoft.AspNetCore.Authentication.AzureAD.UI
+    Microsoft.AspNetCore.HttpsPolicy
     Microsoft.Identity.Client
     Microsoft.Graph
     SixLabors.ImageSharp

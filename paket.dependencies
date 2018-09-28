@@ -4,6 +4,7 @@ group Server
 
     nuget FSharp.Core
     nuget Microsoft.AspNetCore.Authentication.AzureAD.UI
+    nuget Microsoft.AspNetCore.HttpsPolicy
     nuget Microsoft.Graph
     nuget Microsoft.Identity.Client
     nuget MySqlConnector

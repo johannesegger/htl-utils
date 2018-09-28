@@ -1,9 +1,14 @@
 open System
 open System.IO
 open System.Text
-open FSharp.Control.Tasks.V2.ContextInsensitive
+open System.Net.Http.Headers
 open System.Net.NetworkInformation
+open System.Security.Claims
+open FSharp.Control.Tasks.V2.ContextInsensitive
+open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Identity.Client
+open Microsoft.Graph
 open Giraffe
 open Giraffe.Serialization
 open Saturn
@@ -11,10 +16,6 @@ open Shared
 open WakeUp
 open ClassList
 open StudentDirectories
-open System.Security.Claims
-open Microsoft.Identity.Client
-open Microsoft.Graph
-open System.Net.Http.Headers
 
 let publicPath = Path.GetFullPath "../Client/public"
 let port = 8085us
@@ -203,7 +204,7 @@ let main argv =
     }
 
     let app = application {
-        url ("http://+:" + port.ToString() + "/")
+        url ("https://+:" + port.ToString() + "/")
         use_router webApp
         memory_cache
         use_static publicPath
@@ -215,6 +216,16 @@ let main argv =
             options.Authority <- "https://login.microsoftonline.com/htlvb.at/"
             options.TokenValidationParameters.ValidateIssuer <- false
             options.TokenValidationParameters.SaveSigninToken <- true
+        )
+        app_config(fun app ->
+#if DEBUG
+            app.UseDeveloperExceptionPage() |> ignore
+#else
+            // app.UseExceptionHandler("/Error")
+            app.UseHsts()
+#endif
+
+            app.UseHttpsRedirection()
         )
     }
     run app
