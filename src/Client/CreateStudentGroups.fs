@@ -137,16 +137,12 @@ let view model dispatch =
         |> Option.map (snd >> function | NotLoaded -> false | Loaded _ -> true)
         |> Option.defaultValue false
 
+    let colors = [| IsPrimary; IsLink; IsLight; IsInfo; IsDark; IsSuccess; IsWarning; IsDanger |]
+
     Container.container []
         [ yield classListView
+
           yield Divider.divider []
-          
-          yield!
-            [ for group in model.Groups ->
-                Tag.list []
-                    [ for (lastName, firstName) in group ->
-                        Tag.tag [] [ str (sprintf "%s %s" (lastName.ToUpper()) firstName) ] ]
-            ]
 
           yield Field.div [ Field.IsHorizontal ]
             [ Field.label [ Field.Label.IsNormal ] [ Label.label [] [ str "Group size: " ] ]
@@ -162,4 +158,15 @@ let view model dispatch =
             [ Button.Color IsSuccess
               Button.Disabled (not canShuffle)
               Button.OnClick (fun _ev -> dispatch CreateShuffledGroups) ]
-            [ str "Shuffle" ] ]
+            [ str "Shuffle" ]
+
+          yield Divider.divider []
+            
+          yield!
+            [ for (idx, group) in List.indexed model.Groups do
+                let color = colors.[idx % colors.Length]
+                yield Tag.list []
+                    [ for (lastName, firstName) in group ->
+                        Tag.tag [ Tag.Size IsMedium; Tag.Color color ]
+                            [ str (sprintf "%s %s" (lastName.ToUpper()) firstName) ] ]
+            ] ]
