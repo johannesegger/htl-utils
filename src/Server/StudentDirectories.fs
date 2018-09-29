@@ -13,16 +13,16 @@ type CreateDirectoriesErrorInfo =
 
 type CreateStudentDirectoriesError =
     | InvalidBaseDirectory of string
-    | GetStudentsError of string * string
+    | GetStudentsError of Students.GetStudentsError
     | CreatingSomeDirectoriesFailed of CreateDirectoriesErrorInfo
 
 let createStudentDirectories getStudents baseDirectory className = async {
     printfn "Creating student directories for %s in %s" className baseDirectory
     let! students = async {
-        try
-            let! students = getStudents className
-            return Ok students
-        with e -> return GetStudentsError (className, e.ToString()) |> Error
+        let! students = getStudents className
+        return
+            students
+            |> Result.mapError GetStudentsError
     }
     
     return

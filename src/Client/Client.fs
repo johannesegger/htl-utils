@@ -15,13 +15,15 @@ importAll "./Styles/main.sass"
 type Tab =
     | General
     | CreateStudentDirectories
+    | CreateStudentGroups
 
 type Model =
     { ActiveTab: Tab
       Authentication: Authentication.Model
       WakeUp: WakeUp.Model
       ImportTeacherContacts: ImportTeacherContacts.Model
-      CreateStudentDirectories: CreateStudentDirectories.Model }
+      CreateStudentDirectories: CreateStudentDirectories.Model
+      CreateStudentGroups: CreateStudentGroups.Model }
 
 type Msg =
     | ActivateTab of Tab
@@ -29,6 +31,7 @@ type Msg =
     | WakeUpMsg of WakeUp.Msg
     | ImportTeacherContactsMsg of ImportTeacherContacts.Msg
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
+    | CreateStudentGroupsMsg of CreateStudentGroups.Msg
 
 let rec updateIfSignedIn auth (model, cmd) =
     match auth, model.Authentication with
@@ -55,6 +58,9 @@ and update msg model =
     | CreateStudentDirectoriesMsg msg ->
         let subModel, subCmd = CreateStudentDirectories.update authHeaderOptFn msg model.CreateStudentDirectories
         { model with CreateStudentDirectories = subModel }, Cmd.map CreateStudentDirectoriesMsg subCmd
+    | CreateStudentGroupsMsg msg ->
+        let subModel, subCmd = CreateStudentGroups.update msg model.CreateStudentGroups
+        { model with CreateStudentGroups = subModel }, Cmd.map CreateStudentGroupsMsg subCmd
     |> updateIfSignedIn model.Authentication
 
 let init() =
@@ -63,18 +69,21 @@ let init() =
     let importTeacherContactsModel, importTeacherContactsCmd = ImportTeacherContacts.init()
     let authHeaderOptFn = Authentication.authHeaderOptFn authModel
     let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
+    let createStudentGroupsModel, createStudentGroupsCmd = CreateStudentGroups.init
     let model =
         { ActiveTab = General
           Authentication = authModel
           WakeUp = wakeUpModel
           ImportTeacherContacts = importTeacherContactsModel
-          CreateStudentDirectories = createStudentDirectoriesModel }
+          CreateStudentDirectories = createStudentDirectoriesModel
+          CreateStudentGroups = createStudentGroupsModel }
     let cmd =
         Cmd.batch
             [ Cmd.map AuthenticationMsg authCmd
               Cmd.map WakeUpMsg wakeUpCmd
               Cmd.map ImportTeacherContactsMsg importTeacherContactsCmd
-              Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd ]
+              Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd
+              Cmd.map CreateStudentGroupsMsg createStudentGroupsCmd ]
     model, cmd
 
 let view (model : Model) (dispatch : Msg -> unit) =
@@ -82,7 +91,8 @@ let view (model : Model) (dispatch : Msg -> unit) =
         let tabItems =
             [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
                                     ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
-              CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]  ]
+              CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]
+              CreateStudentGroups, "Create student groups", [ CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch) ] ]
         [ yield Tabs.tabs []
             [ for (tabItem, tabName, _tabView) in tabItems ->
                 Tabs.tab [ Tabs.Tab.IsActive (model.ActiveTab = tabItem) ]

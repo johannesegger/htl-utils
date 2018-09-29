@@ -110,7 +110,7 @@ let rec update authHeaderOptFn msg model =
     | LoadClassList ->
         let cmd =
             Cmd.ofPromise
-                (fetchAs<string list> "/api/students/classes")
+                (fetchAs<string list> "/api/classes")
                 []
                 (Ok >> LoadClassListResponse)
                 (Error >> LoadClassListResponse)

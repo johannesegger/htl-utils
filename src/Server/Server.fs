@@ -16,7 +16,7 @@ open Giraffe.Serialization
 open Saturn
 open Shared
 open WakeUp
-open ClassList
+open Students
 open StudentDirectories
 
 let publicPath = Path.GetFullPath "../Client/public"
@@ -99,6 +99,16 @@ let getClassList classList : HttpHandler =
                 ServerErrors.internalError (setBodyFromString (sprintf "Error while querying list of classes: %s" message)) next ctx
     }
 
+let getStudentList students className : HttpHandler =
+    fun next ctx -> task {
+        let! result = students className |> Async.StartAsTask
+        return!
+            match result with
+            | Ok list -> Successful.OK list next ctx
+            | Error (Students.GetStudentsError message) ->
+                ServerErrors.internalError (setBodyFromString (sprintf "Error while querying students from class \"%s\": %s" className message)) next ctx
+    }
+
 let getChildDirectories baseDirectories : HttpHandler =
     fun next ctx -> task {
         let! body = Controller.getJson<string list> ctx
@@ -145,8 +155,8 @@ let createStudentDirectories baseDirectories getStudents : HttpHandler =
             | Ok _ -> Successful.OK () next ctx
             | Error (InvalidBaseDirectory name) ->
                 RequestErrors.BAD_REQUEST (sprintf "Invalid base directory \"%s\"" name) next ctx
-            | Error (GetStudentsError (className, message)) ->
-                ServerErrors.internalError (setBodyFromString (sprintf "Error while querying students from class \"%s\": %s" className message)) next ctx
+            | Error (GetStudentsError (Students.GetStudentsError message)) ->
+                ServerErrors.internalError (setBodyFromString (sprintf "Error while querying students from class \"%s\": %s" input.ClassName message)) next ctx
             | Error (CreatingSomeDirectoriesFailed x) ->
                 let notCreatedDirectories =
                     x.NotCreatedDirectories
@@ -178,7 +188,8 @@ let main argv =
     let sslCertPassword = getEnvVar "SSL_CERT_PASSWORD"
     let connectionString = getEnvVarOrFail "SISDB_CONNECTION_STRING"
     let classList = Db.getClassList connectionString
-    let students = Db.getStudents connectionString
+    let dbStudents = Db.getStudents connectionString
+    let students = Students.getStudents dbStudents
     let teachers =
         let dbTeachers = Db.getTeachers connectionString
         let dbContacts = Db.getContacts connectionString
@@ -205,7 +216,8 @@ let main argv =
     let webApp = router {
         post "/api/wakeup/send" (requiresEggj >=> sendWakeUpCommand)
         post "/api/teachers/import-contacts" (requiresTeacher >=> importTeacherContacts clientApp teachers)
-        get "/api/students/classes" (getClassList classList)
+        get "/api/classes" (getClassList classList)
+        getf "/api/classes/%s/students" (getStudentList students)
         post "/api/create-student-directories/child-directories" (requiresEggj >=> getChildDirectories createDirectoriesBaseDirectory)
         post "/api/create-student-directories/create" (requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory students)
     }

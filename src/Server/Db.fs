@@ -33,7 +33,7 @@ let getClassList connectionString = async {
     return! execute connectionString fn
 }
 
-let getStudents connectionString className = async {
+let getStudents connectionString (className: string) = async {
     let fn (connection: MySqlConnection) = async {
         use command = connection.CreateCommand()
         command.CommandText <- "SELECT LastName, FirstName1 FROM pupil WHERE SchoolClass = @className ORDER BY LastName, FirstName1"

@@ -12,6 +12,7 @@
         <Compile Include="WakeUp.fs" />
         <Compile Include="ImportTeacherContacts.fs" />
         <Compile Include="CreateStudentDirectories.fs" />
+        <Compile Include="CreateStudentGroups.fs" />
         <Compile Include="Client.fs" />
     </ItemGroup>
     <Import Project="..\..\.paket\Paket.Restore.targets" />
