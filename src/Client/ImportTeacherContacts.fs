@@ -20,13 +20,16 @@ let rec update authHeaderOptFn msg model =
     | Import ->
         match authHeaderOptFn with
         | Some getAuthHeader ->
-            let cmd =
+            let makeRequestCmd =
                 Cmd.ofPromise
                     (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/teachers/import-contacts" ()))
                     ()
                     (ignore >> Ok >> ImportResponse)
                     (Error >> ImportResponse)
-            model, cmd
+            let toastCmd =
+                Toast.toast "Import teacher contacts" "Import started. This might take some time."
+                |> Toast.info
+            model, Cmd.batch [ makeRequestCmd; toastCmd ]
         | None ->
             let msg = exn "Please sign in using your Microsoft account." |> Error |> ImportResponse
             update authHeaderOptFn msg model
