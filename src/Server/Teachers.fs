@@ -172,7 +172,7 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) teachers = a
                     |> Async.Ignore
             | None -> ()
         })
-        |> Async.Parallel
+        |> Async.sequence
         |> Async.Ignore
 }
 
