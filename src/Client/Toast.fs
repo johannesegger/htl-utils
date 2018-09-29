@@ -9,7 +9,7 @@ open Thoth.Elmish
 let toast title message =
     Toast.message message
     |> Toast.title title
-    |> Toast.position Toast.TopRight
+    |> Toast.position Toast.BottomRight
     |> Toast.noTimeout
     |> Toast.withCloseButton
     |> Toast.dismissOnClick
