@@ -65,22 +65,6 @@ let private retryGraphApiRequest (fn: 'a -> System.Threading.Tasks.Task<_>) arg 
         .ExecuteAsync(fun () -> fn arg)
     |> Async.AwaitTask
 
-let getOrCreateContactsFolder (graphApiClient: GraphServiceClient) folderName = async {
-    let! folders =
-        retryGraphApiRequest
-            (fun () -> graphApiClient.Me.ContactFolders.Request().Filter(sprintf "displayName eq '%s'" folderName).GetAsync())
-            ()
-    match Seq.tryHead folders with
-    | Some folder -> return folder.Id
-    | None ->
-        let folder = ContactFolder(DisplayName = folderName)
-        let! folder =
-            retryGraphApiRequest
-                (fun p -> graphApiClient.Me.ContactFolders.Request().AddAsync(p))
-                folder
-        return folder.Id
-}
-
 let rec readAll (initialRequest: 'req) (getItems: 'req -> System.Threading.Tasks.Task<'items>) (getNextRequest: 'items -> 'req) = async {
     let rec fetchNextItems currentItems allItems = async {
         match getNextRequest currentItems |> Option.ofObj with
@@ -98,12 +82,12 @@ let rec readAll (initialRequest: 'req) (getItems: 'req -> System.Threading.Tasks
     return! fetchNextItems initialItems (Seq.toList initialItems)
 }
 
-let clearFolder (graphApiClient: GraphServiceClient) folderId = async {
+let clearContacts (graphApiClient: GraphServiceClient) = async {
     let! existingContacts =
         retryGraphApiRequest
             (fun () ->
                 readAll
-                    (graphApiClient.Me.ContactFolders.[folderId].Contacts.Request().Select("id"))
+                    (graphApiClient.Me.Contacts.Request().Select("id"))
                     (fun r -> r.GetAsync())
                     (fun items -> items.NextPageRequest)
                 |> Async.StartAsTask)
@@ -116,14 +100,14 @@ let clearFolder (graphApiClient: GraphServiceClient) folderId = async {
         existingContacts
         |> Seq.map (fun c ->
             retryGraphApiRequest
-                (fun () -> graphApiClient.Me.ContactFolders.[folderId].Contacts.[c.Id].Request().DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
+                (fun () -> graphApiClient.Me.Contacts.[c.Id].Request().DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
                 ()
         )
         |> Async.Parallel
         |> Async.Ignore
 }
 
-let private addTeacherContacts (graphApiClient: GraphServiceClient) folderId teachers = async {
+let private addTeacherContacts (graphApiClient: GraphServiceClient) teachers = async {
     printfn "Adding teachers (%d)" (List.length teachers)
 
     let addContactInfos contactInfos contact =
@@ -175,7 +159,7 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) folderId tea
             
             let! contact =
                 retryGraphApiRequest
-                    (fun p -> graphApiClient.Me.ContactFolders.[folderId].Contacts.Request().AddAsync(p))
+                    (fun p -> graphApiClient.Me.Contacts.Request().AddAsync(p))
                     contact
 
             match teacher.PhotoPath with
@@ -183,7 +167,7 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) folderId tea
                 do!
                     use photoStream = resizePhoto photoPath
                     retryGraphApiRequest
-                        (fun p -> graphApiClient.Me.ContactFolders.[folderId].Contacts.[contact.Id].Photo.Content.Request().PutAsync(p))
+                        (fun p -> graphApiClient.Me.Contacts.[contact.Id].Photo.Content.Request().PutAsync(p))
                         photoStream
                     |> Async.Ignore
             | None -> ()
@@ -241,8 +225,7 @@ let private turnOffBirthdayReminders (graphApiClient: GraphServiceClient) = asyn
 }
 
 let import graphApiClient teachers = async {
-    let! folderId = getOrCreateContactsFolder graphApiClient "HTLVB"
-    do! clearFolder graphApiClient folderId
-    do! addTeacherContacts graphApiClient folderId teachers
+    do! clearContacts graphApiClient
+    do! addTeacherContacts graphApiClient teachers
     do! turnOffBirthdayReminders graphApiClient
 }
