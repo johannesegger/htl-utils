@@ -3,6 +3,7 @@ module CreateStudentGroups
 open System
 open Elmish
 open Fable.Helpers.React
+open Fable.Helpers.React.Props
 open Fable.PowerPack
 open Fable.PowerPack.Fetch
 open Fulma
@@ -12,15 +13,20 @@ open Thoth.Elmish
 open Shared.CreateStudentDirectories
 open Authentication
 
+type Student =
+    { Id: Guid
+      LastName: string
+      FirstName: string }
+
 type ClassStudents =
     | NotLoaded
-    | Loaded of (string * string) list
+    | Loaded of Student list
 
 type Model =
     { ClassList: string list list
       SelectedClass: (string * ClassStudents) option
       GroupSize: int
-      Groups: (string * string) list list }
+      Groups: Student list list }
 
 type Msg =
     | Init
@@ -30,6 +36,7 @@ type Msg =
     | LoadClassStudentsResponse of Result<(string * string) list, exn>
     | SetGroupSize of int
     | CreateShuffledGroups
+    | RemoveStudent of Guid
 
 let private shuffle =
     let rand = Random()
@@ -80,12 +87,18 @@ let rec update msg model =
                 (Error >> LoadClassStudentsResponse)
         model', cmd
     | LoadClassStudentsResponse (Ok students) ->
+        let students' =
+            students
+            |> List.map (fun (lastName, firstName) ->
+                { Id = Guid.NewGuid()
+                  LastName = lastName
+                  FirstName = firstName })
         let model' =
             match model.SelectedClass with
             | Some (className, _) ->
                 { model with
-                    SelectedClass = Some (className, Loaded students)
-                    Groups = group model.GroupSize students }
+                    SelectedClass = Some (className, Loaded students')
+                    Groups = group model.GroupSize students' }
             | None -> model
         model', Cmd.none
     | LoadClassStudentsResponse (Error e) ->
@@ -109,6 +122,18 @@ let rec update msg model =
                     model.Groups
                     |> List.collect id
                     |> shuffle
+                    |> group model.GroupSize }
+        model', Cmd.none
+    | RemoveStudent studentId ->
+        let model' =
+            { model with
+                Groups =
+                    model.Groups
+                    |> List.map (fun group ->
+                        group
+                        |> List.filter (fun student -> student.Id <> studentId)
+                    )
+                    |> List.collect id
                     |> group model.GroupSize }
         model', Cmd.none
 
@@ -163,10 +188,21 @@ let view model dispatch =
           yield Divider.divider []
             
           yield!
-            [ for (idx, group) in List.indexed model.Groups do
-                let color = colors.[idx % colors.Length]
-                yield Tag.list []
-                    [ for (lastName, firstName) in group ->
-                        Tag.tag [ Tag.Size IsMedium; Tag.Color color ]
-                            [ str (sprintf "%s %s" (lastName.ToUpper()) firstName) ] ]
-            ] ]
+                [ for (idx, group) in List.indexed model.Groups do
+                    let color = colors.[idx % colors.Length]
+                    yield 
+                        Field.div [ Field.IsGrouped; Field.IsHorizontal ]
+                            [ Field.label [ Field.Label.IsNormal ]
+                                [ Label.label [] [ str (sprintf "Group #%i" (idx + 1)) ] ]
+                              Field.body [ ]
+                                [ Field.div [ Field.IsGrouped; Field.CustomClass Field.Classes.IsGrouped.Multiline ]
+                                    [ for student in group ->
+                                        Control.div []
+                                            [ Tag.list [ Tag.List.HasAddons ]
+                                                [ Tag.tag [ Tag.Size IsMedium; Tag.Color color ]
+                                                    [ str (sprintf "%s %s" (student.LastName.ToUpper()) student.FirstName) ]
+                                                  Tag.delete
+                                                    [ Tag.Size IsMedium
+                                                      Tag.Props [ OnClick (fun _ev -> dispatch (RemoveStudent student.Id)) ] ]
+                                                    [] ] ] ] ] ]
+                ] ]
