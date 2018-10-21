@@ -1,13 +1,12 @@
 group Server
     FSharp.Core
-    Saturn
-    Fable.JsonConverter
-    WakeOnLan
-    MySqlConnector
     Microsoft.AspNetCore.Authentication.AzureAD.UI
     Microsoft.AspNetCore.HttpsPolicy
-    Microsoft.AspNetCore.Server.Kestrel
-    Microsoft.Identity.Client
     Microsoft.Graph
-    SixLabors.ImageSharp
+    Microsoft.Identity.Client
+    MySqlConnector
     Polly
+    Saturn
+    SixLabors.ImageSharp
+    Thoth.Json.Giraffe
+    WakeOnLan

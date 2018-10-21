@@ -12,6 +12,7 @@ open Fulma.FontAwesome
 open Thoth.Elmish
 open Shared.CreateStudentDirectories
 open Authentication
+open Thoth.Json
 
 type Student =
     { Id: Guid
@@ -64,7 +65,7 @@ let rec update msg model =
     | LoadClassList ->
         let cmd =
             Cmd.ofPromise
-                (fetchAs<string list> "/api/classes")
+                (fetchAs "/api/classes" (Decode.list Decode.string))
                 []
                 (Ok >> LoadClassListResponse)
                 (Error >> LoadClassListResponse)
@@ -81,7 +82,7 @@ let rec update msg model =
         let model' = { model with SelectedClass = Some (name, NotLoaded) }
         let cmd =
             Cmd.ofPromise
-                (fetchAs<(string * string) list> (sprintf "/api/classes/%s/students" name))
+                (fetchAs (sprintf "/api/classes/%s/students" name) (Decode.list (Decode.tuple2 Decode.string Decode.string)))
                 []
                 (Ok >> LoadClassStudentsResponse)
                 (Error >> LoadClassStudentsResponse)

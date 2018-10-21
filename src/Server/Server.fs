@@ -14,6 +14,7 @@ open Microsoft.Graph
 open Giraffe
 open Giraffe.Serialization
 open Saturn
+open Thoth.Json.Giraffe
 open Shared
 open WakeUp
 open Students
@@ -42,9 +43,7 @@ let readStream (stream: Stream) = task {
 }
 
 let configureSerialization (services:IServiceCollection) =
-    let fableJsonSettings = Newtonsoft.Json.JsonSerializerSettings()
-    fableJsonSettings.Converters.Add(Fable.JsonConverter())
-    services.AddSingleton<IJsonSerializer>(NewtonsoftJsonSerializer fableJsonSettings)
+    services.AddSingleton<IJsonSerializer>(ThothSerializer())
 
 let sendWakeUpCommand : HttpHandler =
     fun next ctx -> task {

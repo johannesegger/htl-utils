@@ -9,6 +9,7 @@ open Fulma.Extensions
 open Fulma.FontAwesome
 open Thoth.Elmish
 open Shared.CreateStudentDirectories
+open Thoth.Json
 
 type DirectoryChildren =
     | LoadedDirectoryChildren of Directory list
@@ -110,7 +111,7 @@ let rec update authHeaderOptFn msg model =
     | LoadClassList ->
         let cmd =
             Cmd.ofPromise
-                (fetchAs<string list> "/api/classes")
+                (fetchAs "/api/classes" (Decode.list Decode.string))
                 []
                 (Ok >> LoadClassListResponse)
                 (Error >> LoadClassListResponse)
@@ -138,7 +139,7 @@ let rec update authHeaderOptFn msg model =
                             >> requestHeaders
                             >> List.singleton
                             >> postRecord "/api/create-student-directories/child-directories" (List.rev path))
-                        >> Promise.bind (fun r -> r.json<string list>()))
+                        >> Promise.bind (fun r -> r.json() |> Promise.map (Decode.unwrap "$" (Decode.list Decode.string))))
                     ()
                     ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
                     (Error >> LoadChildDirectoriesResponse)

@@ -18,38 +18,36 @@ let deployDir = Path.getFullName "./deploy"
 
 let platformTool tool winTool =
     let tool = if Environment.isUnix then tool else winTool
-    match Process.tryFindFileOnPath tool with Some t -> t | _ -> failwithf "%s not found" tool
+    match ProcessUtils.tryFindFileOnPath tool with
+    | Some t -> t
+    | _ ->
+        let errorMsg =
+            tool + " was not found in path. " +
+            "Please install it and make sure it's available from your path. " +
+            "See https://safe-stack.github.io/docs/quickstart/#install-pre-requisites for more info"
+        failwith errorMsg
 
 let nodeTool = platformTool "node" "node.exe"
 let yarnTool = platformTool "yarn" "yarn.cmd"
 
-let inline withWorkDir wd =
-    DotNet.Options.withWorkingDirectory wd
-
 let runTool cmd args workingDir =
-    let result =
-        Process.execSimple (fun info ->
-            { info with
-                FileName = cmd
-                WorkingDirectory = workingDir
-                Arguments = args })
-            TimeSpan.MaxValue
-    if result <> 0 then failwithf "'%s %s' failed" cmd args
+    CreateProcess.fromRawCommand cmd args
+    |> CreateProcess.ensureExitCode // will make sure to throw on error
+    |> CreateProcess.withWorkingDirectory workingDir
+    |> Proc.run
+    |> ignore
 
 let runDotNet cmd workingDir =
     let result =
-        DotNet.exec (withWorkDir workingDir) cmd ""
+        DotNet.exec (DotNet.Options.withWorkingDirectory workingDir) cmd ""
     if result.ExitCode <> 0 then failwithf "'dotnet %s' failed in %s" cmd workingDir
 
 let openBrowser url =
-    let result =
-        //https://github.com/dotnet/corefx/issues/10361
-        Process.execSimple (fun info ->
-            { info with
-                FileName = url
-                UseShellExecute = true })
-            TimeSpan.MaxValue
-    if result <> 0 then failwithf "opening browser failed"
+    ShellCommand url
+    |> CreateProcess.fromCommand
+    |> CreateProcess.ensureExitCode // will make sure to throw on error
+    |> Proc.run
+    |> ignore
 
 Target.create "Clean" (fun _ ->
     Shell.cleanDirs [deployDir]
@@ -57,10 +55,10 @@ Target.create "Clean" (fun _ ->
 
 Target.create "InstallClient" (fun _ ->
     printfn "Node version:"
-    runTool nodeTool "--version" __SOURCE_DIRECTORY__
+    runTool nodeTool [ "--version" ] __SOURCE_DIRECTORY__
     printfn "Yarn version:"
-    runTool yarnTool "--version" __SOURCE_DIRECTORY__
-    runTool yarnTool "install --frozen-lockfile" __SOURCE_DIRECTORY__
+    runTool yarnTool [ "--version" ] __SOURCE_DIRECTORY__
+    runTool yarnTool [ "install"; "--frozen-lockfile" ] __SOURCE_DIRECTORY__
     printfn "dotnet version:"
     runDotNet "--version" __SOURCE_DIRECTORY__
     runDotNet "restore" clientPath
@@ -72,7 +70,7 @@ Target.create "RestoreServer" (fun _ ->
 
 Target.create "Build" (fun _ ->
     runDotNet "build" serverPath
-    runDotNet "fable webpack -- -p" clientPath
+    runDotNet "fable webpack -- --config src/Client/webpack.config.js -p" clientPath
 )
 
 Target.create "Run" (fun _ ->
@@ -80,14 +78,14 @@ Target.create "Run" (fun _ ->
         runDotNet "watch run" serverPath
     }
     let client = async {
-        runDotNet "fable webpack-dev-server" clientPath
+        runDotNet "fable webpack-dev-server -- --config src/Client/webpack.config.js" clientPath
     }
     let browser = async {
-        Threading.Thread.Sleep 5000
+        do! Async.Sleep 5000
         openBrowser "http://localhost:8080"
     }
 
-    [ server; client; browser ]
+    [ server; client; browser]
     |> Async.Parallel
     |> Async.RunSynchronously
     |> ignore
@@ -108,10 +106,10 @@ Target.create "Bundle" (fun _ ->
 Target.create "Docker" (fun _ ->
     let imageName = "johannesegger/htl-utils"
 
-    let buildArgs = sprintf "build -t %s ." imageName
+    let buildArgs = [ "build"; "-t"; imageName; "." ]
     runTool "docker" buildArgs "."
 
-    let tagArgs = sprintf "tag %s %s" imageName imageName
+    let tagArgs = [ "tag"; imageName; imageName ]
     runTool "docker" tagArgs "."
 )
 
@@ -123,7 +121,8 @@ open Fake.Core.TargetOperators
     ==> "Bundle"
     ==> "Docker"
 
-"InstallClient"
+"Clean"
+    ==> "InstallClient"
     ==> "RestoreServer"
     ==> "Run"
 
