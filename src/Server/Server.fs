@@ -21,7 +21,8 @@ open Students
 open StudentDirectories
 
 let publicPath = Path.GetFullPath "../Client/public"
-let port = 8085
+let httpPort = 8085
+let httpsPort = 8086
 
 let requiresUser preferredUsername : HttpHandler =
     evaluateUserPolicy
@@ -236,13 +237,19 @@ let main argv =
         )
         host_config(fun host ->
             host.UseKestrel(fun options ->
-                options.Listen(IPAddress.Any, port, fun listenOptions ->
+                options.ListenAnyIP httpPort
+                options.ListenAnyIP(httpsPort, fun listenOptions ->
 #if DEBUG
                     listenOptions.UseHttps() |> ignore
 #else
                     listenOptions.UseHttps(sslCertPath, sslCertPassword) |> ignore
 #endif
                 )
+            )
+        )
+        service_config (fun services ->
+            services.AddHttpsRedirection(fun options ->
+                options.HttpsPort <- Nullable<_> httpsPort
             )
         )
         app_config(fun app ->
