@@ -109,7 +109,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
         [ yield Navbar.navbar [ Navbar.Color IsWarning ]
             [ Navbar.Item.div []
                 [ Heading.h2 [ Heading.Props [ Style [ FontVariant "small-caps" ] ] ]
-                    [ str "Eggj utils" ] ]
+                    [ str "Htl utils" ] ]
               Navbar.End.div []
                 [ Navbar.Item.div []
                     [ Authentication.view model.Authentication (AuthenticationMsg >> dispatch) ] ] ]
