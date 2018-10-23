@@ -32,7 +32,11 @@ let userAgentApplication =
     let tokenReceivedCallBack errorDesc token error tokenType userState =
         //printfn "===== TOKEN RECEIVED: %s - %s - %s - %s - %s" errorDesc token error tokenType userState
         ()
-    Msal.UserAgentApplication.Create(appId, Some authority, tokenReceivedCallBack)
+    let options =
+        let o = Fable.Core.JsInterop.createEmpty<Msal.UserAgentApplicationStaticOptions>
+        o.cacheLocation <- Some "localStorage"
+        o
+    Msal.UserAgentApplication.Create(appId, Some authority, tokenReceivedCallBack, options)
 
 let authHeaderOptFn model =
     let getToken() = promise {
