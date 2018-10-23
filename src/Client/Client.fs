@@ -10,7 +10,7 @@ open Fulma.Extensions
 open Thoth.Elmish
 open Shared
 
-importAll "./Styles/main.sass"
+importAll "./styles/main.sass"
 
 type Tab =
     | General
