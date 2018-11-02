@@ -5,15 +5,23 @@
     </PropertyGroup>
     <ItemGroup>
         <Compile Include="..\Shared\Shared.fs" />
-        <Compile Include="List.fs" />
+        <Compile Include="FileSystem.fs" />
+        <Compile Include="MonacoEditor.fs" />
+        <Compile Include="ReactMonacoEditor.fs" />
+        <Compile Include="ReactContentEditable.fs" />
         <Compile Include="Msal.fs" />
+        <Compile Include="List.fs" />
         <Compile Include="Toast.fs" />
         <Compile Include="Authentication.fs" />
         <Compile Include="WakeUp.fs" />
         <Compile Include="ImportTeacherContacts.fs" />
         <Compile Include="CreateStudentDirectories.fs" />
         <Compile Include="CreateStudentGroups.fs" />
+        <Compile Include="CorrectExercise.fs" />
         <Compile Include="Client.fs" />
+    </ItemGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\ClientLib\ClientLib.fsproj" />
     </ItemGroup>
     <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

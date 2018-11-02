@@ -16,6 +16,7 @@ type Tab =
     | General
     | CreateStudentDirectories
     | CreateStudentGroups
+    | CorrectExercise
 
 type Model =
     { ActiveTab: Tab
@@ -23,7 +24,8 @@ type Model =
       WakeUp: WakeUp.Model
       ImportTeacherContacts: ImportTeacherContacts.Model
       CreateStudentDirectories: CreateStudentDirectories.Model
-      CreateStudentGroups: CreateStudentGroups.Model }
+      CreateStudentGroups: CreateStudentGroups.Model
+      CorrectExercise: CorrectExercise.Model }
 
 type Msg =
     | ActivateTab of Tab
@@ -32,6 +34,7 @@ type Msg =
     | ImportTeacherContactsMsg of ImportTeacherContacts.Msg
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
     | CreateStudentGroupsMsg of CreateStudentGroups.Msg
+    | CorrectExerciseMsg of CorrectExercise.Msg
 
 let rec updateIfSignedIn auth (model, cmd) =
     match auth, model.Authentication with
@@ -61,6 +64,9 @@ and update msg model =
     | CreateStudentGroupsMsg msg ->
         let subModel, subCmd = CreateStudentGroups.update msg model.CreateStudentGroups
         { model with CreateStudentGroups = subModel }, Cmd.map CreateStudentGroupsMsg subCmd
+    | CorrectExerciseMsg msg ->
+        let subModel, subCmd = CorrectExercise.update msg model.CorrectExercise
+        { model with CorrectExercise = subModel }, Cmd.map CorrectExerciseMsg subCmd
     |> updateIfSignedIn model.Authentication
 
 let init() =
@@ -70,20 +76,23 @@ let init() =
     let authHeaderOptFn = Authentication.authHeaderOptFn authModel
     let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
     let createStudentGroupsModel, createStudentGroupsCmd = CreateStudentGroups.init
+    let correctExerciseModel, correctExerciseCmd = CorrectExercise.init
     let model =
         { ActiveTab = General
           Authentication = authModel
           WakeUp = wakeUpModel
           ImportTeacherContacts = importTeacherContactsModel
           CreateStudentDirectories = createStudentDirectoriesModel
-          CreateStudentGroups = createStudentGroupsModel }
+          CreateStudentGroups = createStudentGroupsModel
+          CorrectExercise = correctExerciseModel }
     let cmd =
         Cmd.batch
             [ Cmd.map AuthenticationMsg authCmd
               Cmd.map WakeUpMsg wakeUpCmd
               Cmd.map ImportTeacherContactsMsg importTeacherContactsCmd
               Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd
-              Cmd.map CreateStudentGroupsMsg createStudentGroupsCmd ]
+              Cmd.map CreateStudentGroupsMsg createStudentGroupsCmd
+              Cmd.map CorrectExerciseMsg correctExerciseCmd ]
     model, cmd
 
 let view (model : Model) (dispatch : Msg -> unit) =
@@ -92,8 +101,9 @@ let view (model : Model) (dispatch : Msg -> unit) =
             [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
                                     ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
               CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]
-              CreateStudentGroups, "Create student groups", [ CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch) ] ]
-        [ yield Tabs.tabs []
+              CreateStudentGroups, "Create student groups", [ CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch) ]
+              CorrectExercise, "Correct exercise", [ CorrectExercise.view model.CorrectExercise (CorrectExerciseMsg >> dispatch) ] ]
+        [ yield Tabs.tabs [ Tabs.CustomClass "no-print" ]
             [ for (tabItem, tabName, _tabView) in tabItems ->
                 Tabs.tab [ Tabs.Tab.IsActive (model.ActiveTab = tabItem) ]
                     [ a [ OnClick (fun _ev -> dispatch (ActivateTab tabItem)) ]
@@ -106,7 +116,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
                 else None)
             |> List.collect id ]
     div []
-        [ yield Navbar.navbar [ Navbar.Color IsWarning ]
+        [ yield Navbar.navbar [ Navbar.Color IsWarning; Navbar.CustomClass "no-print" ]
             [ Navbar.Item.div []
                 [ Heading.h2 [ Heading.Props [ Style [ FontVariant "small-caps" ] ] ]
                     [ str "Htl utils" ] ]

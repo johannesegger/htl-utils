@@ -6,10 +6,13 @@
         "bulma": "0.7.2",
         "bulma-divider": "2.0.1",
         "font-awesome": "4.7.0",
+        "monaco-editor": "0.14.3",
         "msal": "0.2.3",
         "react": "16.5.2",
         "react-bootstrap": "0.32.4",
+        "react-contenteditable": "3.1.1",
         "react-dom": "16.5.2",
+        "react-monaco-editor": "0.20.0",
         "whatwg-fetch": "3.0.0"
     },
     "devDependencies": {
@@ -20,6 +23,7 @@
         "concurrently": "4.0.1",
         "css-loader": "1.0.0",
         "fable-loader": "2.0.0",
+        "monaco-editor-webpack-plugin": "1.5.4",
         "node-sass": "4.9.4",
         "remotedev": "0.2.7",
         "sass-loader": "7.1.0",
