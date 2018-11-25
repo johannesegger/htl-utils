@@ -14,6 +14,7 @@ open Fulma
 open Fulma.FontAwesome
 open Monaco
 open Thoth.Elmish
+open Thoth.Json
 open Monaco.MonacoEditor
 open Monaco.MonacoEditor.Editor
 open ClientLib.Correction
@@ -77,7 +78,9 @@ type Settings =
 
 type Model =
     { Exercises: StudentExercise list option
-      Settings: Settings }
+      Settings: Settings
+      ShowCorrections: bool
+      CorrectionsData: string }
 
 type Msg =
     | StartCorrection of DataTransferItemList
@@ -89,6 +92,12 @@ type Msg =
     | SetHasResultTemplate of bool
     | SetResultTemplate of string
     | SetResult of ExerciseId * string
+    | ShowCorrectionsData
+    | HideCorrectionsData
+    | EditCorrectionsData of string
+    | LoadCorrectionsData
+    | LoadCorrectionsDataSuccess of StudentExercise list
+    | PostLoadCorrectionsDataSuccess
     | ResetDocument of DocumentId
     | Close
 
@@ -288,13 +297,149 @@ let applyRemove range doc =
         { doc with
             Corrections = otherCorrections @ doc.Corrections }
 
+let encodeExercises exercises =
+    let encodeCorrectionType = function
+        | Insert (InsertCharacter.NormalCharacter ch) ->
+            Encode.object
+                [ "insert-character", Encode.string (string ch) ]
+        | Insert InsertCharacter.EndOfLine ->
+            Encode.object
+                [ "insert-eol", Encode.object [] ]
+        | StrikeThrough RemoveCharacter.NormalCharacter ->
+            Encode.object
+                [ "strike-through-character", Encode.object [] ]
+        | StrikeThrough RemoveCharacter.EndOfLine ->
+            Encode.object
+                [ "strike-through-eol", Encode.object [] ]
+        | Delete RemoveCharacter.NormalCharacter ->
+            Encode.object
+                [ "delete-character", Encode.object [] ]
+        | Delete RemoveCharacter.EndOfLine ->
+            Encode.object
+                [ "delete-eol", Encode.object [] ]
+
+    let encodePosition position =
+        Encode.object
+            [ "line", Encode.int position.Line
+              "column", Encode.int position.Column ]
+
+    let encodeCorrection correction =
+        Encode.object
+            [ "correctionType", encodeCorrectionType correction.CorrectionType
+              "position", encodePosition correction.Position ]
+
+    let encodeDocument (document: Document) =
+        let (DocumentId documentId) = document.Id
+        Encode.object
+            [ "id", Encode.guid documentId
+              "fileName", Encode.string document.FileName
+              "originalContent", Encode.string document.OriginalContent
+              "corrections", List.map encodeCorrection document.Corrections |> Encode.list
+            ]
+
+    let encodeExercise exercise =
+        let (ExerciseId exerciseId) = exercise.Id
+        Encode.object
+            [ "id", Encode.guid exerciseId
+              "student", Encode.string exercise.Student
+              "documents", List.map encodeDocument exercise.Documents |> Encode.list
+              "result", Encode.string exercise.Result
+            ]
+
+    List.map encodeExercise exercises
+    |> Encode.list
+
+let decodeExercises =
+    let decodeInsertCharacter =
+        Decode.field "insert-character" Decode.string
+        |> Decode.andThen (fun value ->
+            if value.Length = 1
+            then Insert (InsertCharacter.NormalCharacter value.[0]) |> Decode.succeed
+            else sprintf "Expected single insert character, got %s" value |> Decode.fail)
+
+    let decodeInsertEol =
+        Decode.field "insert-eol" (Decode.succeed (Insert InsertCharacter.EndOfLine))
+
+    let decodeStrikeThroughCharacter =
+        Decode.field "strike-through-character" (Decode.succeed (StrikeThrough RemoveCharacter.NormalCharacter))
+
+    let decodeStrikeThroughEol =
+        Decode.field "strike-through-eol" (Decode.succeed (StrikeThrough RemoveCharacter.EndOfLine))
+
+    let decodeDeleteCharacter =
+        Decode.field "delete-character" (Decode.succeed (StrikeThrough RemoveCharacter.NormalCharacter))
+
+    let decodeDeleteEol =
+        Decode.field "delete-eol" (Decode.succeed (StrikeThrough RemoveCharacter.EndOfLine))
+
+    let decodeCorrectionType =
+        Decode.oneOf
+            [ decodeInsertCharacter
+              decodeInsertEol
+              decodeStrikeThroughCharacter
+              decodeStrikeThroughEol
+              decodeDeleteCharacter
+              decodeDeleteEol ]
+
+    let decodePosition =
+        Decode.map2
+            (fun line column -> { Line = line; Column = column })
+            (Decode.field "line" Decode.int)
+            (Decode.field "column" Decode.int)
+
+    let decodeCorrection =
+        Decode.map2
+            (fun correctionType position ->
+                { CorrectionType = correctionType
+                  Position = position })
+            (Decode.field "correctionType" decodeCorrectionType)
+            (Decode.field "position" decodePosition)
+
+    let decodeCorrections =
+        Decode.list decodeCorrection
+
+    let decodeDocument =
+        Decode.map4
+            (fun documentId fileName originalContent corrections ->
+                { Id = DocumentId documentId
+                  FileName = fileName
+                  OriginalContent = originalContent
+                  Editor = None
+                  EditorContent = originalContent
+                  EditorDecorations = []
+                  Corrections = corrections
+                  PendingReInsertCorrections = 0 })
+            (Decode.field "id" Decode.guid)
+            (Decode.field "fileName" Decode.string)
+            (Decode.field "originalContent" Decode.string)
+            (Decode.field "corrections" decodeCorrections)
+
+    let decodeDocuments =
+        Decode.list decodeDocument
+
+    let decodeExercise =
+        Decode.map4
+            (fun exerciseId student documents result ->
+                { Id = ExerciseId exerciseId
+                  Student = student
+                  Documents = documents
+                  Result = result
+                })
+            (Decode.field "id" Decode.guid)
+            (Decode.field "student" Decode.string)
+            (Decode.field "documents" decodeDocuments)
+            (Decode.field "result" Decode.string)
+            
+    Decode.list decodeExercise
 
 let init =
     let model =
         { Exercises = None
           Settings =
             { HasResult = false
-              ResultTemplate = "" } }
+              ResultTemplate = "" }
+          ShowCorrections = false
+          CorrectionsData = "" }
     model, Cmd.none
 
 let update msg model =
@@ -396,6 +541,60 @@ let update msg model =
     | SetResult (exerciseId, value) ->
         let model' = updateExercise model exerciseId (fun e -> { e with Result = value })
         model', Cmd.none
+    | ShowCorrectionsData ->
+        let model' =
+            { model with
+                ShowCorrections = true
+                CorrectionsData =
+                    model.Exercises
+                    |> FSharp.Core.Option.map (encodeExercises >> Encode.toString 4)
+                    |> FSharp.Core.Option.defaultValue "" }
+        model', Cmd.none
+    | HideCorrectionsData ->
+        let model' = { model with ShowCorrections = false }
+        model', Cmd.none
+    | EditCorrectionsData value ->
+        let model' = { model with CorrectionsData = value }
+        model', Cmd.none
+    | LoadCorrectionsData ->
+        match Decode.fromString decodeExercises model.CorrectionsData with
+        | Ok exercises ->
+            let model' =
+                { model with
+                    ShowCorrections = false }
+            let cmd =
+                Cmd.ofPromise
+                    (fun () -> Promise.sleep 100)
+                    ()
+                    (fun () -> LoadCorrectionsDataSuccess exercises)
+                    (failwithf "Sleep failed: %O")
+            model', Cmd.batch [ Cmd.ofMsg Close; cmd ]
+        | Error e ->
+            let cmd =
+                Toast.toast "Loading exercises failed" e
+                |> Toast.error
+            model, cmd
+    | LoadCorrectionsDataSuccess exercises ->
+        let model' =
+            { model with
+                Exercises = Some exercises }
+        let cmd =
+            Cmd.ofPromise
+                (fun () -> Promise.sleep 100)
+                ()
+                (fun () -> PostLoadCorrectionsDataSuccess)
+                (failwithf "Sleep failed: %O")
+        model', cmd
+    | PostLoadCorrectionsDataSuccess ->
+        let model' =
+            { model with
+                Exercises =
+                    model.Exercises
+                    |> FSharp.Core.Option.map (List.map (fun e ->
+                        { e with Documents = List.map applyDecorations e.Documents }
+                    ))
+            }
+        model', Cmd.none
     | ResetDocument documentId ->
         let updateDoc doc =
             { doc with
@@ -468,72 +667,120 @@ let view model dispatch =
               yield ReactMonacoEditor.Options editorOptions
               yield ReactMonacoEditor.OnChange (fun newValue ev -> dispatch (EditText (document.Id, Seq.toList ev.changes)))
               yield ReactMonacoEditor.EditorDidMount (fun editor monaco -> dispatch (SetEditor(document.Id, editor))) ] []
-    match model.Exercises with
-    | Some exercises ->
-        Container.container []
-            [ Level.level [ Level.Level.CustomClass "no-print" ]
-                [ Level.left []
-                    [ Level.item []
-                        [ Field.div [ Field.HasAddons ]
-                            [ Control.div []
-                                [ Input.text
-                                    [ Input.Placeholder "Result template"
-                                      Input.Value model.Settings.ResultTemplate
-                                      Input.Disabled (not model.Settings.HasResult)
-                                      Input.OnChange (fun ev -> dispatch (SetResultTemplate ev.Value)) ] ]
-                              Control.div []
-                                [ Button.a
-                                    [ Button.Color IsLight
-                                      Button.OnClick (fun _ev -> dispatch (SetHasResultTemplate (not model.Settings.HasResult))) ]
-                                    [ str (if model.Settings.HasResult then "Disable result" else "Enable result") ] ] ] ] ]
-                  Level.right []
-                    [ Level.item []
-                        [ Button.button
-                            [ Button.Color IsSuccess
-                              Button.OnClick (fun _ev -> dispatch Print) ]
-                            [ str "Print" ] ]
-                      Level.item []
-                        [ Button.button
-                            [ Button.Color IsDanger
-                              Button.OnClick (fun _ev -> dispatch Close) ]
-                            [ str "Close" ] ] ] ]
-              Container.container [ Container.Props [ Id "exercise-correction" ] ]
-                [ for exercise in exercises ->
-                    Box.box' []
-                        [ Level.level []
-                            [ Level.left []
-                                [ Level.item []
-                                    [ Heading.h4 [ Heading.IsSubtitle ]
-                                        [ str exercise.Student ] ] ]
-                              Level.right []
-                                [ if model.Settings.HasResult then
-                                    yield
-                                        Level.item []
-                                            [ Tag.tag
-                                                [ Tag.Color IsPrimary
-                                                  Tag.Size IsLarge ]
-                                                [ ReactContentEditable.contentEditable
-                                                    [ ReactContentEditable.Html (if exercise.Result <> "" then exercise.Result else model.Settings.ResultTemplate)
-                                                      ReactContentEditable.OnChange (fun ev -> dispatch (SetResult (exercise.Id, ev.Value))) ] ] ] ] ]
-                          Content.content []
-                            (
-                                [ for document in exercise.Documents ->
-                                    Card.card []
-                                        [ Card.header []
-                                            [ Card.Header.title [] [ str document.FileName ] ]
-                                          Card.content [ ]
-                                            [ Content.content [ ]
-                                                [ editorView document ] ]
-                                          Card.footer [ CustomClass "no-print" ]
-                                            [ Card.Footer.a [ Props [ OnClick (fun _ev -> dispatch (ResetDocument document.Id)) ] ]
-                                                [ str "Reset" ] ] ]
-                                ]
-                                |> List.intersperse (hr [])
-                            ) ] ] ]
-    | None ->
-        Container.container []
-            [ div
-                [ Style [ Border "10px dashed #ccc"; Height "300px"; Margin "20px auto"; Padding "50px" ]
-                  OnDrop (fun ev -> ev.preventDefault(); dispatch (StartCorrection ev.dataTransfer.items))
-                  OnDragOver (fun ev -> ev.preventDefault()) ]
-                [ Heading.h2 [] [ str "Drop file or folder" ] ] ]
+    let exercisesView =
+        match model.Exercises with
+        | Some exercises ->
+            Container.container []
+                [ Level.level [ Level.Level.CustomClass "no-print" ]
+                    [ Level.left []
+                        [ Level.item []
+                            [ Field.div [ Field.HasAddons ]
+                                [ Control.div []
+                                    [ Input.text
+                                        [ Input.Placeholder "Result template"
+                                          Input.Value model.Settings.ResultTemplate
+                                          Input.Disabled (not model.Settings.HasResult)
+                                          Input.OnChange (fun ev -> dispatch (SetResultTemplate ev.Value)) ] ]
+                                  Control.div []
+                                    [ Button.a
+                                        [ Button.Color IsLight
+                                          Button.OnClick (fun _ev -> dispatch (SetHasResultTemplate (not model.Settings.HasResult))) ]
+                                        [ str (if model.Settings.HasResult then "Disable result" else "Enable result") ] ] ] ] ]
+                      Level.right []
+                        [ Level.item []
+                            [ Button.button
+                                [ Button.Color IsSuccess
+                                  Button.OnClick (fun _ev -> dispatch Print) ]
+                                [ str "Print" ] ]
+                          Level.item []
+                            [ Button.button
+                                [ Button.Color IsWarning
+                                  Button.OnClick (fun _ev -> dispatch ShowCorrectionsData) ]
+                                [ str "Show/Edit corrections" ] ]
+                          Level.item []
+                            [ Button.button
+                                [ Button.Color IsDanger
+                                  Button.OnClick (fun _ev -> dispatch Close) ]
+                                [ str "Close" ] ] ] ]
+                  Container.container [ Container.Props [ Id "exercise-correction" ] ]
+                    [ for exercise in exercises ->
+                        Box.box' []
+                            [ Level.level []
+                                [ Level.left []
+                                    [ Level.item []
+                                        [ Heading.h4 [ Heading.IsSubtitle ]
+                                            [ str exercise.Student ] ] ]
+                                  Level.right []
+                                    [ if model.Settings.HasResult then
+                                        yield
+                                            Level.item []
+                                                [ Tag.tag
+                                                    [ Tag.Color IsPrimary
+                                                      Tag.Size IsLarge ]
+                                                    [ ReactContentEditable.contentEditable
+                                                        [ ReactContentEditable.Html (if exercise.Result <> "" then exercise.Result else model.Settings.ResultTemplate)
+                                                          ReactContentEditable.OnChange (fun ev -> dispatch (SetResult (exercise.Id, ev.Value))) ] ] ] ] ]
+                              Content.content []
+                                (
+                                    [ for document in exercise.Documents ->
+                                        Card.card []
+                                            [ Card.header []
+                                                [ Card.Header.title [] [ str document.FileName ] ]
+                                              Card.content [ ]
+                                                [ Content.content [ ]
+                                                    [ editorView document ] ]
+                                              Card.footer [ CustomClass "no-print" ]
+                                                [ Card.Footer.a [ Props [ OnClick (fun _ev -> dispatch (ResetDocument document.Id)) ] ]
+                                                    [ str "Reset" ] ] ]
+                                    ]
+                                    |> List.intersperse (hr [])
+                                ) ] ] ]
+        | None ->
+            Container.container []
+                [ div
+                    [ Style [ Border "10px dashed #ccc"; Height "300px"; Margin "20px auto"; Padding "50px" ]
+                      OnDrop (fun ev -> ev.preventDefault(); dispatch (StartCorrection ev.dataTransfer.items))
+                      OnDragOver (fun ev -> ev.preventDefault()) ]
+                    [ Heading.h2 []
+                        [ str "Drop file or folder or "
+                          Button.button
+                            [ Button.Color IsWarning
+                              Button.OnClick (fun _ev -> dispatch ShowCorrectionsData)
+                              Button.Size IsLarge ]
+                            [ str "resume where you left off" ] ] ] ]
+
+    let correctionsDataView =
+        let editorOptions = createEmpty<IEditorConstructionOptions>
+        editorOptions.scrollBeyondLastLine <- Some false
+        editorOptions.wordWrap <- Some "on"
+#if DEBUG
+        // Some debug package (maybe remotedev?) is super-slow if minimap is turned on
+        let minimap = createEmpty<IEditorMinimapOptions>
+        minimap.enabled <- Some false
+        editorOptions.minimap <- Some minimap
+#endif
+        Modal.modal [ Modal.IsActive true ]
+            [ Modal.background [ Props [ OnClick (fun _ev -> dispatch HideCorrectionsData) ] ] []
+              Modal.content []
+                [ Card.card []
+                    [ Card.header []
+                        [ Card.Header.title [] [ str "Corrections data" ] ]
+                      Card.content [ ]
+                        [ Content.content [ ]
+                            [ ReactMonacoEditor.monacoEditor
+                                [ yield ReactMonacoEditor.Language "json"
+                                  yield ReactMonacoEditor.Height (!^"500px")
+                                  yield ReactMonacoEditor.Value model.CorrectionsData
+                                  yield ReactMonacoEditor.Options editorOptions
+                                  yield ReactMonacoEditor.OnChange (fun newValue ev -> dispatch (EditCorrectionsData newValue)) ] [] ] ]
+                      Card.footer [ ]
+                        [ Card.Footer.a [ Props [ OnClick (fun _ev -> dispatch LoadCorrectionsData) ] ]
+                            [ str "Ok" ] ] ] ]
+              Modal.close
+                [ Modal.Close.Size IsLarge
+                  Modal.Close.OnClick (fun _ev -> dispatch HideCorrectionsData) ] [] ]
+
+    div []
+        [ yield exercisesView
+          if model.ShowCorrections then yield correctionsDataView
+        ]

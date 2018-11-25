@@ -1667,7 +1667,7 @@ module MonacoEditor =
             /// When `wordWrap` = "wordWrapColumn", the lines will wrap at `wordWrapColumn`.
             /// When `wordWrap` = "bounded", the lines will wrap at min(viewport width, wordWrapColumn).
             /// Defaults to "off".
-            abstract wordWrap: U4<string, string, string, string> option with get, set
+            abstract wordWrap: string option with get, set
             /// Control the wrapping of the editor.
             /// When `wordWrap` = "off", the lines will never wrap.
             /// When `wordWrap` = "on", the lines will wrap at the viewport width.

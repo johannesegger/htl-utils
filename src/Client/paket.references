@@ -8,4 +8,5 @@ group Client
     Fulma
     Fulma.Extensions
     Thoth.Elmish.Toast
+    Thoth.Json
     dotnet-fable

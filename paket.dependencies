@@ -28,6 +28,7 @@ group Client
     nuget Fulma
     nuget Fulma.Extensions
     nuget Thoth.Elmish.Toast
+    nuget Thoth.Json
 
     clitool dotnet-fable
 
