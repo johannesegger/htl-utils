@@ -72,9 +72,18 @@ type StudentExercise =
       Documents: Document list
       Result: string }
 
+type ExerciseLanguage =
+    | JavaScript
+    | CSS
+    | HTML
+    | JSON
+    | CSharp
+    | CPlusPlus
+
 type Settings =
     { HasResult: bool
-      ResultTemplate: string }
+      ResultTemplate: string
+      ExerciseLanguage: ExerciseLanguage }
 
 type Model =
     { Exercises: StudentExercise list option
@@ -92,6 +101,7 @@ type Msg =
     | SetHasResultTemplate of bool
     | SetResultTemplate of string
     | SetResult of ExerciseId * string
+    | SetExerciseLanguage of ExerciseLanguage
     | ShowCorrectionsData
     | HideCorrectionsData
     | EditCorrectionsData of string
@@ -437,7 +447,8 @@ let init =
         { Exercises = None
           Settings =
             { HasResult = false
-              ResultTemplate = "" }
+              ResultTemplate = ""
+              ExerciseLanguage = JavaScript }
           ShowCorrections = false
           CorrectionsData = "" }
     model, Cmd.none
@@ -540,6 +551,9 @@ let update msg model =
         model', Cmd.none
     | SetResult (exerciseId, value) ->
         let model' = updateExercise model exerciseId (fun e -> { e with Result = value })
+        model', Cmd.none
+    | SetExerciseLanguage language ->
+        let model' = { model with Settings = { model.Settings with ExerciseLanguage = language } }
         model', Cmd.none
     | ShowCorrectionsData ->
         let model' =
@@ -660,8 +674,16 @@ let view model dispatch =
         minimap.enabled <- Some false
         editorOptions.minimap <- Some minimap
 #endif
+        let language =
+            match model.Settings.ExerciseLanguage with
+            | JavaScript -> "javascript"
+            | CSS -> "css"
+            | HTML -> "html"
+            | JSON -> "json"
+            | CSharp -> "csharp"
+            | CPlusPlus -> "cpp"
         ReactMonacoEditor.monacoEditor
-            [ yield ReactMonacoEditor.Language "csharp"
+            [ yield ReactMonacoEditor.Language language
               yield ReactMonacoEditor.Height (!^"500px")
               yield ReactMonacoEditor.Value (getCorrectedDocumentContent document)
               yield ReactMonacoEditor.Options editorOptions
@@ -673,19 +695,44 @@ let view model dispatch =
             Container.container []
                 [ Level.level [ Level.Level.CustomClass "no-print" ]
                     [ Level.left []
-                        [ Level.item []
-                            [ Field.div [ Field.HasAddons ]
-                                [ Control.div []
-                                    [ Input.text
-                                        [ Input.Placeholder "Result template"
-                                          Input.Value model.Settings.ResultTemplate
-                                          Input.Disabled (not model.Settings.HasResult)
-                                          Input.OnChange (fun ev -> dispatch (SetResultTemplate ev.Value)) ] ]
-                                  Control.div []
-                                    [ Button.a
-                                        [ Button.Color IsLight
-                                          Button.OnClick (fun _ev -> dispatch (SetHasResultTemplate (not model.Settings.HasResult))) ]
-                                        [ str (if model.Settings.HasResult then "Disable result" else "Enable result") ] ] ] ] ]
+                        [ Level.item [ Level.Item.HasTextCentered ]
+                            [ div []
+                                [ Level.heading [] [ str "Result" ]
+                                  Field.div [ Field.HasAddons ]
+                                    [ Control.div []
+                                        [ Input.text
+                                            [ Input.Placeholder "Result template"
+                                              Input.Value model.Settings.ResultTemplate
+                                              Input.Disabled (not model.Settings.HasResult)
+                                              Input.OnChange (fun ev -> dispatch (SetResultTemplate ev.Value)) ] ]
+                                      Control.div []
+                                        [ Button.a
+                                            [ Button.Color IsLight
+                                              Button.OnClick (fun _ev -> dispatch (SetHasResultTemplate (not model.Settings.HasResult))) ]
+                                            [ str (if model.Settings.HasResult then "Disable result" else "Enable result") ] ] ] ] ]
+                          Level.item [ Level.Item.HasTextCentered ]
+                            [ div []
+                                [ Level.heading [] [ str "Language" ]
+                                  Field.div [ ]
+                                    [ Control.div []
+                                        [ Select.select [ ]
+                                            [ let languages = [
+                                                JavaScript, "JavaScript"
+                                                CSS, "CSS"
+                                                HTML, "HTML"
+                                                JSON, "JSON"
+                                                CSharp, "C#"
+                                                CPlusPlus, "C++"
+                                              ]
+                                              yield select
+                                                [ OnChange (fun ev ->
+                                                    languages
+                                                    |> List.find (snd >> ((=) ev.Value))
+                                                    |> fst
+                                                    |> SetExerciseLanguage
+                                                    |> dispatch
+                                                  ) ]
+                                                [ for (_item, text) in languages -> option [] [ str text ] ] ] ] ] ] ] ]
                       Level.right []
                         [ Level.item []
                             [ Button.button
