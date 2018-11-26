@@ -239,11 +239,7 @@ let main argv =
             host.UseKestrel(fun options ->
                 options.ListenAnyIP httpPort
                 options.ListenAnyIP(httpsPort, fun listenOptions ->
-#if DEBUG
-                    listenOptions.UseHttps() |> ignore
-#else
                     listenOptions.UseHttps(sslCertPath, sslCertPassword) |> ignore
-#endif
                 )
             )
         )
@@ -257,9 +253,8 @@ let main argv =
             app.UseDeveloperExceptionPage() |> ignore
 #else
             // app.UseExceptionHandler("/Error")
-            app.UseHsts()
 #endif
-
+            app.UseHsts() |> ignore
             app.UseHttpsRedirection()
         )
     }
