@@ -1,5 +1,9 @@
-FROM microsoft/dotnet:2.1.4-runtime-stretch-slim-arm32v7
+# FROM microsoft/dotnet:2.1.4-runtime-stretch-slim-arm32v7
+FROM microsoft/dotnet:2.1.4-runtime-stretch-slim
 COPY /deploy /
 WORKDIR /Server
-EXPOSE 8085
+EXPOSE 5000
+EXPOSE 5001
+EXPOSE 80
+EXPOSE 443
 ENTRYPOINT [ "dotnet", "Server.dll" ]

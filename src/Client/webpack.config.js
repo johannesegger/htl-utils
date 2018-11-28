@@ -17,7 +17,7 @@ var CONFIG = {
     },
     devServerProxy: {
         '/api/*': {
-            target: 'https://localhost:' + (process.env.SUAVE_FABLE_PORT || "8086"),
+            target: 'https://localhost:5001',
             secure: false,
             changeOrigin: true
         }

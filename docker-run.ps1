@@ -9,7 +9,7 @@ docker run `
     -v "$PSScriptRoot\test\testX:/base-dirs/x" `
     -v "$PSScriptRoot\test\testY:/base-dirs/y" `
     -v "$(Split-Path -Parent $env:SSL_CERT_PATH):/ssl" `
-    -p 1100:8085 `
-    -p 2100:8086 `
+    -p 5000:5000 `
+    -p 5001:5001 `
     --name htl-utils `
     johannesegger/htl-utils

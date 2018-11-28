@@ -9,20 +9,20 @@ open FSharp.Control.Tasks.V2.ContextInsensitive
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Logging
 open Microsoft.Identity.Client
 open Microsoft.Graph
 open Giraffe
 open Giraffe.Serialization
-open Saturn
+//open Saturn
 open Thoth.Json.Giraffe
 open Shared
 open WakeUp
 open Students
 open StudentDirectories
+open Microsoft.AspNetCore.Authentication.JwtBearer
 
 let publicPath = Path.GetFullPath "../Client/public"
-let httpPort = 8085
-let httpsPort = 8086
 
 let requiresUser preferredUsername : HttpHandler =
     evaluateUserPolicy
@@ -111,7 +111,7 @@ let getStudentList students className : HttpHandler =
 
 let getChildDirectories baseDirectories : HttpHandler =
     fun next ctx -> task {
-        let! body = Controller.getJson<string list> ctx
+        let! body = ctx.BindJsonAsync<string list>()
         let response =
             match body with
             | []
@@ -140,7 +140,7 @@ let getChildDirectories baseDirectories : HttpHandler =
 
 let createStudentDirectories baseDirectories getStudents : HttpHandler =
     fun next ctx -> task {
-        let! input = Controller.getJson<CreateStudentDirectories.Input> ctx
+        let! input = ctx.BindJsonAsync<CreateStudentDirectories.Input>()
         let baseDirectory = fst input.Path
         let! result =
             baseDirectories
@@ -182,6 +182,11 @@ let getEnvVarOrFail name =
     then failwithf "Environment variable \"%s\" not set" name
     else value
 
+let tryParseInt value =
+    match Int32.TryParse value with
+    | (false, _) -> None
+    | (true, v) -> Some v
+
 [<EntryPoint>]
 let main argv =
     let sslCertPath = getEnvVar "SSL_CERT_PATH"
@@ -213,50 +218,65 @@ let main argv =
     let requiresEggj : HttpHandler = requiresUser "EGGJ@htlvb.at"
     let requiresTeacher : HttpHandler = requiresGroup "2d1c8785-5350-4a3b-993c-62dc9bc30980"
 
-    let webApp = router {
-        post "/api/wakeup/send" (requiresEggj >=> sendWakeUpCommand)
-        post "/api/teachers/import-contacts" (requiresTeacher >=> importTeacherContacts clientApp teachers)
-        get "/api/classes" (getClassList classList)
-        getf "/api/classes/%s/students" (getStudentList students)
-        post "/api/create-student-directories/child-directories" (requiresEggj >=> getChildDirectories createDirectoriesBaseDirectory)
-        post "/api/create-student-directories/create" (requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory students)
-    }
+    let webApp = choose [
+        GET >=> choose [
+            route "/api/classes" >=> getClassList classList
+            routef "/api/classes/%s/students" (getStudentList students)
+        ]
+        POST >=> choose [
+            route "/api/wakeup/send" >=> requiresEggj >=> sendWakeUpCommand
+            route "/api/teachers/import-contacts" >=>  requiresTeacher >=> importTeacherContacts clientApp teachers
+            route "/api/create-student-directories/child-directories" >=> requiresEggj >=> getChildDirectories createDirectoriesBaseDirectory
+            route "/api/create-student-directories/create" >=> requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory students
+        ]
+    ]
 
-    let app = application {
-        use_router webApp
-        memory_cache
-        use_static publicPath
-        service_config configureSerialization
-        use_gzip
-        use_jwt_authentication_with_config (fun options ->
-            Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII <- true
-            options.Audience <- clientId
-            options.Authority <- "https://login.microsoftonline.com/htlvb.at/"
-            options.TokenValidationParameters.ValidateIssuer <- false
-            options.TokenValidationParameters.SaveSigninToken <- true
-        )
-        host_config(fun host ->
-            host.UseKestrel(fun options ->
-                options.ListenAnyIP httpPort
-                options.ListenAnyIP(httpsPort, fun listenOptions ->
-                    listenOptions.UseHttps(sslCertPath, sslCertPassword) |> ignore
-                )
+    let errorHandler (ex : Exception) (logger : ILogger) =
+        logger.LogError(ex, "An unhandled exception has occurred while executing the request.")
+        clearResponse >=> setStatusCode 500 >=> text ex.Message
+
+    let configureApp (app : IApplicationBuilder) =
+        let env = app.ApplicationServices.GetService<IHostingEnvironment>()
+        match env.IsDevelopment() with
+        | true  -> app.UseDeveloperExceptionPage() |> ignore
+        | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
+        app
+            .UseHttpsRedirection()
+            .UseStaticFiles()
+            .UseAuthentication()
+            .UseGiraffe(webApp)
+
+    let configureServices (services : IServiceCollection) =
+        services.AddGiraffe() |> ignore
+        services.AddSingleton<IJsonSerializer>(ThothSerializer()) |> ignore
+        services
+            .AddAuthentication(fun config ->
+                config.DefaultScheme <- JwtBearerDefaults.AuthenticationScheme
+                config.DefaultChallengeScheme <- JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(fun config ->
+                Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII <- true
+                config.Audience <- clientId
+                config.Authority <- "https://login.microsoftonline.com/htlvb.at/"
+                config.TokenValidationParameters.ValidateIssuer <- false
+                config.TokenValidationParameters.SaveSigninToken <- true
+            ) |> ignore
+
+    let configureLogging (builder : ILoggingBuilder) =
+        builder.AddFilter(fun l -> l.Equals LogLevel.Error)
+               .AddConsole()
+               .AddDebug() |> ignore
+
+    WebHostBuilder()
+        .UseKestrel(fun options ->
+            options.ListenAnyIP 5000
+            options.ListenAnyIP(5001, fun listenOptions ->
+                listenOptions.UseHttps(sslCertPath, sslCertPassword) |> ignore
             )
         )
-        service_config (fun services ->
-            services.AddHttpsRedirection(fun options ->
-                options.HttpsPort <- Nullable<_> httpsPort
-            )
-        )
-        app_config(fun app ->
-#if DEBUG
-            app.UseDeveloperExceptionPage() |> ignore
-#else
-            // app.UseExceptionHandler("/Error")
-#endif
-            app.UseHsts() |> ignore
-            app.UseHttpsRedirection()
-        )
-    }
-    run app
+        .UseWebRoot(publicPath)
+        .Configure(Action<IApplicationBuilder> configureApp)
+        .ConfigureServices(configureServices)
+        .ConfigureLogging(configureLogging)
+        .Build()
+        .Run()
     0
