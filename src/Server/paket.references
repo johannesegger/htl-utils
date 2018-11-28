@@ -6,7 +6,8 @@ group Server
     Microsoft.Identity.Client
     MySqlConnector
     Polly
-    Saturn
     SixLabors.ImageSharp
     Thoth.Json.Giraffe
     WakeOnLan
+    Microsoft.AspNetCore
+    Microsoft.AspNetCore.StaticFiles

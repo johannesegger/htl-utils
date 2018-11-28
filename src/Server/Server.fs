@@ -14,7 +14,6 @@ open Microsoft.Identity.Client
 open Microsoft.Graph
 open Giraffe
 open Giraffe.Serialization
-//open Saturn
 open Thoth.Json.Giraffe
 open Shared
 open WakeUp
@@ -182,11 +181,6 @@ let getEnvVarOrFail name =
     then failwithf "Environment variable \"%s\" not set" name
     else value
 
-let tryParseInt value =
-    match Int32.TryParse value with
-    | (false, _) -> None
-    | (true, v) -> Some v
-
 [<EntryPoint>]
 let main argv =
     let sslCertPath = getEnvVar "SSL_CERT_PATH"
@@ -242,6 +236,7 @@ let main argv =
         | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
         app
             .UseHttpsRedirection()
+            .UseDefaultFiles()
             .UseStaticFiles()
             .UseAuthentication()
             .UseGiraffe(webApp)
@@ -261,10 +256,11 @@ let main argv =
                 config.TokenValidationParameters.SaveSigninToken <- true
             ) |> ignore
 
-    let configureLogging (builder : ILoggingBuilder) =
-        builder.AddFilter(fun l -> l.Equals LogLevel.Error)
-               .AddConsole()
-               .AddDebug() |> ignore
+    let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+        builder
+            .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
+            .AddConsole()
+            .AddDebug() |> ignore
 
     WebHostBuilder()
         .UseKestrel(fun options ->

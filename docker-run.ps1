@@ -1,4 +1,5 @@
 docker run `
+    -e ASPNETCORE_HTTPS_PORT=2100 ` # Port for HTTPS redirections
     -e SSL_CERT_PATH="/ssl/$(Split-Path -Leaf $env:SSL_CERT_PATH)" `
     -e SSL_CERT_PASSWORD="$env:SSL_CERT_PASSWORD" `
     -e SISDB_CONNECTION_STRING="$env:SISDB_CONNECTION_STRING" `
@@ -9,7 +10,7 @@ docker run `
     -v "$PSScriptRoot\test\testX:/base-dirs/x" `
     -v "$PSScriptRoot\test\testY:/base-dirs/y" `
     -v "$(Split-Path -Parent $env:SSL_CERT_PATH):/ssl" `
-    -p 5000:5000 `
-    -p 5001:5001 `
+    -p 1100:5000 `
+    -p 2100:5001 `
     --name htl-utils `
     johannesegger/htl-utils

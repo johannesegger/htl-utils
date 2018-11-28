@@ -4,6 +4,4 @@ COPY /deploy /
 WORKDIR /Server
 EXPOSE 5000
 EXPOSE 5001
-EXPOSE 80
-EXPOSE 443
 ENTRYPOINT [ "dotnet", "Server.dll" ]
