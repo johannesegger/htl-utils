@@ -2,11 +2,11 @@ module Client
 
 open Elmish
 open Elmish.React
+open Elmish.HMR // Must be last Elmish.* open declaration (see https://elmish.github.io/hmr/#Usage)
 open Fable.Core.JsInterop
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
 open Fulma
-open Fulma.Extensions
 open Thoth.Elmish
 open Shared
 
@@ -133,7 +133,6 @@ open Elmish.HMR
 Program.mkProgram init update view
 #if DEBUG
 |> Program.withConsoleTrace
-|> Program.withHMR
 #endif
 |> Toast.Program.withToast Toast.renderFulma
 |> Program.withReact "elmish-app"

@@ -1,12 +1,13 @@
 module CreateStudentDirectories
 
 open Elmish
+open Fable.FontAwesome
 open Fable.Helpers.React
 open Fable.PowerPack
 open Fable.PowerPack.Fetch
 open Fulma
 open Fulma.Extensions
-open Fulma.FontAwesome
+open Fulma.Extensions.Wikiki
 open Thoth.Elmish
 open Shared.CreateStudentDirectories
 open Thoth.Json
@@ -253,8 +254,7 @@ let view model dispatch =
                             [ Button.button
                                 [ Button.Disabled newDirectoryName.IsNone
                                   Button.OnClick (fun _ev -> dispatch (AddChildDirectory directory.Path)) ]
-                                [ Icon.faIcon []
-                                    [ Fa.icon Fa.I.Plus ] ] ] ]
+                                [ Icon.icon [] [ Fa.i [ Fa.Solid.Plus ] [] ] ] ] ]
                   yield Button.list [] [ yield! List.map directoryLevelItem children ] ]
             |> Some
         | _ -> None
@@ -275,7 +275,7 @@ let view model dispatch =
                 |> List.intersperse (Divider.divider [])
           | NotLoadedDirectoryChildren ->
             yield Notification.notification [ Notification.Color IsWarning ]
-                [ Icon.faIcon [] [ Fa.icon Fa.I.ExclamationTriangle ]
+                [ Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
                   span [] [ str "Sign in to view directories" ] ]
           yield Divider.divider []
           yield Button.button

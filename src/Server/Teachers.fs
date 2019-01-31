@@ -135,7 +135,7 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) teachers = a
             x.Resize(resizeOptions) |> ignore
         )
         let target = new MemoryStream() :> Stream
-        image.Save(target, ImageFormats.Jpeg)
+        image.SaveAsJpeg target
         target.Seek(0L, SeekOrigin.Begin) |> ignore
         target
 

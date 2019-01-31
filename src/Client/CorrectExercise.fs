@@ -4,6 +4,7 @@ open System
 open System.Text.RegularExpressions
 open Elmish
 open Fable.Core.JsInterop
+open Fable.FontAwesome
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
 open Fable.Import.Browser
@@ -11,7 +12,6 @@ open Fable.Import.React
 open Fable.PowerPack
 open FileSystem
 open Fulma
-open Fulma.FontAwesome
 open Monaco
 open Thoth.Elmish
 open Thoth.Json

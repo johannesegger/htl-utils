@@ -4,9 +4,10 @@ group Client
     Fable.Elmish.Debugger
     Fable.Elmish.React
     Fable.Elmish.HMR
+    Fable.FontAwesome
+    Fable.FontAwesome.Free
     Fable.React
     Fulma
-    Fulma.Extensions
+    Fulma.Extensions.Wikiki.Divider
     Thoth.Elmish.Toast
     Thoth.Json
-    dotnet-fable

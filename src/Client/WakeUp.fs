@@ -1,12 +1,12 @@
 module WakeUp
 
 open Elmish
+open Fable.FontAwesome
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
 open Fable.PowerPack
 open Fable.PowerPack.Fetch
 open Fulma
-open Fulma.FontAwesome
 open Thoth.Elmish
 
 type Model = unit
@@ -51,6 +51,6 @@ let view model dispatch =
                 [ Button.button
                     [ Button.IsLink
                       Button.OnClick (fun _evt -> dispatch SendWakeUpCommand) ]
-                    [ Icon.faIcon [ Icon.Size IsSmall ]
-                        [ Fa.icon Fa.I.Bed ]
-                      span [] [ str "Wake up PC-EGGJ" ] ] ] ] ]
+                    [ div [ ClassName "block" ]
+                        [ Icon.icon [] [ Fa.i [ Fa.Solid.Bed ] [] ]
+                          span [] [ str "Wake up PC-EGGJ" ] ] ] ] ] ]

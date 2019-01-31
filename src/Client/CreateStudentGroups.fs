@@ -2,13 +2,14 @@ module CreateStudentGroups
 
 open System
 open Elmish
+open Fable.FontAwesome
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
 open Fable.PowerPack
 open Fable.PowerPack.Fetch
 open Fulma
 open Fulma.Extensions
-open Fulma.FontAwesome
+open Fulma.Extensions.Wikiki
 open Thoth.Elmish
 open Shared.CreateStudentDirectories
 open Authentication

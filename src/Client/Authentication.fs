@@ -6,7 +6,7 @@ open Fable.Helpers.React
 open Fable.PowerPack
 open Fable.PowerPack.Fetch
 open Fulma
-open Fulma.FontAwesome
+open Fable.FontAwesome
 
 type User =
     { Name: string }
@@ -104,10 +104,10 @@ let view model dispatch =
     | NotAuthenticated ->
         Button.button
             [ Button.OnClick (fun _e -> dispatch SignIn) ]
-            [ Icon.faIcon [] [ Fa.icon Fa.I.Windows ]
+            [ Icon.icon [] [ Fa.i [ Fa.Brand.Windows ] [] ]
               span [] [ str "Sign in" ] ]
     | Authenticated user ->
         Button.button
             [ Button.OnClick (fun _e -> dispatch SignOut) ]
-            [ Icon.faIcon [] [ Fa.icon Fa.I.Windows ]
+            [ Icon.icon [] [ Fa.i [ Fa.Brand.Windows ] [] ]
               span [] [ str (sprintf "%s | Sign out" user.Name) ] ]
