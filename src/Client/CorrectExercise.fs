@@ -49,11 +49,13 @@ module RangeHelper =
         fromPositions position position
 
 type DecorationId = DecorationId of string
-
 module DecorationId =
     let value (DecorationId decorationId) = decorationId
 
 type DocumentId = DocumentId of Guid
+module DocumentId =
+    let value (DocumentId documentId) = documentId
+
 type ExerciseId = ExerciseId of Guid
 
 type Document =
@@ -99,6 +101,7 @@ type Msg =
     | LoadCorrectionsDataSuccess of StudentExercise list
     | PostLoadCorrectionsDataSuccess
     | ResetDocument of DocumentId
+    | RemoveDocument of DocumentId
     | Close
 
 exception private DomException of DOMException
@@ -183,7 +186,7 @@ let private updateExercise model exerciseId update =
             )
     }
 
-let private updateDocument model documentId update =
+let private mapDocument model documentId update =
     { model with
         Exercises =
             match model.Exercises with
@@ -193,10 +196,13 @@ let private updateDocument model documentId update =
                         { exercise with
                             Documents =
                                 exercise.Documents
-                                |> List.map (fun (d: Document) -> if d.Id = documentId then update d else d) }
+                                |> List.choose (fun (d: Document) -> if d.Id = documentId then update d else Some d) }
                     ]
             | None -> None
     }
+
+let private updateDocument model documentId update =
+    mapDocument model documentId (update >> Some)
 
 let private correctionToDecorations = function
     | { Correction = { CorrectionType = Insert insertCharacter as correctionType}; CurrentPosition = Some position } ->
@@ -604,6 +610,9 @@ let update msg model =
                 PendingReInsertCorrections = 0 }
         let model' = updateDocument model documentId updateDoc
         model', Cmd.none
+    | RemoveDocument documentId ->
+        let model' = mapDocument model documentId (fun doc -> doc.Editor.Value.dispose(); None)
+        model', Cmd.none
     | Close -> init
 
 let private getCorrectedDocumentContent document =
@@ -739,7 +748,7 @@ let view model dispatch =
                               Content.content []
                                 (
                                     [ for document in exercise.Documents ->
-                                        Card.card []
+                                        Card.card [ Props [ Key (DocumentId.value document.Id |> string) ] ]
                                             [ Card.header []
                                                 [ Card.Header.title [] [ str document.FileName ] ]
                                               Card.content [ ]
@@ -747,7 +756,9 @@ let view model dispatch =
                                                     [ editorView document ] ]
                                               Card.footer [ CustomClass "no-print" ]
                                                 [ Card.Footer.a [ Props [ OnClick (fun _ev -> dispatch (ResetDocument document.Id)) ] ]
-                                                    [ str "Reset" ] ] ]
+                                                    [ str "Reset" ]
+                                                  Card.Footer.a [ Props [ OnClick (fun _ev -> dispatch (RemoveDocument document.Id)) ] ]
+                                                    [ str "Remove" ] ] ]
                                     ]
                                     |> List.intersperse (hr [])
                                 ) ] ] ]
