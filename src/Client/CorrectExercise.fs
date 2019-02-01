@@ -611,7 +611,7 @@ let update msg model =
         let model' = updateDocument model documentId updateDoc
         model', Cmd.none
     | RemoveDocument documentId ->
-        let model' = mapDocument model documentId (fun doc -> doc.Editor.Value.dispose(); None)
+        let model' = mapDocument model documentId (fun _ -> None)
         model', Cmd.none
     | Close -> init
 
