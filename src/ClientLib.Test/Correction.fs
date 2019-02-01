@@ -90,5 +90,23 @@ let tests =
                       Correction.create (Insert (InsertCharacter.NormalCharacter '1')) { Line = 1; Column = 2 } ]
                 Expect.equal actual expected "Should add new line offset for inserts"
             }
+
+            test "Insert a -> Insert b -> Delete a -> Delete b" {
+                let actual =
+                    []
+                    |> addCorrection (CorrectionIntention.create (InsertText "123") { Line = 1; Column = 2 })
+                    |> addCorrection (CorrectionIntention.create (RemoveText [ RemoveCharacter.NormalCharacter ]) { Line = 1; Column = 2 })
+                    |> addCorrection (CorrectionIntention.create (RemoveText [ RemoveCharacter.NormalCharacter ]) { Line = 1; Column = 2 })
+                    |> addCorrection (CorrectionIntention.create (RemoveText [ RemoveCharacter.NormalCharacter ]) { Line = 1; Column = 2 })
+
+                let expected =
+                    [ Correction.create (Delete (RemoveCharacter.NormalCharacter)) { Line = 1; Column = 2 }
+                      Correction.create (Delete (RemoveCharacter.NormalCharacter)) { Line = 1; Column = 2 }
+                      Correction.create (Delete (RemoveCharacter.NormalCharacter)) { Line = 1; Column = 2 }
+                      Correction.create (Insert (InsertCharacter.NormalCharacter '3')) { Line = 1; Column = 4 }
+                      Correction.create (Insert (InsertCharacter.NormalCharacter '2')) { Line = 1; Column = 3 }
+                      Correction.create (Insert (InsertCharacter.NormalCharacter '1')) { Line = 1; Column = 2 } ]
+                Expect.equal actual expected "Should delete added characters"
+            }
         ]
     ]

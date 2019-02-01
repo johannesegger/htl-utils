@@ -182,6 +182,12 @@ let mergeCorrectionIntention (correctionIntention: CorrectionIntention) correcti
     |> List.map (fun correctionIntention ->
         let existingCorrectionSnapshot =
             snapshots
+            |> List.filter (fun snapshot ->
+                match snapshot.Correction.CorrectionType with
+                | Insert _
+                | StrikeThrough _ -> true
+                | Delete _ -> false // We can't change deleted characters, so we ignore them
+            )
             |> List.tryFind (fun snapshot -> snapshot.CurrentPosition = Some correctionIntention.Position)
         match existingCorrectionSnapshot, correctionIntention with
         | Some { Correction = { CorrectionType = Insert _ } }, { IntentionType = RemoveCharacter ch } ->
