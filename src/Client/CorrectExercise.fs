@@ -72,18 +72,9 @@ type StudentExercise =
       Documents: Document list
       Result: string }
 
-type ExerciseLanguage =
-    | JavaScript
-    | CSS
-    | HTML
-    | JSON
-    | CSharp
-    | CPlusPlus
-
 type Settings =
     { HasResult: bool
-      ResultTemplate: string
-      ExerciseLanguage: ExerciseLanguage }
+      ResultTemplate: string }
 
 type Model =
     { Exercises: StudentExercise list option
@@ -101,7 +92,6 @@ type Msg =
     | SetHasResultTemplate of bool
     | SetResultTemplate of string
     | SetResult of ExerciseId * string
-    | SetExerciseLanguage of ExerciseLanguage
     | ShowCorrectionsData
     | HideCorrectionsData
     | EditCorrectionsData of string
@@ -447,8 +437,7 @@ let init =
         { Exercises = None
           Settings =
             { HasResult = false
-              ResultTemplate = ""
-              ExerciseLanguage = JavaScript }
+              ResultTemplate = "" }
           ShowCorrections = false
           CorrectionsData = "" }
     model, Cmd.none
@@ -551,9 +540,6 @@ let update msg model =
         model', Cmd.none
     | SetResult (exerciseId, value) ->
         let model' = updateExercise model exerciseId (fun e -> { e with Result = value })
-        model', Cmd.none
-    | SetExerciseLanguage language ->
-        let model' = { model with Settings = { model.Settings with ExerciseLanguage = language } }
         model', Cmd.none
     | ShowCorrectionsData ->
         let model' =
@@ -664,6 +650,11 @@ let private getCorrectedDocumentContent document =
             |> String.concat editorNewLine
     List.foldBack folder document.Corrections document.OriginalContent
 
+let private getFileExtension (file: string) =
+    match file.LastIndexOf(".") with
+    | -1 -> ""
+    | idx -> file.Substring(idx).ToLower()
+
 let view model dispatch =
     let editorView document =
         let editorOptions = createEmpty<IEditorConstructionOptions>
@@ -675,13 +666,14 @@ let view model dispatch =
         editorOptions.minimap <- Some minimap
 #endif
         let language =
-            match model.Settings.ExerciseLanguage with
-            | JavaScript -> "javascript"
-            | CSS -> "css"
-            | HTML -> "html"
-            | JSON -> "json"
-            | CSharp -> "csharp"
-            | CPlusPlus -> "cpp"
+            match getFileExtension document.FileName with
+            | ".js" -> "javascript"
+            | ".css" -> "css"
+            | ".html" -> "html"
+            | ".json" -> "json"
+            | ".cs" -> "csharp"
+            | ".c" -> "cpp"
+            | _ -> ""
         ReactMonacoEditor.monacoEditor
             [ yield ReactMonacoEditor.Language language
               yield ReactMonacoEditor.Height (!^"500px")
@@ -709,30 +701,7 @@ let view model dispatch =
                                         [ Button.a
                                             [ Button.Color IsLight
                                               Button.OnClick (fun _ev -> dispatch (SetHasResultTemplate (not model.Settings.HasResult))) ]
-                                            [ str (if model.Settings.HasResult then "Disable result" else "Enable result") ] ] ] ] ]
-                          Level.item [ Level.Item.HasTextCentered ]
-                            [ div []
-                                [ Level.heading [] [ str "Language" ]
-                                  Field.div [ ]
-                                    [ Control.div []
-                                        [ Select.select [ ]
-                                            [ let languages = [
-                                                JavaScript, "JavaScript"
-                                                CSS, "CSS"
-                                                HTML, "HTML"
-                                                JSON, "JSON"
-                                                CSharp, "C#"
-                                                CPlusPlus, "C++"
-                                              ]
-                                              yield select
-                                                [ OnChange (fun ev ->
-                                                    languages
-                                                    |> List.find (snd >> ((=) ev.Value))
-                                                    |> fst
-                                                    |> SetExerciseLanguage
-                                                    |> dispatch
-                                                  ) ]
-                                                [ for (_item, text) in languages -> option [] [ str text ] ] ] ] ] ] ] ]
+                                            [ str (if model.Settings.HasResult then "Disable result" else "Enable result") ] ] ] ] ] ]
                       Level.right []
                         [ Level.item []
                             [ Button.button
