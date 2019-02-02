@@ -48,6 +48,12 @@ module RangeHelper =
     let fromPosition position =
         fromPositions position position
 
+module Span =
+    let ``union`` (a1: TextPosition, a2: TextPosition) (b1: TextPosition, b2: TextPosition) =
+        let minStart = if (a1 :> IComparable).CompareTo(b1) < 0 then a1 else b1
+        let maxEnd = if (a2 :> IComparable).CompareTo(b2) > 0 then a2 else b2
+        (minStart, maxEnd)
+
 type DecorationId = DecorationId of string
 module DecorationId =
     let value (DecorationId decorationId) = decorationId
@@ -293,15 +299,46 @@ let applyRemove range doc =
         |> List.map (fun c -> { c.Correction with Position = c.CurrentPosition.Value })
         |> List.sortBy (fun c -> c.Position)
 
-    match doc.Editor, reInsertCorrections with
-    | Some editor, _ :: _ ->
-        editor.trigger("re-insert", "undo", None)
+    if not <| List.isEmpty reInsertCorrections
+    then
         { doc with
             PendingReInsertCorrections = doc.PendingReInsertCorrections + 1
             Corrections = reInsertCorrections' @ otherCorrections @ doc.Corrections }
-    | _ ->
+    else
         { doc with
             Corrections = otherCorrections @ doc.Corrections }
+
+type InsertOrReplaceIntention =
+    | IndentLine of CorrectionIntention
+    | OutdentLine of CorrectionIntention
+
+let private tryGetInsertOrReplaceIntention previousContent (change: IModelContentChange) =
+    let isWhiteSpace value =
+        Regex.IsMatch(value, @"^\s*$")
+
+    let text =
+        MonacoEditor.editor
+            .createModel(previousContent)
+            .getValueInRange(change.range)
+
+    if isWhiteSpace change.text && isWhiteSpace text
+    then
+        if text.Length < change.text.Length
+        then
+            IndentLine
+                { CorrectionIntention.Position = EndPosition.fromRange change.range
+                  IntentionType = InsertText (change.text.Substring(text.Length)) }
+            |> Some
+        else
+            let textToBeRemoved = text.Substring(change.text.Length)
+            let position =
+                let p = EndPosition.fromRange change.range
+                { p with Column = p.Column - textToBeRemoved.Length }
+            OutdentLine
+                { CorrectionIntention.Position = position
+                  IntentionType = RemoveText (CorrectionIntentionType.removeText textToBeRemoved) }
+            |> Some
+    else None
 
 let encodeExercises exercises =
     let encodeCorrectionType = function
@@ -471,7 +508,7 @@ let update msg model =
         let model' = updateDocument model documentId (fun d -> { d with Editor = Some editor })
         model', Cmd.none
     | EditText (documentId, changes) ->
-        let applyChange doc (change: IModelContentChange) =
+        let applyChange previousContent doc (change: IModelContentChange) =
             // Monaco by default groups several edit operations to a single undo operation,
             // but we want every change to be a single undo operation
             doc.Editor
@@ -480,23 +517,40 @@ let update msg model =
             if change.text = "" // Remove
             then
                 applyRemove change.range doc
-                |> applyDecorations
-                |> setEditorContent
             else // Insert or replace
-                let correctionIntention =
-                    { CorrectionIntention.Position = EndPosition.fromRange change.range
-                      IntentionType = InsertText change.text }
-                { doc with Corrections = addCorrection correctionIntention doc.Corrections }
-                |> applyRemove change.range
-                |> applyDecorations
-                |> setEditorContent
+                match tryGetInsertOrReplaceIntention previousContent change with
+                | Some (IndentLine correctionIntention) ->
+                    { doc with Corrections = addCorrection correctionIntention doc.Corrections }
+                | Some (OutdentLine correctionIntention) ->
+                    let newCorrections = mergeCorrectionIntention correctionIntention doc.Corrections
+                    let range =
+                        newCorrections
+                        |> List.map (fun c -> CorrectionType.getSpan c.Position c.CorrectionType)
+                        |> List.reduce Span.``union``
+                        |> uncurry RangeHelper.fromPositions
+                    { doc with Corrections = newCorrections @ doc.Corrections }
+                    |> applyRemove range
+                | None ->
+                    let correctionIntention =
+                        { CorrectionIntention.Position = EndPosition.fromRange change.range
+                          IntentionType = InsertText change.text }
+                    { doc with Corrections = addCorrection correctionIntention doc.Corrections }
+                    |> applyRemove change.range
         let updateDoc doc =
             if doc.PendingReInsertCorrections > 0
             then
                 { doc with
                     PendingReInsertCorrections = doc.PendingReInsertCorrections - List.length changes }
             else
-                List.fold applyChange doc changes
+                let doc' = List.fold (applyChange doc.EditorContent) doc changes
+                if doc'.PendingReInsertCorrections > doc.PendingReInsertCorrections
+                then
+                    doc'.Editor
+                    |> FSharp.Core.Option.iter (fun editor -> editor.trigger("re-insert", "undo", None))
+                doc'
+            |> applyDecorations
+            |> setEditorContent
+
         let model' = updateDocument model documentId updateDoc
         model', Cmd.none
     | Print ->
