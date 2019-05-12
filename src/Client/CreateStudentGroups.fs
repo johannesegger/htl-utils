@@ -72,7 +72,14 @@ let rec update msg model =
                 (Error >> LoadClassListResponse)
         model, cmd
     | LoadClassListResponse (Ok classList) ->
-        let model' = { model with ClassList = classList |> List.groupBy (fun v -> v.[0]) |> List.map snd }
+        let model' =
+            { model with
+                ClassList =
+                    classList
+                    |> List.groupBy (fun v -> v.[0])
+                    |> List.sortBy fst
+                    |> List.map snd
+            }
         model', Cmd.none
     | LoadClassListResponse (Error e) ->
         let cmd =
@@ -188,11 +195,11 @@ let view model dispatch =
             [ str "Shuffle" ]
 
           yield Divider.divider []
-            
+
           yield!
                 [ for (idx, group) in List.indexed model.Groups do
                     let color = colors.[idx % colors.Length]
-                    yield 
+                    yield
                         Field.div [ Field.IsGrouped; Field.IsHorizontal ]
                             [ Field.label [ Field.Label.IsNormal ]
                                 [ Label.label [] [ str (sprintf "Group #%i" (idx + 1)) ] ]

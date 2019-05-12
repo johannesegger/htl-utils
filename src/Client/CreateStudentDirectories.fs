@@ -118,7 +118,14 @@ let rec update authHeaderOptFn msg model =
                 (Error >> LoadClassListResponse)
         model, cmd
     | LoadClassListResponse (Ok classList) ->
-        let model' = { model with ClassList = classList |> List.groupBy (fun v -> v.[0]) |> List.map snd }
+        let model' =
+            { model with
+                ClassList =
+                    classList
+                    |> List.groupBy (fun v -> v.[0])
+                    |> List.sortBy fst
+                    |> List.map snd
+            }
         model', Cmd.none
     | LoadClassListResponse (Error e) ->
         let cmd =
