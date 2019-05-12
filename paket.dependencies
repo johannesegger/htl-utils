@@ -31,7 +31,6 @@ group Client
     nuget Fulma
     nuget Fulma.Extensions.Wikiki.Divider
     nuget Thoth.Elmish.Toast
-    nuget Thoth.Json
 
 group Build
     storage: none
@@ -41,13 +40,3 @@ group Build
     nuget Fake.Core.Target
     nuget Fake.DotNet.Cli
     nuget Fake.IO.FileSystem
-
-group Test
-    storage: none
-    source https://api.nuget.org/v3/index.json
-
-    nuget FSharp.Core
-    nuget Expecto
-    nuget Expecto.BenchmarkDotNet
-    nuget Expecto.FsCheck
-    nuget Expecto.Hopac

@@ -1,7 +1,6 @@
 var path = require("path");
 var webpack = require("webpack");
 var MinifyPlugin = require("terser-webpack-plugin");
-var MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 function resolve(filePath) {
     return path.join(__dirname, filePath)
@@ -73,10 +72,9 @@ module.exports = {
     },
     // DEVELOPMENT
     //      - HotModuleReplacementPlugin: Enables hot reloading when code changes without refreshing
-    plugins: [
-        ...(isProduction ? [] : [ new webpack.HotModuleReplacementPlugin() ]),
-        ...(isProduction ? [] : [ new webpack.NamedModulesPlugin() ]),
-        new MonacoWebpackPlugin()
+    plugins: isProduction ? [] : [
+        new webpack.HotModuleReplacementPlugin(),
+        new webpack.NamedModulesPlugin()
     ],
     // Configuration for webpack-dev-server
     devServer: {
@@ -125,5 +123,9 @@ module.exports = {
                 }
             }
         ]
-    }
+    },
+    plugins: isProduction ? [] : [
+        new webpack.HotModuleReplacementPlugin(),
+        new webpack.NamedModulesPlugin()
+    ]
 };
