@@ -207,7 +207,7 @@ let main argv =
         let clientCredential = ClientCredential(getEnvVarOrFail "APP_KEY")
         let userTokenCache = TokenCache()
         let appTokenCache = TokenCache()
-        ConfidentialClientApplication(clientId, authority, redirectUri, clientCredential, userTokenCache, appTokenCache) 
+        ConfidentialClientApplication(clientId, authority, redirectUri, clientCredential, userTokenCache, appTokenCache)
 
     let requiresEggj : HttpHandler = requiresUser "EGGJ@htlvb.at"
     let requiresTeacher : HttpHandler = requiresGroup "2d1c8785-5350-4a3b-993c-62dc9bc30980"
