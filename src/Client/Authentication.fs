@@ -9,7 +9,10 @@ open Fulma
 open Fable.FontAwesome
 
 type User =
-    { Name: string }
+    {
+        Name: string
+        Token: string
+    }
 
 type Authentication =
     | NotAuthenticated
@@ -17,7 +20,7 @@ type Authentication =
 
 type Model =
     Authentication
-    
+
 type Msg =
     | Init
     | SignIn
@@ -27,28 +30,44 @@ type Msg =
 
 let appId = "9fb9b79b-6e66-4007-a94f-571d7e3b68c5"
 let userAgentApplication =
-    let authority = "https://login.microsoftonline.com/htlvb.at/"
-    // Not called with `loginPopup`
-    let tokenReceivedCallBack errorDesc token error tokenType userState =
-        //printfn "===== TOKEN RECEIVED: %s - %s - %s - %s - %s" errorDesc token error tokenType userState
-        ()
     let options =
-        let o = Fable.Core.JsInterop.createEmpty<Msal.UserAgentApplicationStaticOptions>
-        o.cacheLocation <- Some "localStorage"
+        let cacheOptions = Fable.Core.JsInterop.createEmpty<Msal.CacheOptions>
+        cacheOptions.cacheLocation <- Some Msal.CacheLocation.LocalStorage
+
+        let authOptions = Fable.Core.JsInterop.createEmpty<Msal.AuthOptions>
+        authOptions.authority <- Some "https://login.microsoftonline.com/htlvb.at/"
+        authOptions.clientId <- appId
+
+        let o = Fable.Core.JsInterop.createEmpty<Msal.Configuration>
+        o.cache <- Some cacheOptions
+        o.auth <- authOptions
         o
-    Msal.UserAgentApplication.Create(appId, Some authority, tokenReceivedCallBack, options)
+    Msal.UserAgentApplication.Create(options)
+
+userAgentApplication.handleRedirectCallback(fun error response ->
+    Fable.Import.Browser.console.log("handleRedirectCallback", error, response)
+)
+
+let getToken() = promise {
+    let authParams = Fable.Core.JsInterop.createEmpty<Msal.AuthenticationParameters>
+    authParams.scopes <- Some !![| appId |]
+    try
+        let! authResponse = userAgentApplication.acquireTokenSilent authParams
+        return authResponse.accessToken
+    with error ->
+        try
+            printfn "Error: %A" error
+            Fable.Import.Browser.console.log("Error", error)
+            // if error :? Msal.InteractionRequiredAuthError then
+            let! authResponse = userAgentApplication.acquireTokenPopup authParams
+            return authResponse.accessToken
+            // else
+            //     return reraise()
+        with _error ->
+            return failwith "Please sign in using your Microsoft account."
+}
 
 let authHeaderOptFn model =
-    let getToken() = promise {
-        let scope = [| appId |]
-        try
-            return! userAgentApplication.acquireTokenSilent !!scope
-        with _error ->
-            try
-                return! userAgentApplication.acquireTokenPopup !!scope
-            with _error ->
-                return failwith "Please sign in using your Microsoft account."
-    }
 
     let getAuthHeader() = promise {
         let! token = getToken()
@@ -59,22 +78,30 @@ let authHeaderOptFn model =
     | NotAuthenticated -> None
     | Authenticated _ -> Some getAuthHeader
 
-let mapToUser (msalUser: Msal.User) =
-    { Name = msalUser.name }
-
 let rec update msg model =
     match msg with
     | Init ->
-        match userAgentApplication.getUser() |> Option.ofObj with
-        | Some user ->
-            update (SignInResult (Ok { Name = user.name })) model
-        | None -> model, Cmd.none
+        let cmd =
+            userAgentApplication.getAccount()
+            |> Option.ofObj
+            |> Option.map (fun user ->
+                let getUser () =
+                    promise {
+                        let! token = getToken()
+                        return { Name = user.name; Token = token }
+                    }
+                Cmd.ofPromise getUser () (Ok >> SignInResult) (Error >> SignInResult)
+            )
+            |> Option.defaultValue Cmd.none
+        model, cmd
     | SignIn ->
         let cmd =
+            let authParams = Fable.Core.JsInterop.createEmpty<Msal.AuthenticationParameters>
+            authParams.scopes <- Some !![| "contacts.readwrite" |]
             Cmd.ofPromise
-                userAgentApplication.loginPopup
-                !![| "contacts.readwrite" |]
-                ((fun _ -> userAgentApplication.getUser()) >> mapToUser >> Ok >> SignInResult)
+                (fun o -> userAgentApplication.loginPopup o)
+                authParams
+                ((fun authResponse -> { Name = userAgentApplication.getAccount().name; Token = authResponse.accessToken }) >> Ok >> SignInResult)
                 (Error >> SignInResult)
         model, cmd
     | SignInResult (Ok user) ->

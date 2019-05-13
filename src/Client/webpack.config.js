@@ -33,8 +33,7 @@ var CONFIG = {
                 "targets": {
                     "browsers": ["last 2 versions"]
                 },
-                "modules": false,
-                "useBuiltIns": "usage",
+                "modules": false
             }]
         ],
         plugins: ["@babel/plugin-transform-runtime"]
