@@ -2,17 +2,13 @@ module CreateStudentGroups
 
 open System
 open Elmish
-open Fable.FontAwesome
-open Fable.Helpers.React
-open Fable.Helpers.React.Props
-open Fable.PowerPack
-open Fable.PowerPack.Fetch
+open Fable.React
+open Fable.React.Props
 open Fulma
 open Fulma.Extensions
 open Fulma.Extensions.Wikiki
 open Thoth.Elmish
-open Shared.CreateStudentDirectories
-open Authentication
+open Thoth.Fetch
 open Thoth.Json
 
 type Student =
@@ -65,9 +61,9 @@ let rec update msg model =
         model', loadClassListCmd
     | LoadClassList ->
         let cmd =
-            Cmd.ofPromise
-                (fetchAs "/api/classes" (Decode.list Decode.string))
-                []
+            Cmd.OfPromise.either
+                (fun () -> Fetch.get("/api/classes", Decode.list Decode.string))
+                ()
                 (Ok >> LoadClassListResponse)
                 (Error >> LoadClassListResponse)
         model, cmd
@@ -82,9 +78,9 @@ let rec update msg model =
     | SelectClass name ->
         let model' = { model with SelectedClass = Some (name, NotLoaded) }
         let cmd =
-            Cmd.ofPromise
-                (fetchAs (sprintf "/api/classes/%s/students" name) (Decode.list (Decode.tuple2 Decode.string Decode.string)))
-                []
+            Cmd.OfPromise.either
+                (fun name -> Fetch.get(sprintf "/api/classes/%s/students" name, Decode.list (Decode.tuple2 Decode.string Decode.string)))
+                name
                 (Ok >> LoadClassStudentsResponse)
                 (Error >> LoadClassStudentsResponse)
         model', cmd
@@ -197,7 +193,7 @@ let view model dispatch =
                             [ Field.label [ Field.Label.IsNormal ]
                                 [ Label.label [] [ str (sprintf "Group #%i" (idx + 1)) ] ]
                               Field.body [ ]
-                                [ Field.div [ Field.IsGrouped; Field.CustomClass Field.Classes.IsGrouped.Multiline ]
+                                [ Field.div [ Field.IsGrouped; Field.IsGroupedMultiline ]
                                     [ for student in group ->
                                         Control.div []
                                             [ Tag.list [ Tag.List.HasAddons ]

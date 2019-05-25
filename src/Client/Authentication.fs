@@ -2,9 +2,7 @@ module Authentication
 
 open Elmish
 open Fable.Core.JsInterop
-open Fable.Helpers.React
-open Fable.PowerPack
-open Fable.PowerPack.Fetch
+open Fable.React
 open Fulma
 open Fable.FontAwesome
 
@@ -45,7 +43,7 @@ let userAgentApplication =
     Msal.UserAgentApplication.Create(options)
 
 userAgentApplication.handleRedirectCallback(fun error response ->
-    Fable.Import.Browser.console.log("handleRedirectCallback", error, response)
+    Browser.Dom.console.log("handleRedirectCallback", error, response)
 )
 
 let getToken() = promise {
@@ -57,7 +55,7 @@ let getToken() = promise {
     with error ->
         try
             printfn "Error: %A" error
-            Fable.Import.Browser.console.log("Error", error)
+            Browser.Dom.console.log("Error", error)
             // if error :? Msal.InteractionRequiredAuthError then
             let! authResponse = userAgentApplication.acquireTokenPopup authParams
             return authResponse.accessToken
@@ -68,10 +66,9 @@ let getToken() = promise {
 }
 
 let authHeaderOptFn model =
-
     let getAuthHeader() = promise {
         let! token = getToken()
-        return Authorization ("Bearer " + token)
+        return Fetch.Types.Authorization ("Bearer " + token)
     }
 
     match model with
@@ -90,7 +87,7 @@ let rec update msg model =
                         let! token = getToken()
                         return { Name = user.name; Token = token }
                     }
-                Cmd.ofPromise getUser () (Ok >> SignInResult) (Error >> SignInResult)
+                Cmd.OfPromise.either getUser () (Ok >> SignInResult) (Error >> SignInResult)
             )
             |> Option.defaultValue Cmd.none
         model, cmd
@@ -98,7 +95,7 @@ let rec update msg model =
         let cmd =
             let authParams = Fable.Core.JsInterop.createEmpty<Msal.AuthenticationParameters>
             authParams.scopes <- Some !![| "contacts.readwrite" |]
-            Cmd.ofPromise
+            Cmd.OfPromise.either
                 (fun o -> userAgentApplication.loginPopup o)
                 authParams
                 ((fun authResponse -> { Name = userAgentApplication.getAccount().name; Token = authResponse.accessToken }) >> Ok >> SignInResult)
@@ -111,7 +108,7 @@ let rec update msg model =
         model, Cmd.none
     | SignOut ->
         let cmd =
-            Cmd.ofFunc
+            Cmd.OfFunc.either
                 userAgentApplication.logout
                 ()
                 (Ok >> SignOutResult)

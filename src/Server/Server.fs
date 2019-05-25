@@ -15,6 +15,7 @@ open Microsoft.Graph
 open Giraffe
 open Giraffe.Serialization
 open Thoth.Json.Giraffe
+open Thoth.Json.Net
 open Shared
 open WakeUp
 open Students
@@ -24,26 +25,18 @@ open Microsoft.AspNetCore.Authentication.JwtBearer
 let publicPath = Path.GetFullPath "../Client/public"
 
 let requiresUser preferredUsername : HttpHandler =
-    evaluateUserPolicy
+    authorizeUser
         (fun user ->
             user.HasClaim("preferred_username", preferredUsername)
         )
         (RequestErrors.FORBIDDEN "Accessing this API is not allowed")
 
 let requiresGroup groupId : HttpHandler =
-    evaluateUserPolicy
+    authorizeUser
         (fun user ->
             user.HasClaim("groups", groupId)
         )
         (RequestErrors.FORBIDDEN "Accessing this API is not allowed")
-
-let readStream (stream: Stream) = task {
-    use reader = new StreamReader(stream, Encoding.UTF8)
-    return! reader.ReadToEndAsync()
-}
-
-let configureSerialization (services:IServiceCollection) =
-    services.AddSingleton<IJsonSerializer>(ThothSerializer())
 
 let sendWakeUpCommand : HttpHandler =
     fun next ctx -> task {
@@ -59,11 +52,11 @@ let sendWakeUpCommand : HttpHandler =
                 ServerErrors.internalError (text (sprintf "Error while sending WoL magic packet to %O (MAC address %O)" ipAddress physicalAddress)) next ctx
     }
 
-let getGraphApiAccessToken (clientApp: ConfidentialClientApplication) (user: ClaimsPrincipal) scopes = async {
+let getGraphApiAccessToken (clientApp: IConfidentialClientApplication) (user: ClaimsPrincipal) scopes = async {
     let identity = Seq.head user.Identities
     let userAccessToken = identity.BootstrapContext :?> string
     let! graphApiAcquireTokenResult =
-        clientApp.AcquireTokenOnBehalfOfAsync(scopes, UserAssertion userAccessToken)
+        clientApp.AcquireTokenOnBehalfOf(scopes, UserAssertion userAccessToken).ExecuteAsync()
         |> Async.AwaitTask
     return graphApiAcquireTokenResult.AccessToken
 }
@@ -76,7 +69,7 @@ let getGraphApiClient accessToken =
         )
     |> GraphServiceClient
 
-let importTeacherContacts (clientApp: ConfidentialClientApplication) getTeachers : HttpHandler =
+let importTeacherContacts clientApp getTeachers : HttpHandler =
     fun next ctx -> task {
         let! teachers = getTeachers
 
@@ -93,7 +86,7 @@ let getClassList classList : HttpHandler =
         let! result = getClassList classList |> Async.StartAsTask
         return!
             match result with
-            | Ok list -> Successful.OK list next ctx
+            | Ok list -> json list next ctx
             | Error (GetClassListError message) ->
                 ServerErrors.internalError (setBodyFromString (sprintf "Error while querying list of classes: %s" message)) next ctx
     }
@@ -103,7 +96,7 @@ let getStudentList students className : HttpHandler =
         let! result = students className |> Async.StartAsTask
         return!
             match result with
-            | Ok list -> Successful.OK list next ctx
+            | Ok list -> json list next ctx
             | Error (Students.GetStudentsError message) ->
                 ServerErrors.internalError (setBodyFromString (sprintf "Error while querying students from class \"%s\": %s" className message)) next ctx
     }
@@ -202,12 +195,11 @@ let main argv =
         |> Map.ofSeq
     let clientId = "9fb9b79b-6e66-4007-a94f-571d7e3b68c5"
     let clientApp =
-        let authority = "https://login.microsoftonline.com/htlvb.at/"
-        let redirectUri = "https://localhost:8080" // TODO adapt for production env?
-        let clientCredential = ClientCredential(getEnvVarOrFail "APP_KEY")
-        let userTokenCache = TokenCache()
-        let appTokenCache = TokenCache()
-        ConfidentialClientApplication(clientId, authority, redirectUri, clientCredential, userTokenCache, appTokenCache)
+        ConfidentialClientApplicationBuilder.Create(clientId)
+            .WithAuthority("https://login.microsoftonline.com/htlvb.at/")
+            .WithRedirectUri("https://localhost:8080") // TODO adapt for production env?
+            .WithClientSecret(getEnvVarOrFail "APP_KEY")
+            .Build()
 
     let requiresEggj : HttpHandler = requiresUser "EGGJ@htlvb.at"
     let requiresTeacher : HttpHandler = requiresGroup "2d1c8785-5350-4a3b-993c-62dc9bc30980"
@@ -243,7 +235,7 @@ let main argv =
 
     let configureServices (services : IServiceCollection) =
         services.AddGiraffe() |> ignore
-        services.AddSingleton<IJsonSerializer>(ThothSerializer()) |> ignore
+        services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true)) |> ignore
         services
             .AddAuthentication(fun config ->
                 config.DefaultScheme <- JwtBearerDefaults.AuthenticationScheme

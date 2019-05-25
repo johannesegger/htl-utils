@@ -2,12 +2,12 @@ module WakeUp
 
 open Elmish
 open Fable.FontAwesome
-open Fable.Helpers.React
-open Fable.Helpers.React.Props
-open Fable.PowerPack
-open Fable.PowerPack.Fetch
+open Fable.React
+open Fable.React.Props
 open Fulma
 open Thoth.Elmish
+open Thoth.Json
+open Thoth.Fetch
 
 type Model = unit
 
@@ -21,9 +21,13 @@ let rec update authHeaderOptFn msg model =
         match authHeaderOptFn with
         | Some getAuthHeader ->
             let cmd =
-                Cmd.ofPromise
-                    (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/wakeup/send" ()))
-                    ()
+                Cmd.OfPromise.either
+                    (fun getAuthHeader -> promise {
+                        let! authHeader = getAuthHeader ()
+                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                        return! Fetch.post("/api/wakeup/send", Encode.nil, requestProperties)
+                    })
+                    getAuthHeader
                     (ignore >> Ok >> SendWakeUpResponse)
                     (Error >> SendWakeUpResponse)
             model, cmd

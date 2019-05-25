@@ -2,12 +2,12 @@ module ImportTeacherContacts
 
 open Elmish
 open Fable.FontAwesome
-open Fable.Helpers.React
-open Fable.Helpers.React.Props
-open Fable.PowerPack
-open Fable.PowerPack.Fetch
+open Fable.React
+open Fable.React.Props
 open Fulma
 open Thoth.Elmish
+open Thoth.Fetch
+open Thoth.Json
 
 type Model = unit
 
@@ -21,9 +21,15 @@ let rec update authHeaderOptFn msg model =
         match authHeaderOptFn with
         | Some getAuthHeader ->
             let makeRequestCmd =
-                Cmd.ofPromise
-                    (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/teachers/import-contacts" ()))
-                    ()
+                Cmd.OfPromise.either
+                    (fun getAuthHeader -> promise {
+                        let url = "/api/teachers/import-contacts"
+                        let data = Encode.nil
+                        let! authHeader = getAuthHeader ()
+                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                        return! Fetch.post(url, data, requestProperties)
+                    })
+                    getAuthHeader
                     (ignore >> Ok >> ImportResponse)
                     (Error >> ImportResponse)
             let toastCmd =

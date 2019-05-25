@@ -31,6 +31,7 @@ group Client
     nuget Fulma
     nuget Fulma.Extensions.Wikiki.Divider
     nuget Thoth.Elmish.Toast
+    nuget Thoth.Fetch
 
 group Build
     storage: none

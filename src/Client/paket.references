@@ -10,3 +10,4 @@ group Client
     Fulma
     Fulma.Extensions.Wikiki.Divider
     Thoth.Elmish.Toast
+    Thoth.Fetch

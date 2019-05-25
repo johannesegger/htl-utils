@@ -2,15 +2,13 @@ module CreateStudentDirectories
 
 open Elmish
 open Fable.FontAwesome
-open Fable.Helpers.React
-open Fable.PowerPack
-open Fable.PowerPack.Fetch
+open Fable.React
 open Fulma
-open Fulma.Extensions
 open Fulma.Extensions.Wikiki
 open Thoth.Elmish
-open Shared.CreateStudentDirectories
+open Thoth.Fetch
 open Thoth.Json
+open Shared.CreateStudentDirectories
 
 type DirectoryChildren =
     | LoadedDirectoryChildren of Directory list
@@ -111,9 +109,9 @@ let rec update authHeaderOptFn msg model =
         model'', Cmd.batch [ loadChildDirectoriesCmd; loadClassListCmd ]
     | LoadClassList ->
         let cmd =
-            Cmd.ofPromise
-                (fetchAs "/api/classes" (Decode.list Decode.string))
-                []
+            Cmd.OfPromise.either
+                (fun () -> Fetch.get("/api/classes", Decode.list Decode.string))
+                ()
                 (Ok >> LoadClassListResponse)
                 (Error >> LoadClassListResponse)
         model, cmd
@@ -133,15 +131,15 @@ let rec update authHeaderOptFn msg model =
         let cmd =
             match authHeaderOptFn with
             | Some getAuthHeader ->
-                Cmd.ofPromise
-                    (getAuthHeader
-                        >> Promise.bind (
-                            List.singleton
-                            >> requestHeaders
-                            >> List.singleton
-                            >> postRecord "/api/create-student-directories/child-directories" (List.rev path))
-                        >> Promise.bind (fun r -> r.json() |> Promise.map (Decode.unwrap "$" (Decode.list Decode.string))))
-                    ()
+                Cmd.OfPromise.either
+                    (fun (path, getAuthHeader) -> promise {
+                        let url = "/api/create-student-directories/child-directories"
+                        let data = List.rev path |> List.map Encode.string |> Encode.list
+                        let! authHeader = getAuthHeader ()
+                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
+                    })
+                    (path, getAuthHeader)
                     ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
                     (Error >> LoadChildDirectoriesResponse)
             | None -> Cmd.none
@@ -172,13 +170,24 @@ let rec update authHeaderOptFn msg model =
         | Some selectedDirectory, Some className ->
             match List.rev selectedDirectory.Path with
             | baseDir :: path ->
-                let record = { ClassName = className; Path = baseDir, path }
+                let input = { ClassName = className; Path = baseDir, path }
                 match authHeaderOptFn with
                 | Some getAuthHeader ->
                     let cmd =
-                        Cmd.ofPromise
-                            (getAuthHeader >> Promise.bind (List.singleton >> requestHeaders >> List.singleton >> postRecord "/api/create-student-directories/create" record))
-                            ()
+                        Cmd.OfPromise.either
+                            (fun (getAuthHeader, input) -> promise {
+                                let url = "/api/create-student-directories/create"
+                                let data =
+                                    Encode.object
+                                        [
+                                            "className", Encode.string input.ClassName
+                                            "path", Encode.tuple2 Encode.string (List.map Encode.string >> Encode.list) input.Path
+                                        ]
+                                let! authHeader = getAuthHeader ()
+                                let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                                return! Fetch.post(url, data, requestProperties)
+                            })
+                            (getAuthHeader, input)
                             (ignore >> Ok >> CreateDirectoriesResponse)
                             (Error >> CreateDirectoriesResponse)
                     model, cmd

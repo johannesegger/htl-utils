@@ -2,7 +2,7 @@
 module rec Msal
 open System
 open Fable.Core
-open Fable.Import.JS
+open Fable.Core.JS
 
 [<Import("UserAgentApplication","msal")>]
 let UserAgentApplication: UserAgentApplicationStatic =
@@ -59,7 +59,7 @@ type [<AllowNullLiteral>] IExports =
 
 /// General error class thrown by the MSAL.js library.
 type [<AllowNullLiteral>] AuthError =
-    inherit Error
+    // inherit Error
     abstract errorCode: string with get, set
     abstract errorMessage: string with get, set
 
@@ -213,8 +213,8 @@ type [<AllowNullLiteral>] QPDict =
     [<Emit "$0[$1]{{=$2}}">] abstract Item: key: string -> string with get, set
 
 type [<AllowNullLiteral>] AuthenticationParameters =
-    abstract scopes: Array<string> option with get, set
-    abstract extraScopesToConsent: Array<string> option with get, set
+    abstract scopes: ResizeArray<string> option with get, set
+    abstract extraScopesToConsent: ResizeArray<string> option with get, set
     abstract prompt: string option with get, set
     abstract extraQueryParameters: QPDict option with get, set
     abstract claimsRequest: string option with get, set
@@ -265,7 +265,7 @@ type [<AllowNullLiteral>] AuthResponse =
     abstract tokenType: string with get, set
     abstract idToken: IdToken with get, set
     abstract accessToken: string with get, set
-    abstract scopes: Array<string> with get, set
+    abstract scopes: ResizeArray<string> with get, set
     abstract expiresOn: DateTime with get, set
     abstract account: Account with get, set
     abstract accountState: string with get, set
@@ -312,8 +312,8 @@ type [<AllowNullLiteral>] SystemOptions =
 
 type [<AllowNullLiteral>] FrameworkOptions =
     abstract isAngular: bool option with get, set
-    abstract unprotectedResources: Array<string> option with get, set
-    abstract protectedResourceMap: Map<string, Array<string>> option with get, set
+    abstract unprotectedResources: ResizeArray<string> option with get, set
+    abstract protectedResourceMap: Map<string, ResizeArray<string>> option with get, set
 
 type [<AllowNullLiteral>] Configuration =
     abstract auth: AuthOptions with get, set
@@ -444,7 +444,7 @@ type [<AllowNullLiteral>] LoggerStaticOptions =
 type [<AllowNullLiteral>] ServerRequestParameters =
     abstract authorityInstance: Authority with get, set
     abstract clientId: string with get, set
-    abstract scopes: Array<string> with get, set
+    abstract scopes: ResizeArray<string> with get, set
     abstract nonce: string with get, set
     abstract state: string with get, set
     abstract xClientVer: string with get, set
@@ -459,16 +459,16 @@ type [<AllowNullLiteral>] ServerRequestParameters =
     // obj
     /// <summary>generates the URL with QueryString Parameters</summary>
     /// <param name="scopes"></param>
-    abstract createNavigateUrl: scopes: Array<string> -> string
+    abstract createNavigateUrl: scopes: ResizeArray<string> -> string
     /// <summary>Generate the array of all QueryStringParams to be sent to the server</summary>
     /// <param name="scopes"></param>
-    abstract createNavigationUrlString: scopes: Array<string> -> Array<string>
+    abstract createNavigationUrlString: scopes: ResizeArray<string> -> ResizeArray<string>
     /// <summary>append the required scopes: https://openid.net/specs/openid-connect-basic-1_0.html#Scopes</summary>
     /// <param name="scopes"></param>
-    abstract translateclientIdUsedInScope: scopes: Array<string> -> unit
+    abstract translateclientIdUsedInScope: scopes: ResizeArray<string> -> unit
     /// <summary>Parse the scopes into a formatted scopeList</summary>
     /// <param name="scopes"></param>
-    abstract parseScope: scopes: Array<string> -> string
+    abstract parseScope: scopes: ResizeArray<string> -> string
 
 /// Nonce: OIDC Nonce definition: https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 /// State: OAuth Spec: https://tools.ietf.org/html/rfc6749#section-10.12
@@ -480,14 +480,14 @@ type [<AllowNullLiteral>] ServerRequestParametersStatic =
     /// <param name="responseType"></param>
     /// <param name="redirectUri"></param>
     /// <param name="state"></param>
-    [<Emit "new $0($1...)">] abstract Create: authority: Authority * clientId: string * scope: Array<string> * responseType: string * redirectUri: string * state: string -> ServerRequestParameters
+    [<Emit "new $0($1...)">] abstract Create: authority: Authority * clientId: string * scope: ResizeArray<string> * responseType: string * redirectUri: string * state: string -> ServerRequestParameters
 
 type [<AllowNullLiteral>] Storage =
     abstract setItem: key: string * value: string * ?enableCookieStorage: bool -> unit
     abstract getItem: key: string * ?enableCookieStorage: bool -> string
     abstract removeItem: key: string -> unit
     abstract clear: unit -> unit
-    abstract getAllAccessTokens: clientId: string * homeAccountIdentifier: string -> Array<AccessTokenCacheItem>
+    abstract getAllAccessTokens: clientId: string * homeAccountIdentifier: string -> ResizeArray<AccessTokenCacheItem>
     abstract removeAcquireTokenEntries: unit -> unit
     abstract resetCacheItems: unit -> unit
     abstract setItemCookie: cName: string * cValue: string * ?expires: float -> unit
@@ -506,7 +506,7 @@ type [<AllowNullLiteral>] StorageStatic =
     abstract generateAuthorityKey: state: string -> string
 
 type [<AllowNullLiteral>] Telemetry =
-    abstract RegisterReceiver: receiverCallback: (Array<Object> -> unit) -> unit
+    abstract RegisterReceiver: receiverCallback: (ResizeArray<Object> -> unit) -> unit
 
 type [<AllowNullLiteral>] TelemetryStatic =
     [<Emit "new $0($1...)">] abstract Create: unit -> Telemetry
@@ -517,10 +517,10 @@ type [<AllowNullLiteral>] Window =
     // abstract CustomEvent: CustomEvent with get, set
     // abstract Event: Event with get, set
     abstract activeRenewals: TypeLiteral_01 with get, set
-    abstract renewStates: Array<string> with get, set
+    abstract renewStates: ResizeArray<string> with get, set
     abstract callbackMappedToRenewStates: TypeLiteral_01 with get, set
     abstract promiseMappedToRenewStates: TypeLiteral_01 with get, set
-    abstract openedWindows: Array<Window> with get, set
+    abstract openedWindows: ResizeArray<Window> with get, set
     abstract requestType: string with get, set
 
 type [<AllowNullLiteral>] CacheResult =
@@ -585,12 +585,12 @@ type [<AllowNullLiteral>] UserAgentApplication =
     abstract getAccount: unit -> Account
     abstract getAccountState: state: string -> unit
     /// Used to filter all cached items and return a list of unique accounts based on homeAccountIdentifier.
-    abstract getAllAccounts: unit -> Array<Account>
+    abstract getAllAccounts: unit -> ResizeArray<Account>
     /// <param name="scopes"></param>
     /// <param name="state"></param>
-    abstract getCachedTokenInternal: scopes: Array<string> * account: Account * state: string -> AuthResponse
+    abstract getCachedTokenInternal: scopes: ResizeArray<string> * account: Account * state: string -> AuthResponse
     /// <param name="endpoint"></param>
-    abstract getScopesForEndpoint: endpoint: string -> Array<string>
+    abstract getScopesForEndpoint: endpoint: string -> ResizeArray<string>
     /// Return boolean flag to developer to help inform if login is in progress
     abstract getLoginInProgress: unit -> bool
     /// <param name="loginInProgress"></param>
@@ -666,18 +666,18 @@ type [<AllowNullLiteral>] UtilsStatic =
     /// <summary>Check if there are dup scopes in a given request</summary>
     /// <param name="cachedScopes"></param>
     /// <param name="scopes"></param>
-    abstract isIntersectingScopes: cachedScopes: Array<string> * scopes: Array<string> -> bool
+    abstract isIntersectingScopes: cachedScopes: ResizeArray<string> * scopes: ResizeArray<string> -> bool
     /// <summary>Check if a given scope is present in the request</summary>
     /// <param name="cachedScopes"></param>
     /// <param name="scopes"></param>
-    abstract containsScope: cachedScopes: Array<string> * scopes: Array<string> -> bool
+    abstract containsScope: cachedScopes: ResizeArray<string> * scopes: ResizeArray<string> -> bool
     /// <summary>toLower</summary>
     /// <param name="scopes"></param>
-    abstract convertToLowerCase: scopes: Array<string> -> Array<string>
+    abstract convertToLowerCase: scopes: ResizeArray<string> -> ResizeArray<string>
     /// <summary>remove one element from a scope array</summary>
     /// <param name="scopes"></param>
     /// <param name="scope"></param>
-    abstract removeElement: scopes: Array<string> * scope: string -> Array<string>
+    abstract removeElement: scopes: ResizeArray<string> * scope: string -> ResizeArray<string>
     abstract getDefaultRedirectUri: unit -> string
     /// <summary>Given a url like https://a:b/common/d?e=f#g, and a tenantId, returns https://a:b/tenantId/d</summary>
     /// <param name="tenantId">The tenant id to replace</param>

@@ -4,8 +4,8 @@ open Elmish
 open Elmish.React
 open Elmish.HMR // Must be last Elmish.* open declaration (see https://elmish.github.io/hmr/#Usage)
 open Fable.Core.JsInterop
-open Fable.Helpers.React
-open Fable.Helpers.React.Props
+open Fable.React
+open Fable.React.Props
 open Fulma
 open Thoth.Elmish
 open Shared
@@ -18,12 +18,14 @@ type Tab =
     | CreateStudentGroups
 
 type Model =
-    { ActiveTab: Tab
-      Authentication: Authentication.Model
-      WakeUp: WakeUp.Model
-      ImportTeacherContacts: ImportTeacherContacts.Model
-      CreateStudentDirectories: CreateStudentDirectories.Model
-      CreateStudentGroups: CreateStudentGroups.Model }
+    {
+        ActiveTab: Tab
+        Authentication: Authentication.Model
+        WakeUp: WakeUp.Model
+        ImportTeacherContacts: ImportTeacherContacts.Model
+        CreateStudentDirectories: CreateStudentDirectories.Model
+        CreateStudentGroups: CreateStudentGroups.Model
+    }
 
 type Msg =
     | ActivateTab of Tab
@@ -71,28 +73,35 @@ let init() =
     let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
     let createStudentGroupsModel, createStudentGroupsCmd = CreateStudentGroups.init
     let model =
-        { ActiveTab = General
-          Authentication = authModel
-          WakeUp = wakeUpModel
-          ImportTeacherContacts = importTeacherContactsModel
-          CreateStudentDirectories = createStudentDirectoriesModel
-          CreateStudentGroups = createStudentGroupsModel }
+        {
+            ActiveTab = General
+            Authentication = authModel
+            WakeUp = wakeUpModel
+            ImportTeacherContacts = importTeacherContactsModel
+            CreateStudentDirectories = createStudentDirectoriesModel
+            CreateStudentGroups = createStudentGroupsModel
+            // InspectDirectory = inspectDirectoryModel
+        }
     let cmd =
         Cmd.batch
-            [ Cmd.map AuthenticationMsg authCmd
-              Cmd.map WakeUpMsg wakeUpCmd
-              Cmd.map ImportTeacherContactsMsg importTeacherContactsCmd
-              Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd
-              Cmd.map CreateStudentGroupsMsg createStudentGroupsCmd ]
+            [
+                Cmd.map AuthenticationMsg authCmd
+                Cmd.map WakeUpMsg wakeUpCmd
+                Cmd.map ImportTeacherContactsMsg importTeacherContactsCmd
+                Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd
+                Cmd.map CreateStudentGroupsMsg createStudentGroupsCmd
+            ]
     model, cmd
 
 let view (model : Model) (dispatch : Msg -> unit) =
     let tabs =
         let tabItems =
-            [ General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
-                                    ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
-              CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]
-              CreateStudentGroups, "Create student groups", [ CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch) ] ]
+            [
+                General, "General", [ WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
+                                      ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
+                CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]
+                CreateStudentGroups, "Create student groups", [ CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch) ]
+            ]
         [ yield Tabs.tabs []
             [ for (tabItem, tabName, _tabView) in tabItems ->
                 Tabs.tab [ Tabs.Tab.IsActive (model.ActiveTab = tabItem) ]
@@ -125,7 +134,7 @@ Program.mkProgram init update view
 |> Program.withConsoleTrace
 #endif
 |> Toast.Program.withToast Toast.renderFulma
-|> Program.withReact "elmish-app"
+|> Program.withReactBatched "elmish-app"
 #if DEBUG
 |> Program.withDebugger
 #endif
