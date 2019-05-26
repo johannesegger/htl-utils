@@ -168,7 +168,7 @@ let view model dispatch =
         Field.div [ Field.IsGrouped ]
             [
                 for (key, value) in data ->
-                    let color = if value = 0 then IsDanger else IsSuccess
+                    let color = match value with | 0 -> IsDanger | 1 -> IsWarning | _ -> IsSuccess
                     Control.div []
                         [
                             Tag.list [ Tag.List.HasAddons ]
