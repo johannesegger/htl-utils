@@ -48,6 +48,10 @@ module InspectDirectory =
             Files: FileInfo list
         }
     module DirectoryInfo =
+        let rec fold fn state directoryInfo =
+            let state' = fn state directoryInfo
+            List.fold (fold fn) state' directoryInfo.Directories
+
         let rec encode : Encoder<_> =
             let encodeBytes : Encoder<Bytes> =
                 fun (Bytes o) -> Encode.int64 o

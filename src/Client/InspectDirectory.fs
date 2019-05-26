@@ -12,17 +12,36 @@ open Thoth.Json
 open Directories
 open Shared.InspectDirectory
 
+[<Fable.Core.StringEnum>]
+type FilterId =
+    | All
+    | IsEmpty
+    | HasEmptyFiles
+
+type DirectoryFilter = FilterId * string
+
+let private directoryFilters =
+    [
+        All, "All"
+        IsEmpty, "Empty directories"
+        HasEmptyFiles, "Directories with empty files"
+    ]
+
 type Model =
     {
         Directory: Directory
         DirectoryInfo: DirectoryInfo option
+        ActiveDirectoryFilter: FilterId
     }
 
 type Msg =
     | Init
     | SelectDirectory of string list
+    | LoadChildDirectories
     | LoadChildDirectoriesResponse of Result<string list * string list, exn>
+    | LoadDirectoryInfo
     | LoadDirectoryInfoResponse of Result<DirectoryInfo, exn>
+    | ApplyFilter of FilterId
 
 let rec update authHeaderOptFn msg model =
     match msg with
@@ -30,10 +49,15 @@ let rec update authHeaderOptFn msg model =
         update authHeaderOptFn (SelectDirectory []) model
     | SelectDirectory path ->
         let model' = { model with Directory = selectDirectory path model.Directory }
+        model', Cmd.batch [ Cmd.ofMsg LoadChildDirectories; Cmd.ofMsg LoadDirectoryInfo ]
+    | LoadChildDirectories ->
+        let path =
+            getSelectedDirectory model.Directory
+            |> Option.map (fun d -> d.Path)
         // TODO don't load if already loaded?
-        let loadChildDirectoriesCmd =
-            match authHeaderOptFn with
-            | Some getAuthHeader ->
+        let cmd =
+            match path, authHeaderOptFn with
+            | Some path, Some getAuthHeader ->
                 Cmd.OfPromise.either
                     (fun (path, getAuthHeader) -> promise {
                         let url = "/api/child-directories"
@@ -45,10 +69,18 @@ let rec update authHeaderOptFn msg model =
                     (path, getAuthHeader)
                     ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
                     (Error >> LoadChildDirectoriesResponse)
-            | None -> Cmd.none
-        let loadDirectoryInfoCmd =
+            | _ -> Cmd.none
+        model, cmd
+    | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
+        let model' = { model with Directory = setChildDirectories path childDirectories model.Directory }
+        model', Cmd.none
+    | LoadDirectoryInfo ->
+        let path =
+            getSelectedDirectory model.Directory
+            |> Option.map (fun d -> d.Path)
+        let cmd =
             match path, authHeaderOptFn with
-            | x::xs, Some getAuthHeader ->
+            | Some (x::xs as path), Some getAuthHeader ->
                 Cmd.OfPromise.either
                     (fun (path, getAuthHeader) -> promise {
                         let url = "/api/directory-info"
@@ -61,10 +93,7 @@ let rec update authHeaderOptFn msg model =
                     (Ok >> LoadDirectoryInfoResponse)
                     (Error >> LoadDirectoryInfoResponse)
             | _ -> Cmd.none
-        model', Cmd.batch [ loadChildDirectoriesCmd; loadDirectoryInfoCmd ]
-    | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
-        let model' = { model with Directory = setChildDirectories path childDirectories model.Directory }
-        model', Cmd.none
+        model, cmd
     | LoadChildDirectoriesResponse (Error e) ->
         let cmd =
             Toast.toast "Loading directories failed" e.Message
@@ -78,6 +107,9 @@ let rec update authHeaderOptFn msg model =
             Toast.toast "Loading directory info failed" e.Message
             |> Toast.error
         model, cmd
+    | ApplyFilter filterId ->
+        let model' = { model with ActiveDirectoryFilter = filterId }
+        model', Cmd.none
 
 let init authHeaderOptFn =
     let model =
@@ -89,6 +121,7 @@ let init authHeaderOptFn =
                     Children = NotLoadedDirectoryChildren
                 }
             DirectoryInfo = None
+            ActiveDirectoryFilter = directoryFilters |> List.head |> fst
         }
     update authHeaderOptFn Init model
 
@@ -120,15 +153,11 @@ let view model dispatch =
                 [ Button.list [] [ yield! List.map directoryLevelItem children ] ]
             |> Some
 
-    let rec foldDirectoryInfo fn state directoryInfo =
-        let state' = fn state directoryInfo
-        List.fold (foldDirectoryInfo fn) state' directoryInfo.Directories
-
     let directoryStatistics size directoryInfo =
         let data =
             [
-                ("Directories", foldDirectoryInfo (fun sum dir -> sum + 1) 0 directoryInfo - 1)
-                ("Files", foldDirectoryInfo (fun sum dir -> sum + (List.length dir.Files)) 0 directoryInfo)
+                ("Directories", DirectoryInfo.fold (fun sum dir -> sum + 1) 0 directoryInfo - 1)
+                ("Files", DirectoryInfo.fold (fun sum dir -> sum + (List.length dir.Files)) 0 directoryInfo)
             ]
 
         let sizeProp =
@@ -139,12 +168,13 @@ let view model dispatch =
         Field.div [ Field.IsGrouped ]
             [
                 for (key, value) in data ->
+                    let color = if value = 0 then IsDanger else IsSuccess
                     Control.div []
                         [
                             Tag.list [ Tag.List.HasAddons ]
                                 [
                                     Tag.tag [ yield Tag.Color IsDark; yield! sizeProp ] [ str key ]
-                                    Tag.tag [ yield Tag.Color IsInfo; yield! sizeProp ] [ str (sprintf "%d" value) ]
+                                    Tag.tag [ yield Tag.Color color; yield! sizeProp ] [ str (sprintf "%d" value) ]
                                 ]
                         ]
             ]
@@ -180,6 +210,21 @@ let view model dispatch =
                         ]
             ]
 
+    let applyFilter directory =
+        match model.ActiveDirectoryFilter with
+        | All -> directory
+        | IsEmpty ->
+            let childDirectories = List.filter (fun d -> List.isEmpty d.Directories && List.isEmpty d.Files) directory.Directories
+            { directory with Directories = childDirectories; Files = [] }
+        | HasEmptyFiles ->
+            let childDirectories =
+                directory.Directories
+                |> List.filter (fun d ->
+                    (false, d)
+                    ||> DirectoryInfo.fold (fun hasEmpty d -> hasEmpty || List.exists (fun f -> f.Size = Bytes 0L) d.Files)
+                )
+            { directory with Directories = childDirectories; Files = [] }
+
     Container.container []
         [
             match model.Directory.Children with
@@ -195,7 +240,7 @@ let view model dispatch =
                         span [] [ str "Sign in to view directories" ]
                     ]
 
-            match model.DirectoryInfo with
+            match Option.map applyFilter model.DirectoryInfo with
             | Some directoryInfo ->
                 yield Divider.divider [ Divider.Label (sprintf "Directory info for %s" (String.concat "\\" directoryInfo.Path)) ]
 
@@ -203,6 +248,16 @@ let view model dispatch =
                     Panel.panel []
                         [
                             yield Panel.heading [] [ directoryInfoHeading directoryInfo ]
+                            yield Panel.tabs []
+                                [
+                                    for (filterId, filterName) in directoryFilters ->
+                                        Panel.tab
+                                            [
+                                                Panel.Tab.IsActive (filterId = model.ActiveDirectoryFilter)
+                                                Panel.Tab.Props [ OnClick (fun _ev -> dispatch (ApplyFilter filterId)) ]
+                                            ]
+                                            [ str filterName ]
+                                ]
                             for childDirectory in directoryInfo.Directories ->
                                 Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
                                     [
