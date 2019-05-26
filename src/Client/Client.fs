@@ -16,6 +16,7 @@ type Tab =
     | General
     | CreateStudentDirectories
     | CreateStudentGroups
+    | InspectDirectory
 
 type Model =
     {
@@ -25,6 +26,7 @@ type Model =
         ImportTeacherContacts: ImportTeacherContacts.Model
         CreateStudentDirectories: CreateStudentDirectories.Model
         CreateStudentGroups: CreateStudentGroups.Model
+        InspectDirectory: InspectDirectory.Model
     }
 
 type Msg =
@@ -34,12 +36,14 @@ type Msg =
     | ImportTeacherContactsMsg of ImportTeacherContacts.Msg
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
     | CreateStudentGroupsMsg of CreateStudentGroups.Msg
+    | InspectDirectoryMsg of InspectDirectory.Msg
 
 let rec updateIfSignedIn auth (model, cmd) =
     match auth, model.Authentication with
     | Authentication.NotAuthenticated, Authentication.Authenticated _ ->
         let model', cmd' = update (CreateStudentDirectoriesMsg CreateStudentDirectories.Init) model
-        model', Cmd.batch [ cmd; cmd' ]
+        let model'', cmd'' = update (InspectDirectoryMsg InspectDirectory.Init) model'
+        model'', Cmd.batch [ cmd; cmd'; cmd'' ]
     | _ -> model, cmd
 
 and update msg model =
@@ -63,6 +67,9 @@ and update msg model =
     | CreateStudentGroupsMsg msg ->
         let subModel, subCmd = CreateStudentGroups.update msg model.CreateStudentGroups
         { model with CreateStudentGroups = subModel }, Cmd.map CreateStudentGroupsMsg subCmd
+    | InspectDirectoryMsg msg ->
+        let subModel, subCmd = InspectDirectory.update authHeaderOptFn msg model.InspectDirectory
+        { model with InspectDirectory = subModel }, Cmd.map InspectDirectoryMsg subCmd
     |> updateIfSignedIn model.Authentication
 
 let init() =
@@ -72,6 +79,7 @@ let init() =
     let authHeaderOptFn = Authentication.authHeaderOptFn authModel
     let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
     let createStudentGroupsModel, createStudentGroupsCmd = CreateStudentGroups.init
+    let inspectDirectoryModel, inspectDirectoryCmd = InspectDirectory.init authHeaderOptFn
     let model =
         {
             ActiveTab = General
@@ -80,7 +88,7 @@ let init() =
             ImportTeacherContacts = importTeacherContactsModel
             CreateStudentDirectories = createStudentDirectoriesModel
             CreateStudentGroups = createStudentGroupsModel
-            // InspectDirectory = inspectDirectoryModel
+            InspectDirectory = inspectDirectoryModel
         }
     let cmd =
         Cmd.batch
@@ -90,6 +98,7 @@ let init() =
                 Cmd.map ImportTeacherContactsMsg importTeacherContactsCmd
                 Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd
                 Cmd.map CreateStudentGroupsMsg createStudentGroupsCmd
+                Cmd.map InspectDirectoryMsg inspectDirectoryCmd
             ]
     model, cmd
 
@@ -101,6 +110,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
                                       ImportTeacherContacts.view model.ImportTeacherContacts (ImportTeacherContactsMsg >> dispatch) ]
                 CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]
                 CreateStudentGroups, "Create student groups", [ CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch) ]
+                InspectDirectory, "Inspect directory", [ InspectDirectory.view model.InspectDirectory (InspectDirectoryMsg >> dispatch) ]
             ]
         [ yield Tabs.tabs []
             [ for (tabItem, tabName, _tabView) in tabItems ->

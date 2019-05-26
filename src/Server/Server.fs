@@ -6,6 +6,7 @@ open System.Net.Http.Headers
 open System.Net.NetworkInformation
 open System.Security.Claims
 open FSharp.Control.Tasks.V2.ContextInsensitive
+open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.DependencyInjection
@@ -16,11 +17,12 @@ open Giraffe
 open Giraffe.Serialization
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
-open Shared
+open Shared.CreateStudentDirectories
+open Shared.InspectDirectory
 open WakeUp
 open Students
 open StudentDirectories
-open Microsoft.AspNetCore.Authentication.JwtBearer
+open Giraffe.GiraffeViewEngine
 
 let publicPath = Path.GetFullPath "../Client/public"
 
@@ -108,13 +110,11 @@ let getChildDirectories baseDirectories : HttpHandler =
             match body with
             | []
             | [ "" ] ->
-                printfn "Returning base directories"
                 baseDirectories |> Map.toList |> List.map fst
             | baseDir :: children ->
                 match Map.tryFind baseDir baseDirectories with
                 | Some dir ->
                     let path = Path.Combine([| yield dir; yield! children |])
-                    printfn "Returning child directories of %s" path
                     try
                         path
                         |> Directory.GetDirectories
@@ -130,9 +130,66 @@ let getChildDirectories baseDirectories : HttpHandler =
         return! json response next ctx
     }
 
+let fileInfo getClientPath path =
+    let info = System.IO.FileInfo path
+    {
+        Path = getClientPath info.FullName
+        Size = Bytes info.Length
+        CreationTime = info.CreationTime
+        LastAccessTime = info.LastAccessTime
+        LastWriteTime = info.LastWriteTime
+    }
+
+let rec directoryInfo getClientPath path =
+    let childDirectories =
+        path
+        |> Directory.GetDirectories
+        |> Seq.map (directoryInfo getClientPath)
+        |> Seq.toList
+    let childFiles =
+        path
+        |> Directory.GetFiles
+        |> Seq.map (fileInfo getClientPath)
+        |> Seq.toList
+    {
+        Path = getClientPath path
+        Directories = childDirectories
+        Files = childFiles
+    }
+
+let getDirectoryInfo baseDirectories : HttpHandler =
+    fun next ctx -> task {
+        let! body = ctx.BindJsonAsync<string list>()
+        let response =
+            match body with
+            | []
+            | [ "" ] -> None
+            | baseDir :: children ->
+                match Map.tryFind baseDir baseDirectories with
+                | Some dir ->
+                    try
+                        let serverPath = Path.Combine([| yield dir; yield! children |])
+                        let fn (path: string) =
+                            path.Substring(serverPath.Length)
+                            |> String.split (sprintf "%c" Path.DirectorySeparatorChar)
+                            |> Seq.filter (not << String.IsNullOrEmpty)
+                            |> Seq.append body
+                            |> Seq.toList
+                        directoryInfo fn serverPath
+                        |> Some
+                    with e ->
+                        eprintfn "Couldn't get directory info: %O" e
+                        None
+                | None ->
+                    eprintfn "Invalid base directory \"%s\"" baseDir
+                    None
+
+        return! json response next ctx
+    }
+
 let createStudentDirectories baseDirectories getStudents : HttpHandler =
     fun next ctx -> task {
-        let! input = ctx.BindJsonAsync<CreateStudentDirectories.Input>()
+        let! input = ctx.BindJsonAsync<Input>()
         let baseDirectory = fst input.Path
         let! result =
             baseDirectories
@@ -187,8 +244,8 @@ let main argv =
         let dbContacts = Db.getContacts connectionString
         let teacherImageDir = getEnvVarOrFail "TEACHER_IMAGE_DIR"
         Teachers.mapDbTeachers teacherImageDir dbContacts dbTeachers
-    let createDirectoriesBaseDirectory =
-        getEnvVarOrFail "CREATE_DIRECTORIES_BASE_DIRECTORIES"
+    let baseDirectories =
+        getEnvVarOrFail "BASE_DIRECTORIES"
         |> String.split ";"
         |> Seq.chunkBySize 2
         |> Seq.map (fun s -> s.[0], s.[1])
@@ -212,8 +269,9 @@ let main argv =
         POST >=> choose [
             route "/api/wakeup/send" >=> requiresEggj >=> sendWakeUpCommand
             route "/api/teachers/import-contacts" >=>  requiresTeacher >=> importTeacherContacts clientApp teachers
-            route "/api/create-student-directories/child-directories" >=> requiresEggj >=> getChildDirectories createDirectoriesBaseDirectory
-            route "/api/create-student-directories/create" >=> requiresEggj >=> createStudentDirectories createDirectoriesBaseDirectory students
+            route "/api/child-directories" >=> requiresEggj >=> getChildDirectories baseDirectories
+            route "/api/directory-info" >=> requiresEggj >=> getDirectoryInfo baseDirectories
+            route "/api/create-student-directories" >=> requiresEggj >=> createStudentDirectories baseDirectories students
         ]
     ]
 
@@ -235,7 +293,10 @@ let main argv =
 
     let configureServices (services : IServiceCollection) =
         services.AddGiraffe() |> ignore
-        services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true)) |> ignore
+        let coders =
+            Extra.empty
+            |> Extra.withCustom DirectoryInfo.encode DirectoryInfo.decode
+        services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
         services
             .AddAuthentication(fun config ->
                 config.DefaultScheme <- JwtBearerDefaults.AuthenticationScheme

@@ -8,103 +8,33 @@ open Fulma.Extensions.Wikiki
 open Thoth.Elmish
 open Thoth.Fetch
 open Thoth.Json
+open Directories
 open Shared.CreateStudentDirectories
 
-type DirectoryChildren =
-    | LoadedDirectoryChildren of Directory list
-    | NotLoadedDirectoryChildren
-and Directory =
-    { Path: string list
-      IsSelected: bool
-      Children: DirectoryChildren }
-
 type Model =
-    { ClassList: string list list
-      SelectedClass: string option
-      Directory: Directory
-      NewDirectoryNames: Map<string list, string> }
+    {
+        ClassList: string list list
+        SelectedClass: string option
+        Directory: Directory
+        NewDirectoryNames: Map<string list, string>
+    }
 
 type Msg =
     | Init
     | LoadClassList
     | LoadClassListResponse of Result<string list, exn>
     | SelectClass of string
-    | LoadChildDirectories of string list
-    | LoadChildDirectoriesResponse of Result<string list * string list, exn>
     | SelectDirectory of string list
+    | SelectDirectoryResponse of Result<string list * string list, exn>
     | UpdateNewDirectoryValue of string list * string
     | AddChildDirectory of string list
     | CreateDirectories
     | CreateDirectoriesResponse of Result<unit, exn>
 
-let private updateDirectory path fn directory =
-    let rec updateDirectory' path directory =
-        match path, directory with
-        | [], dir ->
-            fn dir
-        | path :: xs, ({ Children = LoadedDirectoryChildren children } as dir) ->
-            let childDirs =
-                children
-                |> List.map (fun childDir ->
-                    if List.head childDir.Path = path
-                    then updateDirectory' xs childDir
-                    else childDir
-                )
-            { dir with Children = LoadedDirectoryChildren childDirs }
-        | _ :: _, { Children = NotLoadedDirectoryChildren } ->
-            // Should not happen
-            directory
-    updateDirectory' (List.rev path) directory
-
-let private setChildDirectories path childDirectories directory =
-    let fn dir =
-        let childDirectories' =
-            childDirectories
-            |> List.map (fun n -> { Path = n :: dir.Path; IsSelected = false; Children = NotLoadedDirectoryChildren })
-        { dir with Children = LoadedDirectoryChildren childDirectories' }
-
-    updateDirectory path fn directory
-
-let private selectDirectory path directory =
-    let rec selectDirectory' directory =
-        let isSelected = path |> List.rev |> List.truncate (directory.Path.Length) = List.rev directory.Path
-        let children =
-            match directory.Children with
-            | LoadedDirectoryChildren children ->
-                LoadedDirectoryChildren (List.map selectDirectory' children)
-            | NotLoadedDirectoryChildren ->
-                NotLoadedDirectoryChildren
-        { directory with
-            IsSelected = isSelected
-            Children = children }
-    selectDirectory' directory
-
-let private addChildDirectory path name directory =
-    let fn dir =
-        match dir with
-        | { Children = LoadedDirectoryChildren children } ->
-            let children' =
-                let child = { Path = name :: dir.Path; IsSelected = false; Children = NotLoadedDirectoryChildren }
-                child :: children
-            { dir with Children = LoadedDirectoryChildren children' }
-        | x -> x
-    updateDirectory path fn directory
-
-let rec private getSelectedDirectory directory =
-    if not directory.IsSelected
-    then None
-    else
-        match directory with
-        | { Children = LoadedDirectoryChildren children } ->
-            children
-            |> List.tryPick getSelectedDirectory
-            |> Option.orElse (Some directory)
-        | _ -> Some directory
-
 let rec update authHeaderOptFn msg model =
     match msg with
     | Init ->
-        let model', loadChildDirectoriesCmd = update authHeaderOptFn (LoadChildDirectories []) model
+        let model', loadChildDirectoriesCmd = update authHeaderOptFn (SelectDirectory []) model
         let model'', loadClassListCmd = update authHeaderOptFn LoadClassList model'
         model'', Cmd.batch [ loadChildDirectoriesCmd; loadClassListCmd ]
     | LoadClassList ->
@@ -126,35 +56,33 @@ let rec update authHeaderOptFn msg model =
     | SelectClass name ->
         let model' = { model with SelectedClass = Some name }
         model', Cmd.none
-    | LoadChildDirectories path ->
+    | SelectDirectory path ->
+        let model' = { model with Directory = selectDirectory path model.Directory }
         // TODO don't load if already loaded?
         let cmd =
             match authHeaderOptFn with
             | Some getAuthHeader ->
                 Cmd.OfPromise.either
                     (fun (path, getAuthHeader) -> promise {
-                        let url = "/api/create-student-directories/child-directories"
+                        let url = "/api/child-directories"
                         let data = List.rev path |> List.map Encode.string |> Encode.list
                         let! authHeader = getAuthHeader ()
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
                     })
                     (path, getAuthHeader)
-                    ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
-                    (Error >> LoadChildDirectoriesResponse)
+                    ((fun r -> path, r) >> Ok >> SelectDirectoryResponse)
+                    (Error >> SelectDirectoryResponse)
             | None -> Cmd.none
-        model, cmd
-    | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
+        model', cmd
+    | SelectDirectoryResponse (Ok (path, childDirectories)) ->
         let model' = { model with Directory = setChildDirectories path childDirectories model.Directory }
-        update authHeaderOptFn (SelectDirectory path) model'
-    | LoadChildDirectoriesResponse (Error e) ->
+        model', Cmd.none
+    | SelectDirectoryResponse (Error e) ->
         let cmd =
             Toast.toast "Loading directories failed" e.Message
             |> Toast.error
         model, cmd
-    | SelectDirectory path ->
-        let model' = { model with Directory = selectDirectory path model.Directory }
-        model', Cmd.none
     | UpdateNewDirectoryValue (path, value) ->
         let model' = { model with NewDirectoryNames = model.NewDirectoryNames |> Map.add path value }
         model', Cmd.none
@@ -164,7 +92,7 @@ let rec update authHeaderOptFn msg model =
             { model with
                 Directory = addChildDirectory path name model.Directory
                 NewDirectoryNames = model.NewDirectoryNames |> Map.remove path }
-        update authHeaderOptFn (LoadChildDirectories (name :: path)) model'
+        update authHeaderOptFn (SelectDirectory (name :: path)) model'
     | CreateDirectories ->
         match getSelectedDirectory model.Directory, model.SelectedClass with
         | Some selectedDirectory, Some className ->
@@ -176,7 +104,7 @@ let rec update authHeaderOptFn msg model =
                     let cmd =
                         Cmd.OfPromise.either
                             (fun (getAuthHeader, input) -> promise {
-                                let url = "/api/create-student-directories/create"
+                                let url = "/api/create-student-directories"
                                 let data =
                                     Encode.object
                                         [
@@ -231,22 +159,13 @@ let view model dispatch =
                               | _ -> () ]
                             [ str name ] ] ]
 
-    let mapDirectory fn directory =
-        let rec mapDirectory' fn level directory =
-            match directory with
-            | { Children = LoadedDirectoryChildren children } as dir when dir.IsSelected ->
-                List.append
-                    [ fn level directory ]
-                    (List.collect (mapDirectory' fn (level + 1)) children)
-            | _ -> []
-        mapDirectory' fn 0 directory
-
     let directoryLevelItem directory =
-        let props =
-            if directory.IsSelected
-            then [ Button.Color IsLink ]
-            else [ Button.OnClick (fun _ev -> directory.Path |> LoadChildDirectories |> dispatch) ]
-        Button.button props [ str (List.tryHead directory.Path |> Option.defaultValue "<none>") ]
+        Button.button
+            [
+                Button.Color (if directory.IsSelected then IsLink else NoColor)
+                Button.OnClick (fun _ev -> directory.Path |> SelectDirectory |> dispatch)
+            ]
+            [ str (List.tryHead directory.Path |> Option.defaultValue "<none>") ]
 
     let directoryView level directory =
         match directory.Children with

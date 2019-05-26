@@ -10,10 +10,12 @@
         <Compile Include="Toast.fs" />
         <Compile Include="Authentication.fs" />
         <Compile Include="Classes.fs" />
+        <Compile Include="Directories.fs" />
         <Compile Include="WakeUp.fs" />
         <Compile Include="ImportTeacherContacts.fs" />
         <Compile Include="CreateStudentDirectories.fs" />
         <Compile Include="CreateStudentGroups.fs" />
+        <Compile Include="InspectDirectory.fs" />
         <Compile Include="Client.fs" />
     </ItemGroup>
     <Import Project="..\..\.paket\Paket.Restore.targets" />
