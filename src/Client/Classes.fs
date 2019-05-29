@@ -3,6 +3,11 @@ module Classes
 open System
 open System.Text.RegularExpressions
 
+type ClassList =
+    | NotLoadedClassList
+    | FailedToLoadClassList
+    | LoadedClassList of string list list
+
 let groupAndSort (classes: string list) =
     let makeSortable (c: string) =
         Option.ofObj c

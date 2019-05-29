@@ -7,7 +7,7 @@ open Thoth.Json.Net
 #endif
 
 module CreateStudentDirectories =
-    type Input =
+    type CreateDirectoriesData =
         {
             ClassName: string
             Path: string * string list

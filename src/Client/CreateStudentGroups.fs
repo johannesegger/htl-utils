@@ -2,14 +2,17 @@ module CreateStudentGroups
 
 open System
 open Elmish
+open Elmish.Streams
+open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
+open FSharp.Control
 open Fulma
-open Fulma.Extensions
 open Fulma.Extensions.Wikiki
 open Thoth.Elmish
 open Thoth.Fetch
 open Thoth.Json
+open Classes
 
 type Student =
     { Id: Guid
@@ -21,13 +24,12 @@ type ClassStudents =
     | Loaded of Student list
 
 type Model =
-    { ClassList: string list list
+    { ClassList: ClassList
       SelectedClass: (string * ClassStudents) option
       GroupSize: int
       Groups: Student list list }
 
 type Msg =
-    | Init
     | LoadClassList
     | LoadClassListResponse of Result<string list, exn>
     | SelectClass of string
@@ -56,105 +58,109 @@ let private group size list =
 
 let rec update msg model =
     match msg with
-    | Init ->
-        let model', loadClassListCmd = update LoadClassList model
-        model', loadClassListCmd
     | LoadClassList ->
-        let cmd =
-            Cmd.OfPromise.either
-                (fun () -> Fetch.get("/api/classes", Decode.list Decode.string))
-                ()
-                (Ok >> LoadClassListResponse)
-                (Error >> LoadClassListResponse)
-        model, cmd
+        { model with ClassList = NotLoadedClassList }
     | LoadClassListResponse (Ok classList) ->
-        let model' = { model with ClassList = Classes.groupAndSort classList }
-        model', Cmd.none
+        { model with ClassList = LoadedClassList (Classes.groupAndSort classList) }
     | LoadClassListResponse (Error e) ->
-        let cmd =
-            Toast.toast "Loading list of classes failed" e.Message
-            |> Toast.error
-        model, cmd
+        { model with ClassList = FailedToLoadClassList }
     | SelectClass name ->
-        let model' = { model with SelectedClass = Some (name, NotLoaded) }
-        let cmd =
-            Cmd.OfPromise.either
-                (fun name -> Fetch.get(sprintf "/api/classes/%s/students" name, Decode.list (Decode.tuple2 Decode.string Decode.string)))
-                name
-                (Ok >> LoadClassStudentsResponse)
-                (Error >> LoadClassStudentsResponse)
-        model', cmd
+        { model with SelectedClass = Some (name, NotLoaded) }
     | LoadClassStudentsResponse (Ok students) ->
-        let students' =
-            students
-            |> List.map (fun (lastName, firstName) ->
-                { Id = Guid.NewGuid()
-                  LastName = lastName
-                  FirstName = firstName })
-        let model' =
-            match model.SelectedClass with
-            | Some (className, _) ->
-                { model with
-                    SelectedClass = Some (className, Loaded students')
-                    Groups = group model.GroupSize students' }
-            | None -> model
-        model', Cmd.none
+        match model.SelectedClass with
+        | Some (className, _) ->
+            let students' =
+                students
+                |> List.map (fun (lastName, firstName) ->
+                    {
+                        Id = Guid.NewGuid()
+                        LastName = lastName
+                        FirstName = firstName
+                    }
+                )
+            { model with
+                SelectedClass = Some (className, Loaded students')
+                Groups = group model.GroupSize students' }
+        | None -> model
     | LoadClassStudentsResponse (Error e) ->
-        let cmd =
-            Toast.toast "Loading students failed" e.Message
-            |> Toast.error
-        model, cmd
+        model // TODO set to error
     | SetGroupSize size ->
-        let model' =
-            { model with
-                GroupSize = size
-                Groups =
-                    model.Groups
-                    |> List.collect id
-                    |> group size }
-        model', Cmd.none
+        { model with
+            GroupSize = size
+            Groups =
+                model.Groups
+                |> List.collect id
+                |> group size }
     | CreateShuffledGroups ->
-        let model' =
-            { model with
-                Groups =
-                    model.Groups
-                    |> List.collect id
-                    |> shuffle
-                    |> group model.GroupSize }
-        model', Cmd.none
+        { model with
+            Groups =
+                model.Groups
+                |> List.collect id
+                |> shuffle
+                |> group model.GroupSize }
     | RemoveStudent studentId ->
-        let model' =
-            { model with
-                Groups =
-                    model.Groups
-                    |> List.map (fun group ->
-                        group
-                        |> List.filter (fun student -> student.Id <> studentId)
-                    )
-                    |> List.collect id
-                    |> group model.GroupSize }
-        model', Cmd.none
+        { model with
+            Groups =
+                model.Groups
+                |> List.map (fun group ->
+                    group
+                    |> List.filter (fun student -> student.Id <> studentId)
+                )
+                |> List.collect id
+                |> group model.GroupSize }
 
 let init =
-    let model =
-        { ClassList = []
-          SelectedClass = None
-          GroupSize = 2
-          Groups = [] }
-    update Init model
+    {
+        ClassList = NotLoadedClassList
+        SelectedClass = None
+        GroupSize = 2
+        Groups = []
+    }
 
 let view model dispatch =
     let classListView =
-        Container.container []
-            [ for group in model.ClassList ->
-                Button.list []
-                    [ for name in group ->
-                        Button.button
-                            [ yield Button.OnClick (fun _ev -> dispatch (SelectClass name))
-                              match model.SelectedClass with
-                              | Some (className, _) when className = name -> yield Button.Color IsLink
-                              | _ -> () ]
-                            [ str name ] ] ]
+        match model.ClassList with
+        | NotLoadedClassList ->
+            Progress.progress [ Progress.Color IsInfo ] []
+        | FailedToLoadClassList ->
+            Notification.notification [ Notification.Color IsDanger ]
+                [
+                    Level.level []
+                        [
+                            Level.left []
+                                [
+                                    Level.item []
+                                        [
+                                            Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
+                                            span [] [ str "Error while loading class list" ]
+                                        ]
+                                    Level.item []
+                                        [
+                                            Button.button
+                                                [
+                                                    Button.Color IsSuccess
+                                                    Button.OnClick (fun _ev -> dispatch LoadClassList)
+                                                ]
+                                                [
+                                                    Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
+                                                    span [] [ str "Retry" ]
+                                                ]
+                                        ]
+                                ]
+                        ]
+                ]
+        | LoadedClassList classList ->
+            Container.container []
+                [ for group in classList ->
+                    Button.list []
+                        [ for name in group ->
+                            Button.button
+                                [ yield Button.OnClick (fun _ev -> dispatch (SelectClass name))
+                                  match model.SelectedClass with
+                                  | Some (className, _) when className = name -> yield Button.Color IsLink
+                                  | _ -> () ]
+                                [ str name ] ] ]
+
     let canShuffle =
         model.SelectedClass
         |> Option.map (snd >> function | NotLoaded -> false | Loaded _ -> true)
@@ -204,3 +210,56 @@ let view model dispatch =
                                                       Tag.Props [ OnClick (fun _ev -> dispatch (RemoveStudent student.Id)) ] ]
                                                     [] ] ] ] ] ]
                 ] ]
+
+let stream authHeader states msgs =
+    authHeader
+    |> AsyncRx.choose id
+    |> AsyncRx.flatMapLatest (fun authHeader ->
+        [
+            yield msgs
+
+            let loadClassesResponseToast response =
+                match response with
+                | Ok _ -> Cmd.none
+                | Error (e: exn) ->
+                    Toast.toast "Loading list of classes failed" e.Message
+                    |> Toast.error
+            let loadClassList =
+                AsyncRx.defer (fun () ->
+                    AsyncRx.ofPromise (promise {
+                        return! Fetch.``get``("/api/classes", Decode.list Decode.string)
+                    })
+                    |> AsyncRx.map Ok
+                    |> AsyncRx.catch (Error >> AsyncRx.single)
+                )
+            yield
+                msgs
+                |> AsyncRx.choose (function | LoadClassList -> Some loadClassList | _ -> None)
+                |> AsyncRx.startWith [ loadClassList ]
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showToast loadClassesResponseToast
+                |> AsyncRx.map LoadClassListResponse
+
+            let loadStudents name =
+                AsyncRx.defer (fun () ->
+                    AsyncRx.ofPromise (promise {
+                        return! Fetch.``get``(sprintf "/api/classes/%s/students" name, Decode.list (Decode.tuple2 Decode.string Decode.string))
+                    })
+                    |> AsyncRx.map Ok
+                    |> AsyncRx.catch (Error >> AsyncRx.single)
+                )
+            let loadStudentsResponseToast response =
+                match response with
+                | Ok _ -> Cmd.none
+                | Error (e: exn) ->
+                    Toast.toast "Loading students failed" e.Message
+                    |> Toast.error
+            yield
+                msgs
+                |> AsyncRx.choose (function | SelectClass name -> Some (loadStudents name) | _ -> None)
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showToast loadStudentsResponseToast
+                |> AsyncRx.map LoadClassStudentsResponse
+        ]
+        |> AsyncRx.mergeSeq
+    )

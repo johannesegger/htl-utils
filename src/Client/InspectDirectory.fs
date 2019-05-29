@@ -1,9 +1,11 @@
 module InspectDirectory
 
 open Elmish
+open Elmish.Streams
 open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
+open FSharp.Control
 open Fulma
 open Fulma.Extensions.Wikiki
 open Thoth.Elmish
@@ -32,98 +34,50 @@ type Model =
         Directory: Directory
         DirectoryInfo: DirectoryInfo option
         ActiveDirectoryFilter: FilterId
+        AutoRefreshEnabled: bool
+        AutoRefreshInterval: System.TimeSpan
     }
 
 type Msg =
-    | Init
     | SelectDirectory of string list
-    | LoadChildDirectories
-    | LoadChildDirectoriesResponse of Result<string list * string list, exn>
-    | LoadDirectoryInfo
+    | LoadChildDirectoriesResponse of Result<string list * string list, string list * exn>
     | LoadDirectoryInfoResponse of Result<DirectoryInfo, exn>
     | ApplyFilter of FilterId
+    | ToggleAutoRefresh
+    | SetAutoRefreshInterval of System.TimeSpan
 
-let rec update authHeaderOptFn msg model =
+let rec update msg model =
     match msg with
-    | Init ->
-        update authHeaderOptFn (SelectDirectory []) model
     | SelectDirectory path ->
-        let model' = { model with Directory = selectDirectory path model.Directory }
-        model', Cmd.batch [ Cmd.ofMsg LoadChildDirectories; Cmd.ofMsg LoadDirectoryInfo ]
-    | LoadChildDirectories ->
-        let path =
-            getSelectedDirectory model.Directory
-            |> Option.map (fun d -> d.Path)
-        // TODO don't load if already loaded?
-        let cmd =
-            match path, authHeaderOptFn with
-            | Some path, Some getAuthHeader ->
-                Cmd.OfPromise.either
-                    (fun (path, getAuthHeader) -> promise {
-                        let url = "/api/child-directories"
-                        let data = (List.map Encode.string >> Encode.list) (List.rev path)
-                        let! authHeader = getAuthHeader ()
-                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
-                    })
-                    (path, getAuthHeader)
-                    ((fun r -> path, r) >> Ok >> LoadChildDirectoriesResponse)
-                    (Error >> LoadChildDirectoriesResponse)
-            | _ -> Cmd.none
-        model, cmd
+        { model with Directory = selectDirectory path model.Directory }
     | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
-        let model' = { model with Directory = setChildDirectories path childDirectories model.Directory }
-        model', Cmd.none
-    | LoadDirectoryInfo ->
-        let path =
-            getSelectedDirectory model.Directory
-            |> Option.map (fun d -> d.Path)
-        let cmd =
-            match path, authHeaderOptFn with
-            | Some (x::xs as path), Some getAuthHeader ->
-                Cmd.OfPromise.either
-                    (fun (path, getAuthHeader) -> promise {
-                        let url = "/api/directory-info"
-                        let data = (List.map Encode.string >> Encode.list) (List.rev path)
-                        let! authHeader = getAuthHeader ()
-                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.post(url, data, DirectoryInfo.decode, requestProperties)
-                    })
-                    (path, getAuthHeader)
-                    (Ok >> LoadDirectoryInfoResponse)
-                    (Error >> LoadDirectoryInfoResponse)
-            | _ -> Cmd.none
-        model, cmd
-    | LoadChildDirectoriesResponse (Error e) ->
-        let cmd =
-            Toast.toast "Loading directories failed" e.Message
-            |> Toast.error
-        model, cmd
+        { model with Directory = setChildDirectories path childDirectories model.Directory }
+    | LoadChildDirectoriesResponse (Error (path, e)) ->
+        { model with Directory = setChildDirectoriesFailedToLoad path model.Directory }
     | LoadDirectoryInfoResponse (Ok directoryInfo) ->
-        let model' = { model with DirectoryInfo = Some directoryInfo }
-        model', Cmd.none
+        { model with DirectoryInfo = Some directoryInfo }
     | LoadDirectoryInfoResponse (Error e) ->
-        let cmd =
-            Toast.toast "Loading directory info failed" e.Message
-            |> Toast.error
-        model, cmd
+        model // TODO set to error
     | ApplyFilter filterId ->
-        let model' = { model with ActiveDirectoryFilter = filterId }
-        model', Cmd.none
+        { model with ActiveDirectoryFilter = filterId }
+    | ToggleAutoRefresh ->
+        { model with AutoRefreshEnabled = not model.AutoRefreshEnabled }
+    | SetAutoRefreshInterval interval ->
+        { model with AutoRefreshInterval = interval }
 
-let init authHeaderOptFn =
-    let model =
-        {
-            Directory =
-                {
-                    Path = []
-                    IsSelected = true
-                    Children = NotLoadedDirectoryChildren
-                }
-            DirectoryInfo = None
-            ActiveDirectoryFilter = directoryFilters |> List.head |> fst
-        }
-    update authHeaderOptFn Init model
+let init =
+    {
+        Directory =
+            {
+                Path = []
+                IsSelected = true
+                Children = NotLoadedDirectoryChildren
+            }
+        DirectoryInfo = None
+        ActiveDirectoryFilter = directoryFilters |> List.head |> fst
+        AutoRefreshEnabled = false
+        AutoRefreshInterval = System.TimeSpan.FromSeconds 5.
+    }
 
 let view model dispatch =
     let mapDirectory fn directory =
@@ -146,7 +100,8 @@ let view model dispatch =
 
     let directoryView level directory =
         match directory.Children with
-        | NotLoadedDirectoryChildren
+        | NotLoadedDirectoryChildren // TODO show progress bar
+        | FailedToLoadDirectoryChildren // TODO show error and retry button
         | LoadedDirectoryChildren [] -> None
         | LoadedDirectoryChildren children ->
             Container.container []
@@ -234,11 +189,39 @@ let view model dispatch =
                     |> List.choose id
                     |> List.intersperse (Divider.divider [])
             | NotLoadedDirectoryChildren ->
-                yield Notification.notification [ Notification.Color IsLink ]
+                yield Notification.notification [ Notification.Color IsWarning ]
                     [
                         Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
                         span [] [ str "Sign in to view directories" ]
                     ]
+            | FailedToLoadDirectoryChildren ->
+                yield
+                    Notification.notification [ Notification.Color IsDanger ]
+                        [
+                            Level.level []
+                                [
+                                    Level.left []
+                                        [
+                                            Level.item []
+                                                [
+                                                    Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
+                                                    span [] [ str "Error while loading directory children" ]
+                                                ]
+                                            Level.item []
+                                                [
+                                                    Button.button
+                                                        [
+                                                            Button.Color IsSuccess
+                                                            Button.OnClick (fun _ev -> dispatch (SelectDirectory model.Directory.Path))
+                                                        ]
+                                                        [
+                                                            Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
+                                                            span [] [ str "Retry" ]
+                                                        ]
+                                                ]
+                                        ]
+                                ]
+                        ]
 
             match Option.map applyFilter model.DirectoryInfo with
             | Some directoryInfo ->
@@ -257,6 +240,55 @@ let view model dispatch =
                                                 Panel.Tab.Props [ OnClick (fun _ev -> dispatch (ApplyFilter filterId)) ]
                                             ]
                                             [ str filterName ]
+                                ]
+                            yield Panel.block []
+                                [
+                                    Field.div [ Field.IsGrouped ]
+                                        [
+                                            yield Control.div []
+                                                [
+                                                    Checkbox.checkbox []
+                                                        [
+                                                            Checkbox.input
+                                                                [
+                                                                    Props
+                                                                        [
+                                                                            Checked model.AutoRefreshEnabled
+                                                                            OnChange (fun _ev -> dispatch ToggleAutoRefresh)
+                                                                        ]
+                                                                ]
+                                                            str "Auto-refresh"
+                                                        ]
+                                                ]
+                                            if model.AutoRefreshEnabled then
+                                                yield
+                                                    Control.div []
+                                                        [
+                                                            let refreshIntervals =
+                                                                [
+                                                                    "1 second", System.TimeSpan.FromSeconds 1.
+                                                                    "5 seconds", System.TimeSpan.FromSeconds 5.
+                                                                    "10 seconds", System.TimeSpan.FromSeconds 10.
+                                                                    "30 seconds", System.TimeSpan.FromSeconds 30.
+                                                                    "1 minute", System.TimeSpan.FromMinutes 1.
+                                                                ]
+                                                            for (name, interval) in refreshIntervals ->
+                                                                Radio.radio [ ]
+                                                                    [
+                                                                        Radio.input
+                                                                            [
+                                                                                Radio.Input.Name "auto-refresh-interval"
+                                                                                Radio.Input.Props
+                                                                                    [
+                                                                                        Style [ MarginRight "0.5em" ]
+                                                                                        Checked (interval = model.AutoRefreshInterval)
+                                                                                        OnChange (fun _ev -> dispatch (SetAutoRefreshInterval interval))
+                                                                                    ]
+                                                                            ]
+                                                                        str name
+                                                                    ]
+                                                        ]
+                                        ]
                                 ]
                             for childDirectory in directoryInfo.Directories ->
                                 Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
@@ -277,3 +309,102 @@ let view model dispatch =
                         ]
             | None -> ()
         ]
+
+let stream authHeader states msgs =
+    authHeader
+    |> AsyncRx.choose id
+    |> AsyncRx.flatMapLatest (fun authHeader ->
+        [
+            yield msgs
+
+            let loadRootDirectoriesResponseToast response =
+                match response with
+                | Ok _ -> Cmd.none
+                | Error (_, e: exn) ->
+                    Toast.toast "Loading root directories failed" e.Message
+                    |> Toast.error
+            yield
+                AsyncRx.defer (fun () ->
+                    AsyncRx.ofPromise (promise {
+                        let url = "/api/child-directories"
+                        let data = Encode.list []
+                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
+                    })
+                    |> AsyncRx.map (fun children -> Ok ([], children))
+                    |> AsyncRx.catch ((fun e -> [], e) >> Error >> AsyncRx.single)
+                )
+                |> AsyncRx.showToast loadRootDirectoriesResponseToast
+                |> AsyncRx.map LoadChildDirectoriesResponse
+
+            let loadChildDirectories path =
+                AsyncRx.defer (fun () ->
+                    AsyncRx.ofPromise (promise {
+                        let url = "/api/child-directories"
+                        let data = List.rev path |> List.map Encode.string |> Encode.list
+                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
+                    })
+                    |> AsyncRx.map (fun children -> Ok (path, children))
+                    |> AsyncRx.catch ((fun e -> path, e) >> Error >> AsyncRx.single)
+                )
+            let loadChildDirectoriesResponseToast response =
+                match response with
+                | Ok _ -> Cmd.none
+                | Error (path, e: exn) ->
+                    Toast.toast "Loading child directories failed" e.Message
+                    |> Toast.error
+            yield
+                msgs
+                |> AsyncRx.choose (function
+                    | SelectDirectory path -> Some (loadChildDirectories path)
+                    | _ -> None
+                )
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showToast loadChildDirectoriesResponseToast
+                |> AsyncRx.map LoadChildDirectoriesResponse
+
+            let loadDirectoryInfo path =
+                AsyncRx.defer (fun () ->
+                    AsyncRx.ofPromise (promise {
+                        let url = "/api/directory-info"
+                        let data = (List.map Encode.string >> Encode.list) (List.rev path)
+                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                        return! Fetch.post(url, data, DirectoryInfo.decode, requestProperties)
+                    })
+                    |> AsyncRx.map Ok
+                    |> AsyncRx.catch (Error >> AsyncRx.single)
+                )
+            let loadDirectoryInfoResponseToast response =
+                match response with
+                | Ok _ -> Cmd.none
+                | Error (e: exn) ->
+                    Toast.toast "Loading directory info failed" e.Message
+                    |> Toast.error
+            let autoRefresh =
+                states
+                |> AsyncRx.map (fun state ->
+                    match getSelectedDirectory state.Directory, state.AutoRefreshEnabled with
+                    | Some dir, true -> Some (dir.Path, int state.AutoRefreshInterval.TotalMilliseconds)
+                    | _ -> None
+                )
+                |> AsyncRx.distinctUntilChanged
+                |> AsyncRx.flatMapLatest (function
+                    | Some (path, interval) ->
+                        AsyncRx.interval 0 interval
+                        |> AsyncRx.map (fun _ -> SelectDirectory path)
+                    | None -> AsyncRx.never ()
+                )
+            yield
+                msgs
+                |> AsyncRx.merge autoRefresh
+                |> AsyncRx.choose (function
+                    | SelectDirectory path -> Some (loadDirectoryInfo path)
+                    | _ -> None
+                )
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showToast loadDirectoryInfoResponseToast
+                |> AsyncRx.map LoadDirectoryInfoResponse
+        ]
+        |> AsyncRx.mergeSeq
+    )

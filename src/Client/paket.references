@@ -4,6 +4,7 @@ group Client
     Fable.Elmish.Debugger
     Fable.Elmish.React
     Fable.Elmish.HMR
+    Fable.Elmish.Streams
     Fable.FontAwesome
     Fable.FontAwesome.Free
     Fable.React

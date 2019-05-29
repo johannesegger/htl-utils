@@ -1,10 +1,13 @@
 module Authentication
 
 open Elmish
+open Elmish.Streams
 open Fable.Core.JsInterop
-open Fable.React
-open Fulma
 open Fable.FontAwesome
+open Fable.React
+open FSharp.Control
+open Fulma
+open Thoth.Elmish
 
 type User =
     {
@@ -12,15 +15,12 @@ type User =
         Token: string
     }
 
-type Authentication =
+type Model =
+    | Loading
     | NotAuthenticated
     | Authenticated of User
 
-type Model =
-    Authentication
-
 type Msg =
-    | Init
     | SignIn
     | SignInResult of Result<User, exn>
     | SignOut
@@ -54,8 +54,6 @@ let getToken() = promise {
         return authResponse.accessToken
     with error ->
         try
-            printfn "Error: %A" error
-            Browser.Dom.console.log("Error", error)
             // if error :? Msal.InteractionRequiredAuthError then
             let! authResponse = userAgentApplication.acquireTokenPopup authParams
             return authResponse.accessToken
@@ -65,73 +63,96 @@ let getToken() = promise {
             return failwith "Please sign in using your Microsoft account."
 }
 
-let authHeaderOptFn model =
-    let getAuthHeader() = promise {
-        let! token = getToken()
-        return Fetch.Types.Authorization ("Bearer " + token)
-    }
-
+let tryGetAuthHeader model =
     match model with
+    | Loading
     | NotAuthenticated -> None
-    | Authenticated _ -> Some getAuthHeader
+    | Authenticated user -> Some (Fetch.Types.Authorization ("Bearer " + user.Token))
 
 let rec update msg model =
     match msg with
-    | Init ->
-        let cmd =
-            userAgentApplication.getAccount()
-            |> Option.ofObj
-            |> Option.map (fun user ->
-                let getUser () =
-                    promise {
-                        let! token = getToken()
-                        return { Name = user.name; Token = token }
-                    }
-                Cmd.OfPromise.either getUser () (Ok >> SignInResult) (Error >> SignInResult)
-            )
-            |> Option.defaultValue Cmd.none
-        model, cmd
-    | SignIn ->
-        let cmd =
-            let authParams = Fable.Core.JsInterop.createEmpty<Msal.AuthenticationParameters>
-            authParams.scopes <- Some !![| "contacts.readwrite" |]
-            Cmd.OfPromise.either
-                (fun o -> userAgentApplication.loginPopup o)
-                authParams
-                ((fun authResponse -> { Name = userAgentApplication.getAccount().name; Token = authResponse.accessToken }) >> Ok >> SignInResult)
-                (Error >> SignInResult)
-        model, cmd
-    | SignInResult (Ok user) ->
-        let model' = Authenticated user
-        model', Cmd.none
-    | SignInResult (Error _e) ->
-        model, Cmd.none
-    | SignOut ->
-        let cmd =
-            Cmd.OfFunc.either
-                userAgentApplication.logout
-                ()
-                (Ok >> SignOutResult)
-                (Error >> SignOutResult)
-        model, cmd
-    | SignOutResult  (Ok ()) ->
-        let model' = NotAuthenticated
-        model', Cmd.none
-    | SignOutResult  (Error _e) ->
-        model, Cmd.none
+    | SignIn -> model
+    | SignInResult (Ok user) -> Authenticated user
+    | SignInResult (Error _e) -> NotAuthenticated
+    | SignOut -> model
+    | SignOutResult  (Ok ()) -> NotAuthenticated
+    | SignOutResult  (Error _e) -> NotAuthenticated
 
-let init() =
-    update Init NotAuthenticated
+let init = Loading
 
 let view model dispatch =
     match model with
+    | Loading ->
+        Button.button [ Button.IsLoading true ] []
     | NotAuthenticated ->
         Button.button
             [ Button.OnClick (fun _e -> dispatch SignIn) ]
-            [ Icon.icon [] [ Fa.i [ Fa.Brand.Windows ] [] ]
-              span [] [ str "Sign in" ] ]
+            [
+                Icon.icon [] [ Fa.i [ Fa.Brand.Windows ] [] ]
+                span [] [ str "Sign in" ]
+            ]
     | Authenticated user ->
         Button.button
             [ Button.OnClick (fun _e -> dispatch SignOut) ]
-            [ Icon.icon [] [ Fa.i [ Fa.Brand.Windows ] [] ]
-              span [] [ str (sprintf "%s | Sign out" user.Name) ] ]
+            [
+                Icon.icon [] [ Fa.i [ Fa.Brand.Windows ] [] ]
+                span [] [ str (sprintf "%s | Sign out" user.Name) ]
+            ]
+
+let stream states msgs =
+    [
+        yield
+            states
+            |> AsyncRx.distinctUntilChanged
+            |> AsyncRx.choose (function
+                | Loading ->
+                    match userAgentApplication.getAccount() |> Option.ofObj with
+                    | Some user ->
+                        AsyncRx.ofPromise (promise {
+                            let! token = getToken()
+                            return { Name = user.name; Token = token }
+                        })
+                        |> AsyncRx.map (Ok >> SignInResult)
+                        |> AsyncRx.catch (Error >> SignInResult >> AsyncRx.single)
+                        |> Some
+                    | None ->
+                        AsyncRx.single (SignInResult (Error (exn "Not signed in")))
+                        |> Some
+                | _ -> None
+            )
+            |> AsyncRx.switchLatest
+
+        let login =
+            AsyncRx.defer (fun () ->
+                AsyncRx.ofPromise (promise {
+                    let authParams = Fable.Core.JsInterop.createEmpty<Msal.AuthenticationParameters>
+                    authParams.scopes <- Some (ResizeArray [| "contacts.readwrite" |])
+                    let! authResponse = userAgentApplication.loginPopup authParams
+                    return { Name = userAgentApplication.getAccount().name; Token = authResponse.accessToken }
+                })
+            )
+            |> AsyncRx.map Ok
+            |> AsyncRx.catch (Error >> AsyncRx.single)
+        let loginResponseToast response =
+            match response with
+            | Ok user -> Cmd.none
+            | Error (e: exn) ->
+                Toast.toast "Wake up failed" e.Message
+                |> Toast.error
+        yield
+            msgs
+            |> AsyncRx.choose (function | SignIn -> Some login | _ -> None)
+            |> AsyncRx.switchLatest
+            |> AsyncRx.showToast loginResponseToast
+            |> AsyncRx.map SignInResult
+
+        let logout =
+            AsyncRx.defer (fun () -> AsyncRx.single (userAgentApplication.logout()))
+            |> AsyncRx.map (Ok >> SignOutResult)
+            |> AsyncRx.catch (Error >> SignOutResult >> AsyncRx.single)
+        yield
+            msgs
+            |> AsyncRx.choose (function | SignOut -> Some logout | _ -> None)
+            |> AsyncRx.switchLatest
+    ]
+    |> AsyncRx.mergeSeq

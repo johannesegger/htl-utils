@@ -2,10 +2,12 @@ module Client
 
 open Elmish
 open Elmish.React
+open Elmish.Streams
 open Elmish.HMR // Must be last Elmish.* open declaration (see https://elmish.github.io/hmr/#Usage)
 open Fable.Core.JsInterop
 open Fable.React
 open Fable.React.Props
+open FSharp.Control
 open Fulma
 open Thoth.Elmish
 open Shared
@@ -38,69 +40,35 @@ type Msg =
     | CreateStudentGroupsMsg of CreateStudentGroups.Msg
     | InspectDirectoryMsg of InspectDirectory.Msg
 
-let rec updateIfSignedIn auth (model, cmd) =
-    match auth, model.Authentication with
-    | Authentication.NotAuthenticated, Authentication.Authenticated _ ->
-        let model', cmd' = update (CreateStudentDirectoriesMsg CreateStudentDirectories.Init) model
-        let model'', cmd'' = update (InspectDirectoryMsg InspectDirectory.Init) model'
-        model'', Cmd.batch [ cmd; cmd'; cmd'' ]
-    | _ -> model, cmd
-
-and update msg model =
-    let authHeaderOptFn = Authentication.authHeaderOptFn model.Authentication
+let update msg model =
     match msg with
     | ActivateTab tabItem ->
-        let model' = { model with ActiveTab = tabItem }
-        model', Cmd.none
+        { model with ActiveTab = tabItem }
     | AuthenticationMsg msg ->
-        let subModel, subCmd = Authentication.update msg model.Authentication
-        { model with Authentication = subModel }, Cmd.map AuthenticationMsg subCmd
+        { model with Authentication = Authentication.update msg model.Authentication }
     | WakeUpMsg msg ->
-        let subModel, subCmd = WakeUp.update authHeaderOptFn msg model.WakeUp
-        { model with WakeUp = subModel }, Cmd.map WakeUpMsg subCmd
+        { model with WakeUp = WakeUp.update msg model.WakeUp }
     | ImportTeacherContactsMsg msg ->
-        let subModel, subCmd = ImportTeacherContacts.update authHeaderOptFn msg model.ImportTeacherContacts
-        { model with ImportTeacherContacts = subModel }, Cmd.map ImportTeacherContactsMsg subCmd
+        { model with ImportTeacherContacts = ImportTeacherContacts.update msg model.ImportTeacherContacts }
     | CreateStudentDirectoriesMsg msg ->
-        let subModel, subCmd = CreateStudentDirectories.update authHeaderOptFn msg model.CreateStudentDirectories
-        { model with CreateStudentDirectories = subModel }, Cmd.map CreateStudentDirectoriesMsg subCmd
+        { model with CreateStudentDirectories = CreateStudentDirectories.update msg model.CreateStudentDirectories }
     | CreateStudentGroupsMsg msg ->
-        let subModel, subCmd = CreateStudentGroups.update msg model.CreateStudentGroups
-        { model with CreateStudentGroups = subModel }, Cmd.map CreateStudentGroupsMsg subCmd
+        { model with CreateStudentGroups = CreateStudentGroups.update msg model.CreateStudentGroups }
     | InspectDirectoryMsg msg ->
-        let subModel, subCmd = InspectDirectory.update authHeaderOptFn msg model.InspectDirectory
-        { model with InspectDirectory = subModel }, Cmd.map InspectDirectoryMsg subCmd
-    |> updateIfSignedIn model.Authentication
+        { model with InspectDirectory = InspectDirectory.update msg model.InspectDirectory }
 
 let init() =
-    let authModel, authCmd = Authentication.init()
-    let wakeUpModel, wakeUpCmd = WakeUp.init()
-    let importTeacherContactsModel, importTeacherContactsCmd = ImportTeacherContacts.init()
-    let authHeaderOptFn = Authentication.authHeaderOptFn authModel
-    let createStudentDirectoriesModel, createStudentDirectoriesCmd = CreateStudentDirectories.init authHeaderOptFn
-    let createStudentGroupsModel, createStudentGroupsCmd = CreateStudentGroups.init
-    let inspectDirectoryModel, inspectDirectoryCmd = InspectDirectory.init authHeaderOptFn
     let model =
         {
             ActiveTab = General
-            Authentication = authModel
-            WakeUp = wakeUpModel
-            ImportTeacherContacts = importTeacherContactsModel
-            CreateStudentDirectories = createStudentDirectoriesModel
-            CreateStudentGroups = createStudentGroupsModel
-            InspectDirectory = inspectDirectoryModel
+            Authentication = Authentication.init
+            WakeUp = WakeUp.init
+            ImportTeacherContacts = ImportTeacherContacts.init
+            CreateStudentDirectories = CreateStudentDirectories.init
+            CreateStudentGroups = CreateStudentGroups.init
+            InspectDirectory = InspectDirectory.init
         }
-    let cmd =
-        Cmd.batch
-            [
-                Cmd.map AuthenticationMsg authCmd
-                Cmd.map WakeUpMsg wakeUpCmd
-                Cmd.map ImportTeacherContactsMsg importTeacherContactsCmd
-                Cmd.map CreateStudentDirectoriesMsg createStudentDirectoriesCmd
-                Cmd.map CreateStudentGroupsMsg createStudentGroupsCmd
-                Cmd.map InspectDirectoryMsg inspectDirectoryCmd
-            ]
-    model, cmd
+    model
 
 let view (model : Model) (dispatch : Msg -> unit) =
     let tabs =
@@ -134,12 +102,69 @@ let view (model : Model) (dispatch : Msg -> unit) =
                     [ Authentication.view model.Authentication (AuthenticationMsg >> dispatch) ] ] ]
           yield! tabs ]
 
+// let stream model msgs =
+//     let authHeader = Authentication.tryGetAuthHeader model.Authentication
+//     msgs
+//     |> Stream.subStream Authentication.stream model.Authentication asAuthenticationMsg AuthenticationMsg "authentication"
+//     |> Stream.subStream (CreateStudentDirectories.stream authHeader) model.CreateStudentDirectories asCreateStudentDirectoriesMsg CreateStudentDirectoriesMsg "createStudentDirectories"
+//     |> Stream.subStream (ImportTeacherContacts.stream authHeader) model.ImportTeacherContacts asImportTeacherContactsMsg ImportTeacherContactsMsg "importTeacherContacts"
+//     |> Stream.subStream (WakeUp.stream authHeader) model.WakeUp asWakeUpMsg WakeUpMsg "wakeUp"
+//     // |> Stream.subStream CreateStudentGroups.stream model.Info asInfoMsg InfoMsg "info"
+//     // |> Stream.subStream InspectDirectory.stream model.Info asInfoMsg InfoMsg "info"
+
+let stream states msgs =
+    let authHeader =
+        states
+        |> AsyncRx.map ((fun model -> model.Authentication) >> Authentication.tryGetAuthHeader)
+        |> AsyncRx.distinctUntilChanged
+    [
+        msgs
+        |> AsyncRx.choose (function | ActivateTab _ as x -> Some x | _ -> None)
+
+        (
+            states |> AsyncRx.map (fun m -> m.Authentication),
+            msgs |> AsyncRx.choose (function AuthenticationMsg msg -> Some msg | _ -> None)
+        )
+        ||> Authentication.stream
+        |> AsyncRx.map AuthenticationMsg
+
+        (
+            states |> AsyncRx.map (fun m -> m.WakeUp),
+            msgs |> AsyncRx.choose (function WakeUpMsg msg -> Some msg | _ -> None)
+        )
+        ||> WakeUp.stream authHeader
+        |> AsyncRx.map WakeUpMsg
+
+        (
+            states |> AsyncRx.map (fun m -> m.CreateStudentDirectories),
+            msgs |> AsyncRx.choose (function CreateStudentDirectoriesMsg msg -> Some msg | _ -> None)
+        )
+        ||> CreateStudentDirectories.stream authHeader
+        |> AsyncRx.map CreateStudentDirectoriesMsg
+
+        (
+            states |> AsyncRx.map (fun m -> m.CreateStudentGroups),
+            msgs |> AsyncRx.choose (function CreateStudentGroupsMsg msg -> Some msg | _ -> None)
+        )
+        ||> CreateStudentGroups.stream authHeader
+        |> AsyncRx.map CreateStudentGroupsMsg
+
+        (
+            states |> AsyncRx.map (fun m -> m.InspectDirectory),
+            msgs |> AsyncRx.choose (function InspectDirectoryMsg msg -> Some msg | _ -> None)
+        )
+        ||> InspectDirectory.stream authHeader
+        |> AsyncRx.map InspectDirectoryMsg
+    ]
+    |> AsyncRx.mergeSeq
+
 #if DEBUG
 open Elmish.Debug
 open Elmish.HMR
 #endif
 
-Program.mkProgram init update view
+Program.mkSimple init update view
+|> Smaerts.Program.withStream stream
 #if DEBUG
 |> Program.withConsoleTrace
 #endif

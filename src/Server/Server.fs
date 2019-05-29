@@ -1,7 +1,5 @@
 open System
 open System.IO
-open System.Text
-open System.Net
 open System.Net.Http.Headers
 open System.Net.NetworkInformation
 open System.Security.Claims
@@ -22,7 +20,6 @@ open Shared.InspectDirectory
 open WakeUp
 open Students
 open StudentDirectories
-open Giraffe.GiraffeViewEngine
 
 let publicPath = Path.GetFullPath "../Client/public"
 
@@ -189,7 +186,7 @@ let getDirectoryInfo baseDirectories : HttpHandler =
 
 let createStudentDirectories baseDirectories getStudents : HttpHandler =
     fun next ctx -> task {
-        let! input = ctx.BindJsonAsync<Input>()
+        let! input = ctx.BindJsonAsync<CreateDirectoriesData>()
         let baseDirectory = fst input.Path
         let! result =
             baseDirectories

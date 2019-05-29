@@ -1,64 +1,106 @@
 module ImportTeacherContacts
 
-open Elmish
+open Elmish.Streams
 open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
+open FSharp.Control
 open Fulma
 open Thoth.Elmish
 open Thoth.Fetch
 open Thoth.Json
 
-type Model = unit
+type Model =
+    | Disabled
+    | Ready
+    | Sending
 
 type Msg =
+    | Disable
+    | Enable
     | Import
     | ImportResponse of Result<unit, exn>
 
-let rec update authHeaderOptFn msg model =
+let rec update msg model =
     match msg with
-    | Import ->
-        match authHeaderOptFn with
-        | Some getAuthHeader ->
-            let makeRequestCmd =
-                Cmd.OfPromise.either
-                    (fun getAuthHeader -> promise {
-                        let url = "/api/teachers/import-contacts"
-                        let data = Encode.nil
-                        let! authHeader = getAuthHeader ()
-                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.post(url, data, requestProperties)
-                    })
-                    getAuthHeader
-                    (ignore >> Ok >> ImportResponse)
-                    (Error >> ImportResponse)
-            let toastCmd =
-                Toast.toast "Import teacher contacts" "Import started. This might take some time."
-                |> Toast.info
-            model, Cmd.batch [ makeRequestCmd; toastCmd ]
-        | None ->
-            let msg = exn "Please sign in using your Microsoft account." |> Error |> ImportResponse
-            update authHeaderOptFn msg model
-    | ImportResponse (Error e) ->
-        let cmd =
-            Toast.toast "Import teacher contacts failed" e.Message
-            |> Toast.error
-        model, cmd
-    | ImportResponse (Ok ()) ->
-        let cmd =
-            Toast.toast "Import teacher contacts" "Import successful"
-            |> Toast.success
-        model, cmd
+    | Disable -> Disabled
+    | Enable -> Ready
+    | Import -> Sending
+    | ImportResponse (Error e) -> Ready
+    | ImportResponse (Ok ()) -> Ready
 
-let init() =
-    (), Cmd.none
+let init = Disabled
 
 let view model dispatch =
+    let isImportingDisabled =
+        match model with
+        | Disabled
+        | Sending -> true
+        | Ready -> false
     Container.container [ Container.Props [ Style [ MarginTop "1rem" ] ] ]
-        [ Content.content [ ]
-            [ Button.list [ Button.List.IsCentered ]
-                [ Button.button
-                    [ Button.IsLink
-                      Button.OnClick (fun _evt -> dispatch Import) ]
-                    [ Icon.icon [] [ Fa.i [ Fa.Solid.IdCard ] [] ]
-                      span [] [ str "Import teacher contacts" ] ] ] ] ]
+        [
+            Content.content []
+                [
+                    Button.list [ Button.List.IsCentered ]
+                        [
+                            Button.button
+                                [
+                                    Button.IsLink
+                                    Button.Disabled isImportingDisabled
+                                    Button.OnClick (fun _evt -> dispatch Import)
+                                ]
+                                [
+                                    Icon.icon [] [ Fa.i [ Fa.Solid.IdCard ] [] ]
+                                    span [] [ str "Import teacher contacts" ]
+                                ]
+                        ]
+                ]
+        ]
+
+let stream authHeader model msgs =
+    match authHeader, model with
+    | None, Ready ->
+        AsyncRx.single Disable
+        |> AsyncRx.toStream "importTeacherContacts-disable"
+        |> Stream.merge msgs
+    | Some authHeader, Disabled ->
+        AsyncRx.single Enable
+        |> AsyncRx.toStream "importTeacherContacts-enable"
+        |> Stream.merge msgs
+    | Some authHeader, Ready
+    | Some authHeader, Sending ->
+        let importStartedToast =
+            Toast.toast "Import teacher contacts" "Import started. This might take some time."
+            |> Toast.info
+
+        let import =
+            AsyncRx.defer (fun () ->
+                AsyncRx.ofPromise (promise {
+                    let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                    return! Fetch.post("/api/teachers/import-contacts", Encode.nil, requestProperties)
+                })
+                |> AsyncRx.map ignore
+            )
+
+        let responseToast response =
+            match response with
+            | Ok () ->
+                Toast.toast "Import teacher contacts" "Import successful"
+                |> Toast.success
+            | Error (e: exn) ->
+                Toast.toast "Import teacher contacts failed" e.Message
+                |> Toast.error
+
+        msgs
+        // |> AsyncRx.tapOnNext (printfn "ImportTeacherContacts: Received %O")
+        |> AsyncRx.choose (function | Import -> Some import | _ -> None)
+        |> AsyncRx.showToast (fun _ -> importStartedToast)
+        |> AsyncRx.switchLatest
+        |> AsyncRx.map (ignore >> Ok)
+        |> AsyncRx.catch (Error >> AsyncRx.single)
+        |> AsyncRx.showToast responseToast
+        |> AsyncRx.map ImportResponse
+        |> AsyncRx.toStream "importTeacherContacts-send"
+        |> Stream.merge msgs
+    | None, Disabled
+    | None, Sending -> msgs

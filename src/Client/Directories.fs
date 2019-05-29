@@ -6,6 +6,7 @@ open Fulma
 type DirectoryChildren =
     | LoadedDirectoryChildren of Directory list
     | NotLoadedDirectoryChildren
+    | FailedToLoadDirectoryChildren
 and Directory =
     {
         Path: string list
@@ -27,8 +28,8 @@ let private updateDirectory path fn directory =
                     else childDir
                 )
             { dir with Children = LoadedDirectoryChildren childDirs }
-        | _ :: _, { Children = NotLoadedDirectoryChildren } ->
-            // Should not happen
+        | _ :: _, { Children = NotLoadedDirectoryChildren }
+        | _ :: _, { Children = FailedToLoadDirectoryChildren } ->
             directory
     updateDirectory' (List.rev path) directory
 
@@ -41,6 +42,12 @@ let setChildDirectories path childDirectories directory =
 
     updateDirectory path fn directory
 
+let setChildDirectoriesFailedToLoad path directory =
+    let fn dir =
+        { dir with Children = FailedToLoadDirectoryChildren }
+
+    updateDirectory path fn directory
+
 let selectDirectory path directory =
     let rec selectDirectory' (directory: Directory) =
         let isSelected = path |> List.rev |> List.truncate (directory.Path.Length) = List.rev directory.Path
@@ -50,6 +57,8 @@ let selectDirectory path directory =
                 LoadedDirectoryChildren (List.map selectDirectory' children)
             | NotLoadedDirectoryChildren ->
                 NotLoadedDirectoryChildren
+            | NotLoadedDirectoryChildren
+            | FailedToLoadDirectoryChildren as x -> x
         { directory with
             IsSelected = isSelected
             Children = children }

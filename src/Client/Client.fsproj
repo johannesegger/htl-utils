@@ -5,6 +5,8 @@
     </PropertyGroup>
     <ItemGroup>
         <Compile Include="..\Shared\Shared.fs" />
+        <Compile Include="AsyncRx.fs" />
+        <Compile Include="Stream.fs" />
         <Compile Include="List.fs" />
         <Compile Include="Msal.fs" />
         <Compile Include="Toast.fs" />
