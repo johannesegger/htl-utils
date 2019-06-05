@@ -92,7 +92,6 @@ let stream authHeader model msgs =
                 |> Toast.error
 
         msgs
-        // |> AsyncRx.tapOnNext (printfn "ImportTeacherContacts: Received %O")
         |> AsyncRx.choose (function | Import -> Some import | _ -> None)
         |> AsyncRx.showToast (fun _ -> importStartedToast)
         |> AsyncRx.switchLatest

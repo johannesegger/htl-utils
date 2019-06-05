@@ -102,16 +102,6 @@ let view (model : Model) (dispatch : Msg -> unit) =
                     [ Authentication.view model.Authentication (AuthenticationMsg >> dispatch) ] ] ]
           yield! tabs ]
 
-// let stream model msgs =
-//     let authHeader = Authentication.tryGetAuthHeader model.Authentication
-//     msgs
-//     |> Stream.subStream Authentication.stream model.Authentication asAuthenticationMsg AuthenticationMsg "authentication"
-//     |> Stream.subStream (CreateStudentDirectories.stream authHeader) model.CreateStudentDirectories asCreateStudentDirectoriesMsg CreateStudentDirectoriesMsg "createStudentDirectories"
-//     |> Stream.subStream (ImportTeacherContacts.stream authHeader) model.ImportTeacherContacts asImportTeacherContactsMsg ImportTeacherContactsMsg "importTeacherContacts"
-//     |> Stream.subStream (WakeUp.stream authHeader) model.WakeUp asWakeUpMsg WakeUpMsg "wakeUp"
-//     // |> Stream.subStream CreateStudentGroups.stream model.Info asInfoMsg InfoMsg "info"
-//     // |> Stream.subStream InspectDirectory.stream model.Info asInfoMsg InfoMsg "info"
-
 let stream states msgs =
     let authHeader =
         states
