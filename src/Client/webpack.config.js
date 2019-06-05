@@ -67,7 +67,7 @@ module.exports = {
                 }
             }
         },
-        minimizer: isProduction ? [new MinifyPlugin()] : []
+        minimizer: [] //isProduction ? [new MinifyPlugin()] : [] // Minimizer makes problems with calls to `IAsyncObservable.SubscribeAsync` ("worker is not defined")
     },
     // DEVELOPMENT
     //      - HotModuleReplacementPlugin: Enables hot reloading when code changes without refreshing
