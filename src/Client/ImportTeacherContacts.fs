@@ -61,12 +61,8 @@ let stream authHeader model msgs =
     match authHeader, model with
     | None, Ready ->
         AsyncRx.single Disable
-        |> AsyncRx.toStream "importTeacherContacts-disable"
-        |> Stream.merge msgs
     | Some authHeader, Disabled ->
         AsyncRx.single Enable
-        |> AsyncRx.toStream "importTeacherContacts-enable"
-        |> Stream.merge msgs
     | Some authHeader, Ready
     | Some authHeader, Sending ->
         let importStartedToast =
@@ -99,7 +95,5 @@ let stream authHeader model msgs =
         |> AsyncRx.catch (Error >> AsyncRx.single)
         |> AsyncRx.showToast responseToast
         |> AsyncRx.map ImportResponse
-        |> AsyncRx.toStream "importTeacherContacts-send"
-        |> Stream.merge msgs
     | None, Disabled
     | None, Sending -> msgs
