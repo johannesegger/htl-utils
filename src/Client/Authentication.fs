@@ -128,7 +128,8 @@ let stream states msgs =
                     let authParams = Fable.Core.JsInterop.createEmpty<Msal.AuthenticationParameters>
                     authParams.scopes <- Some (ResizeArray [| "contacts.readwrite" |])
                     let! authResponse = userAgentApplication.loginPopup authParams
-                    return { Name = userAgentApplication.getAccount().name; Token = authResponse.accessToken }
+                    let! token = getToken()
+                    return { Name = userAgentApplication.getAccount().name; Token = token }
                 })
             )
             |> AsyncRx.map Ok
