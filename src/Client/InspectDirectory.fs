@@ -359,8 +359,8 @@ let view model dispatch =
                                                                 yield! List.map fileView dir.Files
                                                                 yield! List.collect subDirectoryView dir.Directories
                                                             ]
-                                                        for childDirectory in childDirectory.Directories do
-                                                            yield! subDirectoryView childDirectory
+                                                        yield! List.map fileView childDirectory.Files
+                                                        yield! List.collect subDirectoryView childDirectory.Directories
 
                                                     ]
                                             ]
