@@ -105,7 +105,7 @@ let getChildDirectories baseDirectories : HttpHandler =
     fun next ctx -> task {
         let! body = ctx.BindJsonAsync<DirectoryPath>()
         let response =
-            match DirectoryPath.getNormalized body with
+            match DirectoryPath.toNormalized body with
             | [] -> baseDirectories |> Map.toList |> List.map fst
             | baseDir :: children ->
                 match Map.tryFind baseDir baseDirectories with
@@ -148,7 +148,7 @@ let rec directoryInfo getClientPath path =
         |> Seq.map (fileInfo getClientPath)
         |> Seq.toList
     {
-        Path = getClientPath path
+        Path = getClientPath path |> DirectoryPath.fromNormalized
         Directories = childDirectories
         Files = childFiles
     }
@@ -157,7 +157,7 @@ let getDirectoryInfo baseDirectories : HttpHandler =
     fun next ctx -> task {
         let! body = ctx.BindJsonAsync<DirectoryPath>()
         let response =
-            match DirectoryPath.getNormalized body with
+            match DirectoryPath.toNormalized body with
             | [] -> None
             | baseDir :: children as fullPath ->
                 match Map.tryFind baseDir baseDirectories with
@@ -185,7 +185,7 @@ let getDirectoryInfo baseDirectories : HttpHandler =
 let createStudentDirectories baseDirectories getStudents : HttpHandler =
     fun next ctx -> task {
         let! input = ctx.BindJsonAsync<CreateDirectoriesData>()
-        let path = DirectoryPath.getNormalized input.Path
+        let path = DirectoryPath.toNormalized input.Path
         let! result =
             match path with
             | [] -> async { return Result.Error EmptyPath }

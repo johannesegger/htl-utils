@@ -34,6 +34,7 @@ type Model =
     {
         Directory: Directory
         DirectoryInfo: DirectoryInfo option
+        DirectoriesWithVisibleDetails: Set<DirectoryPath>
         ActiveDirectoryFilter: FilterId
         AutoRefreshEnabled: bool
         AutoRefreshInterval: System.TimeSpan
@@ -46,11 +47,14 @@ type Msg =
     | ApplyFilter of FilterId
     | ToggleAutoRefresh
     | SetAutoRefreshInterval of System.TimeSpan
+    | ToggleDetailsVisibility of DirectoryPath
 
 let rec update msg model =
     match msg with
     | SelectDirectory path ->
-        { model with Directory = selectDirectory path model.Directory }
+        { model with
+            Directory = selectDirectory path model.Directory
+            DirectoriesWithVisibleDetails = Set.empty }
     | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
         { model with Directory = setChildDirectories path childDirectories model.Directory }
     | LoadChildDirectoriesResponse (Error (path, e)) ->
@@ -65,6 +69,13 @@ let rec update msg model =
         { model with AutoRefreshEnabled = not model.AutoRefreshEnabled }
     | SetAutoRefreshInterval interval ->
         { model with AutoRefreshInterval = interval }
+    | ToggleDetailsVisibility directoryPath ->
+        { model with
+            DirectoriesWithVisibleDetails =
+                if Set.contains directoryPath model.DirectoriesWithVisibleDetails then
+                    Set.remove directoryPath model.DirectoriesWithVisibleDetails
+                else Set.add directoryPath model.DirectoriesWithVisibleDetails
+        }
 
 let init =
     {
@@ -75,6 +86,7 @@ let init =
                 Children = NotLoadedDirectoryChildren
             }
         DirectoryInfo = None
+        DirectoriesWithVisibleDetails = Set.empty
         ActiveDirectoryFilter = directoryFilters |> List.head |> fst
         AutoRefreshEnabled = false
         AutoRefreshInterval = System.TimeSpan.FromSeconds 5.
@@ -121,25 +133,24 @@ let view model dispatch =
             |> Option.map Tag.Size
             |> Option.toList
 
-        Field.div [ Field.IsGrouped ]
-            [
-                for (key, value) in data ->
-                    let color = match value with | 0 -> IsDanger | 1 -> IsWarning | _ -> IsSuccess
-                    Control.div []
-                        [
-                            Tag.list [ Tag.List.HasAddons ]
-                                [
-                                    Tag.tag [ yield Tag.Color IsDark; yield! sizeProp ] [ str key ]
-                                    Tag.tag [ yield Tag.Color color; yield! sizeProp ] [ str (sprintf "%d" value) ]
-                                ]
-                        ]
-            ]
+        [
+            for (key, value) in data ->
+                let color = match value with | 0 -> IsDanger | 1 -> IsWarning | _ -> IsSuccess
+                Control.div []
+                    [
+                        Tag.list [ Tag.List.HasAddons ]
+                            [
+                                Tag.tag [ yield Tag.Color IsDark; yield! sizeProp ] [ str key ]
+                                Tag.tag [ yield Tag.Color color; yield! sizeProp ] [ str (sprintf "%d" value) ]
+                            ]
+                    ]
+        ]
 
     let directoryInfoHeading directoryInfo =
         Level.level []
             [
-                Level.left [] [ Heading.h3 [] [ str (String.concat "\\" directoryInfo.Path) ] ]
-                Level.right [] [ directoryStatistics (Some IsMedium) directoryInfo ]
+                Level.left [] [ Heading.h3 [] [ str (String.concat "\\" (DirectoryPath.toNormalized directoryInfo.Path)) ] ]
+                Level.right [] [ Field.div [ Field.IsGrouped ] (directoryStatistics (Some IsMedium) directoryInfo) ]
             ]
 
     let fileStatistics fileInfo =
@@ -149,9 +160,9 @@ let view model dispatch =
         let data =
             [
                 ("Size", Bytes.toHumanReadable fileInfo.Size, if fileInfo.Size = Bytes 0L then IsDanger else IsSuccess)
-                ("Creation time", dateToString fileInfo.CreationTime, IsLink)
-                ("Last access time", dateToString fileInfo.LastAccessTime, IsLink)
-                ("Last write time", dateToString fileInfo.LastWriteTime, IsLink)
+                // ("Creation time", dateToString fileInfo.CreationTime, IsLink)
+                // ("Last access time", dateToString fileInfo.LastAccessTime, IsLink)
+                // ("Last write time", dateToString fileInfo.LastWriteTime, IsLink)
             ]
         Field.div [ Field.IsGrouped ]
             [
@@ -226,7 +237,7 @@ let view model dispatch =
 
             match Option.map applyFilter model.DirectoryInfo with
             | Some directoryInfo ->
-                yield Divider.divider [ Divider.Label (sprintf "Directory info for %s" (String.concat "\\" directoryInfo.Path)) ]
+                yield Divider.divider [ Divider.Label (sprintf "Directory info for %s" (String.concat "\\" (DirectoryPath.toNormalized directoryInfo.Path))) ]
 
                 yield
                     Panel.panel []
@@ -291,14 +302,68 @@ let view model dispatch =
                                                         ]
                                         ]
                                 ]
-                            for childDirectory in directoryInfo.Directories ->
-                                Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
-                                    [
-                                        Panel.icon [] [ Fa.i [ Fa.Solid.Folder ] [] ]
-                                        str (List.last childDirectory.Path)
-                                        span [ Style [ FlexGrow 1 ] ] []
-                                        directoryStatistics None childDirectory
-                                    ]
+                            for childDirectory in directoryInfo.Directories do
+                                let showDetails = Set.contains childDirectory.Path model.DirectoriesWithVisibleDetails
+                                yield
+                                    Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
+                                        [
+                                            Panel.icon [] [ Fa.i [ Fa.Solid.Folder ] [] ]
+                                            str (DirectoryPath.getName childDirectory.Path)
+                                            span [ Style [ FlexGrow 1 ] ] []
+                                            Field.div [ Field.IsGrouped ]
+                                                [
+                                                    yield! directoryStatistics None childDirectory
+                                                    yield Control.div []
+                                                        [
+                                                            Button.a
+                                                                [
+                                                                    Button.Color IsLink
+                                                                    Button.Size IsSmall
+                                                                    Button.OnClick (fun _ev -> dispatch (ToggleDetailsVisibility childDirectory.Path))
+                                                                ]
+                                                                [
+                                                                    Icon.icon [] [ Fa.i [ (if showDetails then Fa.Solid.AngleDown else Fa.Solid.AngleRight) ] [] ]
+                                                                    span [] [ str "Details" ]
+                                                                ]
+                                                        ]
+                                                ]
+                                        ]
+                                if showDetails then
+                                    yield
+                                        Panel.block []
+                                            [
+                                                Panel.panel [ Props [ Style [ FlexGrow "1" ] ] ]
+                                                    [
+                                                        let relativeName path =
+                                                            path
+                                                            |> List.skip (DirectoryPath.length childDirectory.Path)
+                                                            |> String.concat "\\"
+                                                        let fileView (file: FileInfo) =
+                                                            Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
+                                                                [
+                                                                    Panel.icon [] [ Fa.i [ Fa.Solid.File ] [] ]
+                                                                    str (relativeName file.Path)
+                                                                    span [ Style [ FlexGrow 1 ] ] []
+                                                                    fileStatistics file
+                                                                ]
+                                                        let rec subDirectoryView dir =
+                                                            [
+                                                                yield
+                                                                    Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
+                                                                        [
+                                                                            Panel.icon [] [ Fa.i [ Fa.Solid.Folder ] [] ]
+                                                                            str (relativeName (DirectoryPath.toNormalized dir.Path))
+                                                                            span [ Style [ FlexGrow 1 ] ] []
+                                                                            Field.div [ Field.IsGrouped ] (directoryStatistics None dir)
+                                                                        ]
+                                                                yield! List.map fileView dir.Files
+                                                                yield! List.collect subDirectoryView dir.Directories
+                                                            ]
+                                                        for childDirectory in childDirectory.Directories do
+                                                            yield! subDirectoryView childDirectory
+
+                                                    ]
+                                            ]
                             for file in directoryInfo.Files ->
                                 Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
                                     [

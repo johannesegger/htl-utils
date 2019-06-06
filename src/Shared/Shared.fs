@@ -6,6 +6,9 @@ open Thoth.Json
 open Thoth.Json.Net
 #endif
 
+#if FABLE_COMPILER
+[<Fable.Core.Erase>] // enables equality
+#endif
 type DirectoryPath = DirectoryPath of string list
 
 module DirectoryPath =
@@ -23,7 +26,6 @@ module DirectoryPath =
         if lengthDiff >= 0 then
             List.skip lengthDiff child = ``base``
         else false
-        |> fun b -> printfn "%O is child of %O: %b" child ``base`` b; b
 
     let isRoot (DirectoryPath path) =
         List.isEmpty path
@@ -31,7 +33,11 @@ module DirectoryPath =
     let getBase (DirectoryPath path) =
         List.last path
 
-    let getNormalized (DirectoryPath path) = List.rev path
+    let toNormalized (DirectoryPath path) = List.rev path
+
+    let fromNormalized path = List.rev path |> DirectoryPath
+
+    let length (DirectoryPath path) = List.length path
 
     let decode : Decoder<_> =
         Decode.list Decode.string
@@ -78,7 +84,7 @@ module InspectDirectory =
 
     type DirectoryInfo =
         {
-            Path: string list
+            Path: DirectoryPath
             Directories: DirectoryInfo list
             Files: FileInfo list
         }
@@ -103,7 +109,7 @@ module InspectDirectory =
             fun o ->
                 Encode.object
                     [
-                        "path", (List.map Encode.string >> Encode.list) o.Path
+                        "path", DirectoryPath.encode o.Path
                         "directories", (List.map encode >> Encode.list) o.Directories
                         "files", (List.map encodeFileInfo >> Encode.list) o.Files
                     ]
@@ -126,7 +132,7 @@ module InspectDirectory =
 
             Decode.object (fun get ->
                 {
-                    Path = get.Required.Field "path" (Decode.list Decode.string)
+                    Path = get.Required.Field "path" DirectoryPath.decode
                     Directories = get.Required.Field "directories" (Decode.list decode)
                     Files = get.Required.Field "files" (Decode.list fileInfoDecoder)
                 }

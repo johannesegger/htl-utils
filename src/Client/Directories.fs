@@ -30,7 +30,7 @@ let private updateDirectory path fn directory =
         | _ :: _, { Children = NotLoadedDirectoryChildren }
         | _ :: _, { Children = FailedToLoadDirectoryChildren } ->
             directory
-    updateDirectory' (DirectoryPath.getNormalized path) directory
+    updateDirectory' (DirectoryPath.toNormalized path) directory
 
 let setChildDirectories path childDirectories directory =
     let fn dir =
