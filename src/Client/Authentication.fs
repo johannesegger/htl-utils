@@ -144,7 +144,7 @@ let stream states msgs =
             match response with
             | Ok user -> Cmd.none
             | Error (e: exn) ->
-                Toast.toast "Wake up failed" e.Message
+                Toast.toast "Login failed" e.Message
                 |> Toast.error
         yield
             msgs
