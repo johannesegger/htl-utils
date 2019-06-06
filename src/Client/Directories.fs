@@ -1,7 +1,6 @@
 module Directories
 
-open Fable.React.Props
-open Fulma
+open Shared
 
 type DirectoryChildren =
     | LoadedDirectoryChildren of Directory list
@@ -9,7 +8,7 @@ type DirectoryChildren =
     | FailedToLoadDirectoryChildren
 and Directory =
     {
-        Path: string list
+        Path: DirectoryPath
         IsSelected: bool
         Children: DirectoryChildren
     }
@@ -23,7 +22,7 @@ let private updateDirectory path fn directory =
             let childDirs =
                 children
                 |> List.map (fun childDir ->
-                    if List.head childDir.Path = path
+                    if DirectoryPath.getName childDir.Path = path
                     then updateDirectory' xs childDir
                     else childDir
                 )
@@ -31,13 +30,13 @@ let private updateDirectory path fn directory =
         | _ :: _, { Children = NotLoadedDirectoryChildren }
         | _ :: _, { Children = FailedToLoadDirectoryChildren } ->
             directory
-    updateDirectory' (List.rev path) directory
+    updateDirectory' (DirectoryPath.getNormalized path) directory
 
 let setChildDirectories path childDirectories directory =
     let fn dir =
         let childDirectories' =
             childDirectories
-            |> List.map (fun n -> { Path = n :: dir.Path; IsSelected = false; Children = NotLoadedDirectoryChildren })
+            |> List.map (fun n -> { Path = DirectoryPath.combine dir.Path [ n ]; IsSelected = false; Children = NotLoadedDirectoryChildren })
         { dir with Children = LoadedDirectoryChildren childDirectories' }
 
     updateDirectory path fn directory
@@ -50,18 +49,17 @@ let setChildDirectoriesFailedToLoad path directory =
 
 let selectDirectory path directory =
     let rec selectDirectory' (directory: Directory) =
-        let isSelected = path |> List.rev |> List.truncate (directory.Path.Length) = List.rev directory.Path
-        let children =
-            match directory.Children with
-            | LoadedDirectoryChildren children ->
-                LoadedDirectoryChildren (List.map selectDirectory' children)
-            | NotLoadedDirectoryChildren ->
-                NotLoadedDirectoryChildren
-            | NotLoadedDirectoryChildren
-            | FailedToLoadDirectoryChildren as x -> x
         { directory with
-            IsSelected = isSelected
-            Children = children }
+            IsSelected = DirectoryPath.isChildDirectory directory.Path path
+            Children =
+                match directory.Children with
+                | LoadedDirectoryChildren children ->
+                    LoadedDirectoryChildren (List.map selectDirectory' children)
+                | NotLoadedDirectoryChildren ->
+                    NotLoadedDirectoryChildren
+                | NotLoadedDirectoryChildren
+                | FailedToLoadDirectoryChildren as x -> x
+        }
     selectDirectory' directory
 
 let addChildDirectory path name directory =
@@ -69,7 +67,7 @@ let addChildDirectory path name directory =
         match dir with
         | { Children = LoadedDirectoryChildren children } ->
             let children' =
-                let child = { Path = name :: dir.Path; IsSelected = false; Children = NotLoadedDirectoryChildren }
+                let child = { Path = DirectoryPath.combine dir.Path [ name ]; IsSelected = false; Children = NotLoadedDirectoryChildren }
                 child :: children
             { dir with Children = LoadedDirectoryChildren children' }
         | x -> x

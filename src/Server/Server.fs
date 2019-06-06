@@ -15,6 +15,7 @@ open Giraffe
 open Giraffe.Serialization
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
+open Shared
 open Shared.CreateStudentDirectories
 open Shared.InspectDirectory
 open WakeUp
@@ -102,12 +103,10 @@ let getStudentList students className : HttpHandler =
 
 let getChildDirectories baseDirectories : HttpHandler =
     fun next ctx -> task {
-        let! body = ctx.BindJsonAsync<string list>()
+        let! body = ctx.BindJsonAsync<DirectoryPath>()
         let response =
-            match body with
-            | []
-            | [ "" ] ->
-                baseDirectories |> Map.toList |> List.map fst
+            match DirectoryPath.getNormalized body with
+            | [] -> baseDirectories |> Map.toList |> List.map fst
             | baseDir :: children ->
                 match Map.tryFind baseDir baseDirectories with
                 | Some dir ->
@@ -156,12 +155,11 @@ let rec directoryInfo getClientPath path =
 
 let getDirectoryInfo baseDirectories : HttpHandler =
     fun next ctx -> task {
-        let! body = ctx.BindJsonAsync<string list>()
+        let! body = ctx.BindJsonAsync<DirectoryPath>()
         let response =
-            match body with
-            | []
-            | [ "" ] -> None
-            | baseDir :: children ->
+            match DirectoryPath.getNormalized body with
+            | [] -> None
+            | baseDir :: children as fullPath ->
                 match Map.tryFind baseDir baseDirectories with
                 | Some dir ->
                     try
@@ -170,7 +168,7 @@ let getDirectoryInfo baseDirectories : HttpHandler =
                             path.Substring(serverPath.Length)
                             |> String.split (sprintf "%c" Path.DirectorySeparatorChar)
                             |> Seq.filter (not << String.IsNullOrEmpty)
-                            |> Seq.append body
+                            |> Seq.append fullPath
                             |> Seq.toList
                         directoryInfo fn serverPath
                         |> Some
@@ -187,18 +185,23 @@ let getDirectoryInfo baseDirectories : HttpHandler =
 let createStudentDirectories baseDirectories getStudents : HttpHandler =
     fun next ctx -> task {
         let! input = ctx.BindJsonAsync<CreateDirectoriesData>()
-        let baseDirectory = fst input.Path
+        let path = DirectoryPath.getNormalized input.Path
         let! result =
-            baseDirectories
-            |> Map.tryFind baseDirectory
-            |> Result.ofOption (InvalidBaseDirectory baseDirectory)
-            |> Result.bindAsync (fun baseDirectory ->
-                let path = Path.Combine([| yield baseDirectory; yield! snd input.Path |]) // TODO verify that absolute input.Path works as expected
-                createStudentDirectories getStudents path input.ClassName
-            )
+            match path with
+            | [] -> async { return Result.Error EmptyPath }
+            | baseDirectory :: pathTail ->
+                baseDirectories
+                |> Map.tryFind baseDirectory
+                |> Result.ofOption (InvalidBaseDirectory baseDirectory)
+                |> Result.bindAsync (fun baseDirectory ->
+                    let path = Path.Combine([| yield baseDirectory; yield! pathTail |]) // TODO verify that absolute input.Path works as expected
+                    createStudentDirectories getStudents path input.ClassName
+                )
         return!
             match result with
             | Ok _ -> Successful.OK () next ctx
+            | Error EmptyPath ->
+                RequestErrors.BAD_REQUEST "No path provided" next ctx
             | Error (InvalidBaseDirectory name) ->
                 RequestErrors.BAD_REQUEST (sprintf "Invalid base directory \"%s\"" name) next ctx
             | Error (GetStudentsError (Students.GetStudentsError message)) ->
@@ -293,6 +296,7 @@ let main argv =
         let coders =
             Extra.empty
             |> Extra.withCustom DirectoryInfo.encode DirectoryInfo.decode
+            |> Extra.withCustom DirectoryPath.encode DirectoryPath.decode
         services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
         services
             .AddAuthentication(fun config ->

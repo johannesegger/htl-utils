@@ -12,6 +12,7 @@ open Thoth.Fetch
 open Thoth.Json
 open Classes
 open Directories
+open Shared
 open Shared.CreateStudentDirectories
 
 type Model =
@@ -19,17 +20,17 @@ type Model =
         ClassList: ClassList
         SelectedClass: string option
         Directory: Directory
-        NewDirectoryNames: Map<string list, string>
+        NewDirectoryNames: Map<DirectoryPath, string>
     }
 
 type Msg =
     | LoadClassList
     | LoadClassListResponse of Result<string list, exn>
     | SelectClass of string
-    | SelectDirectory of string list
-    | LoadChildDirectoriesResponse of Result<string list * string list, string list * exn>
-    | UpdateNewDirectoryValue of string list * string
-    | AddChildDirectory of name: string * path: string list
+    | SelectDirectory of DirectoryPath
+    | LoadChildDirectoriesResponse of Result<DirectoryPath * string list, DirectoryPath * exn>
+    | UpdateNewDirectoryValue of DirectoryPath * string
+    | AddChildDirectory of string * DirectoryPath
     | CreateDirectories of CreateDirectoriesData
     | CreateDirectoriesResponse of Result<unit, exn>
 
@@ -65,7 +66,7 @@ let init =
         SelectedClass = None
         Directory =
             {
-                Path = []
+                Path = DirectoryPath.empty
                 IsSelected = true
                 Children = NotLoadedDirectoryChildren
             }
@@ -122,7 +123,7 @@ let view model dispatch =
                 Button.Color (if directory.IsSelected then IsLink else NoColor)
                 Button.OnClick (fun _ev -> directory.Path |> SelectDirectory |> dispatch)
             ]
-            [ str (List.tryHead directory.Path |> Option.defaultValue "<none>") ]
+            [ str (DirectoryPath.getName directory.Path) ]
 
     let directoryView level directory =
         match directory.Children with
@@ -149,7 +150,7 @@ let view model dispatch =
 
     let isAnyDirectorySelected =
         getSelectedDirectory model.Directory
-        |> Option.map (fun d -> d.Path |> List.isEmpty |> not)
+        |> Option.map ((fun d -> d.Path) >> DirectoryPath.isRoot >> not)
         |> Option.defaultValue false
 
     Container.container []
@@ -200,11 +201,8 @@ let view model dispatch =
                 yield Button.Disabled (not isAnyDirectorySelected || model.SelectedClass.IsNone)
                 match getSelectedDirectory model.Directory, model.SelectedClass with
                 | Some selectedDirectory, Some className ->
-                    match List.rev selectedDirectory.Path with
-                    | baseDir :: path ->
-                        let data = { ClassName = className; Path = baseDir, path }
-                        yield Button.OnClick (fun _ev -> dispatch (CreateDirectories data))
-                    | _ -> ()
+                    let data = { ClassName = className; Path = selectedDirectory.Path }
+                    yield Button.OnClick (fun _ev -> dispatch (CreateDirectories data))
                 | _ -> () ]
             [ str "Create" ] ]
 
@@ -247,12 +245,12 @@ let stream authHeader states msgs =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = "/api/child-directories"
-                        let data = Encode.list []
+                        let data = DirectoryPath.encode DirectoryPath.empty
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
                     })
-                    |> AsyncRx.map (fun children -> Ok ([], children))
-                    |> AsyncRx.catch ((fun e -> [], e) >> Error >> AsyncRx.single)
+                    |> AsyncRx.map (fun children -> Ok (DirectoryPath.empty, children))
+                    |> AsyncRx.catch ((fun e -> DirectoryPath.empty, e) >> Error >> AsyncRx.single)
                 )
                 |> AsyncRx.showToast loadRootDirectoriesResponseToast
                 |> AsyncRx.map LoadChildDirectoriesResponse
@@ -261,7 +259,7 @@ let stream authHeader states msgs =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = "/api/child-directories"
-                        let data = List.rev path |> List.map Encode.string |> Encode.list
+                        let data = DirectoryPath.encode path
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
                     })
@@ -278,7 +276,7 @@ let stream authHeader states msgs =
                 msgs
                 |> AsyncRx.choose (function
                     | SelectDirectory path -> Some (loadChildDirectories path)
-                    | AddChildDirectory (name, path) -> Some (loadChildDirectories (name :: path))
+                    | AddChildDirectory (name, path) -> Some (loadChildDirectories (DirectoryPath.combine path [ name ]))
                     | _ -> None
                 )
                 |> AsyncRx.switchLatest
@@ -288,7 +286,7 @@ let stream authHeader states msgs =
             yield
                 msgs
                 |> AsyncRx.choose (function
-                    | AddChildDirectory (name, path) -> Some (SelectDirectory (name :: path))
+                    | AddChildDirectory (name, path) -> Some (SelectDirectory (DirectoryPath.combine path [ name ]))
                     | _ -> None
                 )
 
@@ -300,7 +298,7 @@ let stream authHeader states msgs =
                             Encode.object
                                 [
                                     "className", Encode.string data.ClassName
-                                    "path", Encode.tuple2 Encode.string (List.map Encode.string >> Encode.list) data.Path
+                                    "path", DirectoryPath.encode data.Path
                                 ]
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, requestProperties)

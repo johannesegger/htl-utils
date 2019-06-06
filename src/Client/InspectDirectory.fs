@@ -12,6 +12,7 @@ open Thoth.Elmish
 open Thoth.Fetch
 open Thoth.Json
 open Directories
+open Shared
 open Shared.InspectDirectory
 
 [<Fable.Core.StringEnum>]
@@ -39,8 +40,8 @@ type Model =
     }
 
 type Msg =
-    | SelectDirectory of string list
-    | LoadChildDirectoriesResponse of Result<string list * string list, string list * exn>
+    | SelectDirectory of DirectoryPath
+    | LoadChildDirectoriesResponse of Result<DirectoryPath * string list, DirectoryPath * exn>
     | LoadDirectoryInfoResponse of Result<DirectoryInfo, exn>
     | ApplyFilter of FilterId
     | ToggleAutoRefresh
@@ -69,7 +70,7 @@ let init =
     {
         Directory =
             {
-                Path = []
+                Path = DirectoryPath.empty
                 IsSelected = true
                 Children = NotLoadedDirectoryChildren
             }
@@ -96,7 +97,7 @@ let view model dispatch =
                 Button.Color (if directory.IsSelected then IsLink else NoColor)
                 Button.OnClick (fun _ev -> directory.Path |> SelectDirectory |> dispatch)
             ]
-            [ str (List.tryHead directory.Path |> Option.defaultValue "<none>") ]
+            [ str (DirectoryPath.getName directory.Path) ]
 
     let directoryView level directory =
         match directory.Children with
@@ -327,12 +328,12 @@ let stream authHeader states msgs =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = "/api/child-directories"
-                        let data = Encode.list []
+                        let data = DirectoryPath.encode DirectoryPath.empty
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
                     })
-                    |> AsyncRx.map (fun children -> Ok ([], children))
-                    |> AsyncRx.catch ((fun e -> [], e) >> Error >> AsyncRx.single)
+                    |> AsyncRx.map (fun children -> Ok (DirectoryPath.empty, children))
+                    |> AsyncRx.catch ((fun e -> DirectoryPath.empty, e) >> Error >> AsyncRx.single)
                 )
                 |> AsyncRx.showToast loadRootDirectoriesResponseToast
                 |> AsyncRx.map LoadChildDirectoriesResponse
@@ -341,7 +342,7 @@ let stream authHeader states msgs =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = "/api/child-directories"
-                        let data = List.rev path |> List.map Encode.string |> Encode.list
+                        let data = DirectoryPath.encode path
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
                     })
@@ -368,7 +369,7 @@ let stream authHeader states msgs =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = "/api/directory-info"
-                        let data = (List.map Encode.string >> Encode.list) (List.rev path)
+                        let data = DirectoryPath.encode path
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, DirectoryInfo.decode, requestProperties)
                     })

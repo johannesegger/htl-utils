@@ -12,6 +12,7 @@ type CreateDirectoriesErrorInfo =
       NotCreatedDirectories: CreateDirectoryErrorInfo list}
 
 type CreateStudentDirectoriesError =
+    | EmptyPath
     | InvalidBaseDirectory of string
     | GetStudentsError of Students.GetStudentsError
     | CreatingSomeDirectoriesFailed of CreateDirectoriesErrorInfo
@@ -24,7 +25,7 @@ let createStudentDirectories getStudents baseDirectory className = async {
             students
             |> Result.mapError GetStudentsError
     }
-    
+
     return
         students
         |> Result.bind (

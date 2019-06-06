@@ -6,11 +6,46 @@ open Thoth.Json
 open Thoth.Json.Net
 #endif
 
+type DirectoryPath = DirectoryPath of string list
+
+module DirectoryPath =
+    let empty =
+        DirectoryPath []
+
+    let getName (DirectoryPath path) =
+        List.head path
+
+    let combine (DirectoryPath path) children =
+        DirectoryPath (List.rev children @ path)
+
+    let isChildDirectory (DirectoryPath ``base``) (DirectoryPath child) =
+        let lengthDiff = List.length child - List.length ``base``
+        if lengthDiff >= 0 then
+            List.skip lengthDiff child = ``base``
+        else false
+        |> fun b -> printfn "%O is child of %O: %b" child ``base`` b; b
+
+    let isRoot (DirectoryPath path) =
+        List.isEmpty path
+
+    let getBase (DirectoryPath path) =
+        List.last path
+
+    let getNormalized (DirectoryPath path) = List.rev path
+
+    let decode : Decoder<_> =
+        Decode.list Decode.string
+        |> Decode.map DirectoryPath
+
+    let encode : Encoder<_> =
+        fun (DirectoryPath path) ->
+            (List.map Encode.string >> Encode.list) path
+
 module CreateStudentDirectories =
     type CreateDirectoriesData =
         {
             ClassName: string
-            Path: string * string list
+            Path: DirectoryPath
         }
 
 module InspectDirectory =
