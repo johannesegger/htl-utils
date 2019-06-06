@@ -2,6 +2,7 @@ module Authentication
 
 open Elmish
 open Elmish.Streams
+open Fable.Core
 open Fable.Core.JsInterop
 open Fable.FontAwesome
 open Fable.React
@@ -46,6 +47,9 @@ userAgentApplication.handleRedirectCallback(fun error response ->
     Browser.Dom.console.log("handleRedirectCallback", error, response)
 )
 
+[<Emit("$0.name === \"InteractionRequiredAuthError\"")>]
+let isInteractionRequiredAuthError (_ : exn) : bool = jsNative
+
 let getToken() = promise {
     let authParams = Fable.Core.JsInterop.createEmpty<Msal.AuthenticationParameters>
     authParams.scopes <- Some !![| appId |]
@@ -54,11 +58,13 @@ let getToken() = promise {
         return authResponse.accessToken
     with error ->
         try
-            // if error :? Msal.InteractionRequiredAuthError then
-            let! authResponse = userAgentApplication.acquireTokenPopup authParams
-            return authResponse.accessToken
-            // else
-            //     return reraise()
+            printfn "isInteractionRequiredAuthError %b" (isInteractionRequiredAuthError error)
+            if isInteractionRequiredAuthError error then
+                let! authResponse = userAgentApplication.acquireTokenPopup authParams
+                Browser.Dom.console.log("===== AuthResponse 2", authResponse)
+                return authResponse.accessToken
+            else
+                return raise error
         with _error ->
             return failwith "Please sign in using your Microsoft account."
 }
