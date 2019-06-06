@@ -315,7 +315,7 @@ let stream authHeader states msgs =
                     |> Toast.success
                 | Error (e: exn) ->
                     Toast.toast "Creating student directories" e.Message
-                    |> Toast.success
+                    |> Toast.error
             yield
                 msgs
                 |> AsyncRx.choose (function CreateDirectories data -> Some (createDirectories data) | _ -> None)
