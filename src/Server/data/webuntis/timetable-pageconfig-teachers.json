@@ -1,0 +1,32 @@
+{
+    "data": {
+        "elements": [
+            {
+                "type": 2,
+                "id": 1,
+                "name": "ABLD",
+                "forename": "David",
+                "longName": "ABLINGER",
+                "displayname": "ABLD",
+                "externKey": "",
+                "dids": [
+                    8
+                ],
+                "klasseId": null,
+                "klasseOrStudentgroupId": null,
+                "title": "MMag.",
+                "alternatename": null,
+                "classteacher": null,
+                "classteacher2": null,
+                "buildingId": null,
+                "restypeId": null,
+                "can": {
+                    "showWorktime": false,
+                    "editWorktime": false,
+                    "showAbsences": false
+                },
+                "capacity": 0
+            }
+        ]
+    }
+}

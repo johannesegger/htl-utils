@@ -19,6 +19,7 @@ type Tab =
     | CreateStudentDirectories
     | CreateStudentGroups
     | InspectDirectory
+    | AADGroups
 
 type Model =
     {
@@ -29,6 +30,7 @@ type Model =
         CreateStudentDirectories: CreateStudentDirectories.Model
         CreateStudentGroups: CreateStudentGroups.Model
         InspectDirectory: InspectDirectory.Model
+        AADGroups: AADGroups.Model
     }
 
 type Msg =
@@ -39,6 +41,7 @@ type Msg =
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
     | CreateStudentGroupsMsg of CreateStudentGroups.Msg
     | InspectDirectoryMsg of InspectDirectory.Msg
+    | AADGroupsMsg of AADGroups.Msg
 
 let update msg model =
     match msg with
@@ -56,6 +59,8 @@ let update msg model =
         { model with CreateStudentGroups = CreateStudentGroups.update msg model.CreateStudentGroups }
     | InspectDirectoryMsg msg ->
         { model with InspectDirectory = InspectDirectory.update msg model.InspectDirectory }
+    | AADGroupsMsg msg ->
+        { model with AADGroups = AADGroups.update msg model.AADGroups }
 
 let init() =
     let model =
@@ -67,6 +72,7 @@ let init() =
             CreateStudentDirectories = CreateStudentDirectories.init
             CreateStudentGroups = CreateStudentGroups.init
             InspectDirectory = InspectDirectory.init
+            AADGroups = AADGroups.init
         }
     model
 
@@ -79,6 +85,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
                 CreateStudentDirectories, "Create student directories", [ CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch) ]
                 CreateStudentGroups, "Create student groups", [ CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch) ]
                 InspectDirectory, "Inspect directory", [ InspectDirectory.view model.InspectDirectory (InspectDirectoryMsg >> dispatch) ]
+                AADGroups, "AAD Groups", [ AADGroups.view model.AADGroups (AADGroupsMsg >> dispatch) ]
             ]
         [ yield Tabs.tabs []
             [ for (tabItem, tabName, _tabView) in tabItems ->
@@ -145,6 +152,13 @@ let stream states msgs =
         )
         ||> InspectDirectory.stream authHeader
         |> AsyncRx.map InspectDirectoryMsg
+
+        (
+            states |> AsyncRx.map (fun m -> m.AADGroups),
+            msgs |> AsyncRx.choose (function AADGroupsMsg msg -> Some msg | _ -> None)
+        )
+        ||> AADGroups.stream authHeader
+        |> AsyncRx.map AADGroupsMsg
     ]
     |> AsyncRx.mergeSeq
 

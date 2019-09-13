@@ -12,7 +12,7 @@ open Thoth.Elmish
 open Thoth.Fetch
 open Thoth.Json
 open Directories
-open Shared
+open Shared.Common
 open Shared.InspectDirectory
 
 [<Fable.Core.StringEnum>]

@@ -49,65 +49,20 @@ let mapDbTeachers teacherImageDir dbContacts dbTeachers = async {
     return List.map (mapDbTeacher contacts photos) dbTeachers
 }
 
-let private retryGraphApiRequest (fn: 'a -> System.Threading.Tasks.Task<_>) arg =
-    Policy
-        .HandleInner<ServiceException>()
-        .WaitAndRetryAsync(
-            6,
-            Func<_, _, _, _>(fun (i: int) (ex: exn) ctx ->
-                ex :?> ServiceException |> Option.ofObj
-                |> Option.bind (fun p -> p.ResponseHeaders |> Option.ofObj)
-                |> Option.bind (fun p -> p.RetryAfter |> Option.ofObj) 
-                |> Option.bind (fun p -> p.Delta |> Option.ofNullable)
-                |> Option.defaultValue (TimeSpan.FromSeconds (pown 2. i))
-            ),
-            Func<_, _, _, _, _>(fun ex t i ctx -> System.Threading.Tasks.Task.CompletedTask))
-        .ExecuteAsync(fun () -> fn arg)
-    |> Async.AwaitTask
+let clearContacts (graphServiceClient: GraphServiceClient) = async {
+    let! existingContactIds = AAD.getContactIds graphServiceClient
 
-let rec readAll (initialRequest: 'req) (getItems: 'req -> System.Threading.Tasks.Task<'items>) (getNextRequest: 'items -> 'req) = async {
-    let rec fetchNextItems currentItems allItems = async {
-        match getNextRequest currentItems |> Option.ofObj with
-        | Some request ->
-            let! nextItems = retryGraphApiRequest getItems request
-            return!
-                nextItems
-                |> Seq.toList
-                |> List.append allItems
-                |> fetchNextItems nextItems
-        | None -> return allItems
-    }
-
-    let! initialItems = getItems initialRequest |> Async.AwaitTask
-    return! fetchNextItems initialItems (Seq.toList initialItems)
-}
-
-let clearContacts (graphApiClient: GraphServiceClient) = async {
-    let! existingContacts =
-        retryGraphApiRequest
-            (fun () ->
-                readAll
-                    (graphApiClient.Me.Contacts.Request().Select("id"))
-                    (fun r -> r.GetAsync())
-                    (fun items -> items.NextPageRequest)
-                |> Async.StartAsTask)
-            ()
-
-    List.length existingContacts
+    List.length existingContactIds
     |> printfn "Deleting existing contacts (%d)"
     
     do!
-        existingContacts
-        |> Seq.map (fun c ->
-            retryGraphApiRequest
-                (fun () -> graphApiClient.Me.Contacts.[c.Id].Request().DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
-                ()
-        )
+        existingContactIds
+        |> Seq.map (AAD.removeContact graphServiceClient)
         |> Async.Parallel
         |> Async.Ignore
 }
 
-let private addTeacherContacts (graphApiClient: GraphServiceClient) teachers = async {
+let private addTeacherContacts (graphServiceClient: GraphServiceClient) teachers = async {
     printfn "Adding teachers (%d)" (List.length teachers)
 
     let addContactInfos contactInfos contact =
@@ -142,7 +97,7 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) teachers = a
     do!
         teachers
         |> List.map (fun teacher -> async {
-            let contact =
+            let contactData =
                 let birthday =
                     teacher.Birthday
                     |> Option.map (fun date -> DateTimeOffset(date.Year, date.Month, date.Day, 0, 0, 0, TimeSpan.Zero))
@@ -157,18 +112,13 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) teachers = a
                 )
                 |> addContactInfos teacher.Contacts
             
-            let! contact =
-                retryGraphApiRequest
-                    (fun p -> graphApiClient.Me.Contacts.Request().AddAsync(p))
-                    contact
+            let! contact = AAD.addContact graphServiceClient contactData
 
             match teacher.PhotoPath with
             | Some photoPath ->
+                use photoStream = resizePhoto photoPath
                 do!
-                    use photoStream = resizePhoto photoPath
-                    retryGraphApiRequest
-                        (fun p -> graphApiClient.Me.Contacts.[contact.Id].Photo.Content.Request().PutAsync(p))
-                        photoStream
+                    AAD.setContactPhoto graphServiceClient contact.Id photoStream
                     |> Async.Ignore
             | None -> ()
         })
@@ -176,11 +126,8 @@ let private addTeacherContacts (graphApiClient: GraphServiceClient) teachers = a
         |> Async.Ignore
 }
 
-let private getBirthdayCalendarId (graphApiClient: GraphServiceClient) = async {
-    let! calendars =
-        retryGraphApiRequest
-            (fun () -> graphApiClient.Me.Calendars.Request().Select("id,name").GetAsync())
-            ()
+let private getBirthdayCalendarId (graphServiceClient: GraphServiceClient) = async {
+    let! calendars = AAD.getCalendars graphServiceClient
 
     return
         calendars
@@ -191,41 +138,29 @@ let private getBirthdayCalendarId (graphApiClient: GraphServiceClient) = async {
                 calendars
                 |> Seq.map (fun c -> c.Name)
                 |> String.concat ", "
-            failwithf "Birthday calendar not found. Found calendars (%d): %s" calendars.Count calendarNames
+            failwithf "Birthday calendar not found. Found calendars (%d): %s" (List.length calendars) calendarNames
         )
 }
 
 
-let private turnOffBirthdayReminders (graphApiClient: GraphServiceClient) = async {
-    let! birthdayCalendarId = getBirthdayCalendarId graphApiClient
-    let! birthdayEvents =
-        retryGraphApiRequest
-            (fun () ->
-                readAll
-                    (graphApiClient.Me.Calendars.[birthdayCalendarId].Events.Request())
-                    (fun r -> r.GetAsync())
-                    (fun items -> items.NextPageRequest)
-                |> Async.StartAsTask)
-            ()
+let private turnOffBirthdayReminders (graphServiceClient: GraphServiceClient) = async {
+    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient
+    let! birthdayEvents = AAD.getCalendarEvents graphServiceClient birthdayCalendarId
 
-    List.length birthdayEvents
-    |> printfn "Turning off reminders for all birthday events (%d)."
+    printfn "Turning off reminders for all birthday events (%d)." (List.length birthdayEvents)
 
     do!
         birthdayEvents
         |> Seq.map (fun event -> async {
             let event' = Event(IsReminderOn = Nullable<_> false)
-            return!
-                retryGraphApiRequest
-                    (fun p -> graphApiClient.Me.Calendars.[birthdayCalendarId].Events.[event.Id].Request().UpdateAsync(p))
-                    event'
+            return! AAD.updateCalendarEvent graphServiceClient birthdayCalendarId event.Id event'
         })
         |> Async.Parallel
         |> Async.Ignore
 }
 
-let import graphApiClient teachers = async {
-    do! clearContacts graphApiClient
-    do! addTeacherContacts graphApiClient teachers
-    do! turnOffBirthdayReminders graphApiClient
+let import graphServiceClient teachers = async {
+    do! clearContacts graphServiceClient
+    do! addTeacherContacts graphServiceClient teachers
+    do! turnOffBirthdayReminders graphServiceClient
 }

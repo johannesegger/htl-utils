@@ -1,5 +1,7 @@
 open System
 open System.IO
+open System.Net
+open System.Net.Http
 open System.Net.Http.Headers
 open System.Net.NetworkInformation
 open System.Security.Claims
@@ -15,7 +17,8 @@ open Giraffe
 open Giraffe.Serialization
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
-open Shared
+open Shared.AADGroups
+open Shared.Common
 open Shared.CreateStudentDirectories
 open Shared.InspectDirectory
 open WakeUp
@@ -222,44 +225,79 @@ let createStudentDirectories baseDirectories getStudents : HttpHandler =
                 ServerErrors.internalError (setBodyFromString message) next ctx
     }
 
-let getEnvVar name =
-    Environment.GetEnvironmentVariable name
+let getAADGroupUpdates clientApp : HttpHandler =
+    fun next ctx -> task {
+        let! graphServiceAccessToken = getGraphApiAccessToken clientApp ctx.User [| "group.readwrite.all" |]
+        let graphServiceClient = getGraphApiClient graphServiceAccessToken
+        let! aadGroups = AAD.getGrpGroups graphServiceClient
+        let! aadUsers = AAD.getUsers graphServiceClient
+        let! teachingData = task {
+            use stream = ctx.Request.Form.Files.["untis-teaching-data"].OpenReadStream()
+            use reader = new StreamReader(stream)
+            let! content = reader.ReadToEndAsync()
+            return Untis.TeachingData.ParseRows content
+        }
+        let classesWithTeachers = Untis.getClassesWithTeachers teachingData
+        let classTeachers = Untis.getClassTeachers teachingData
+        let! allTeachers = task {
+            use stream = ctx.Request.Form.Files.["sokrates-teachers"].OpenReadStream()
+            return! Sokrates.getTeachers stream
+        }
+        let groupUpdates =
+            let groups =
+                aadGroups
+                |> List.map (fun g -> (g.Id, { Group.Id = g.Id; Name = g.Name }))
+                |> Map.ofList
+            let users =
+                aadUsers
+                |> List.map (fun u -> (u.Id, { User.Id = u.Id; ShortName = u.ShortName; FirstName = u.FirstName; LastName = u.LastName }))
+                |> Map.ofList
+            AADGroups.getGroupUpdates aadGroups aadUsers classesWithTeachers classTeachers allTeachers
+            |> List.map (AADGroups.GroupUpdate.toDto users groups)
+        return! Successful.OK groupUpdates next ctx
+    }
 
-let getEnvVarOrFail name =
-    let value = getEnvVar name
-    if isNull value
-    then failwithf "Environment variable \"%s\" not set" name
-    else value
+let applyAADGroupUpdates clientApp : HttpHandler =
+    fun next ctx -> task {
+        let! input = ctx.BindJsonAsync<GroupUpdate list>()
+        let! graphServiceAccessToken = getGraphApiAccessToken clientApp ctx.User [| "group.readwrite.all" |]
+        let graphServiceClient = getGraphApiClient graphServiceAccessToken
+        let! appliedUpdates =
+            input
+            |> List.map AADGroups.GroupUpdate.fromDto
+            |> AADGroups.applyGroupUpdates graphServiceClient
+        return! Successful.OK () next ctx
+    }
 
 [<EntryPoint>]
 let main argv =
-    let sslCertPath = getEnvVar "SSL_CERT_PATH"
-    let sslCertPassword = getEnvVar "SSL_CERT_PASSWORD"
-    let connectionString = getEnvVarOrFail "SISDB_CONNECTION_STRING"
+    let sslCertPath = Environment.getEnvVar "SSL_CERT_PATH"
+    let sslCertPassword = Environment.getEnvVar "SSL_CERT_PASSWORD"
+    let connectionString = Environment.getEnvVarOrFail "SISDB_CONNECTION_STRING"
     let classList = Db.getClassList connectionString
     let dbStudents = Db.getStudents connectionString
     let students = Students.getStudents dbStudents
     let teachers =
         let dbTeachers = Db.getTeachers connectionString
         let dbContacts = Db.getContacts connectionString
-        let teacherImageDir = getEnvVarOrFail "TEACHER_IMAGE_DIR"
+        let teacherImageDir = Environment.getEnvVarOrFail "TEACHER_IMAGE_DIR"
         Teachers.mapDbTeachers teacherImageDir dbContacts dbTeachers
     let baseDirectories =
-        getEnvVarOrFail "BASE_DIRECTORIES"
+        Environment.getEnvVarOrFail "BASE_DIRECTORIES"
         |> String.split ";"
         |> Seq.chunkBySize 2
         |> Seq.map (fun s -> s.[0], s.[1])
         |> Map.ofSeq
-    let clientId = "9fb9b79b-6e66-4007-a94f-571d7e3b68c5"
     let clientApp =
-        ConfidentialClientApplicationBuilder.Create(clientId)
-            .WithAuthority("https://login.microsoftonline.com/htlvb.at/")
+        ConfidentialClientApplicationBuilder.Create(Environment.AAD.clientId)
+            .WithAuthority(Environment.AAD.authority)
             .WithRedirectUri("https://localhost:8080") // TODO adapt for production env?
-            .WithClientSecret(getEnvVarOrFail "APP_KEY")
+            .WithClientSecret(Environment.AAD.appKey)
             .Build()
 
     let requiresEggj : HttpHandler = requiresUser "EGGJ@htlvb.at"
     let requiresTeacher : HttpHandler = requiresGroup "2d1c8785-5350-4a3b-993c-62dc9bc30980"
+    let requiresAdmin : HttpHandler = requiresUser "admin@htlvb.at"
 
     let webApp = choose [
         GET >=> choose [
@@ -272,6 +310,8 @@ let main argv =
             route "/api/child-directories" >=> requiresEggj >=> getChildDirectories baseDirectories
             route "/api/directory-info" >=> requiresEggj >=> getDirectoryInfo baseDirectories
             route "/api/create-student-directories" >=> requiresEggj >=> createStudentDirectories baseDirectories students
+            route "/api/aad/group-updates" >=> requiresAdmin >=> getAADGroupUpdates clientApp
+            route "/api/aad/apply-group-updates" >=> requiresAdmin >=> applyAADGroupUpdates clientApp
         ]
     ]
 
@@ -297,6 +337,7 @@ let main argv =
             Extra.empty
             |> Extra.withCustom DirectoryInfo.encode DirectoryInfo.decode
             |> Extra.withCustom DirectoryPath.encode DirectoryPath.decode
+            |> Extra.withCustom GroupUpdate.encode GroupUpdate.decode
         services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
         services
             .AddAuthentication(fun config ->
@@ -304,8 +345,8 @@ let main argv =
                 config.DefaultChallengeScheme <- JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(fun config ->
                 Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII <- true
-                config.Audience <- clientId
-                config.Authority <- "https://login.microsoftonline.com/htlvb.at/"
+                config.Audience <- Environment.AAD.clientId
+                config.Authority <- Environment.AAD.authority
                 config.TokenValidationParameters.ValidateIssuer <- false
                 config.TokenValidationParameters.SaveSigninToken <- true
             ) |> ignore

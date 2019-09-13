@@ -19,6 +19,7 @@
         <Compile Include="CreateStudentDirectories.fs" />
         <Compile Include="CreateStudentGroups.fs" />
         <Compile Include="InspectDirectory.fs" />
+        <Compile Include="AADGroups.fs" />
         <Compile Include="Client.fs" />
     </ItemGroup>
     <Import Project="..\..\.paket\Paket.Restore.targets" />

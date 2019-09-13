@@ -1,0 +1,165 @@
+{
+    "data": {
+        "result": {
+            "data": {
+                "noDetails": false,
+                "elementIds": [
+                    116
+                ],
+                "elementPeriods": {
+                    "116": [
+                        {
+                            "id": 410602,
+                            "lessonId": 11889,
+                            "lessonNumber": 224995,
+                            "lessonCode": "UNTIS_ADDITIONAL",
+                            "lessonText": "",
+                            "periodText": "",
+                            "hasPeriodText": false,
+                            "date": 20190909,
+                            "startTime": 835,
+                            "endTime": 925,
+                            "elements": [
+                                {
+                                    "type": 1,
+                                    "id": 333,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                },
+                                {
+                                    "type": 2,
+                                    "id": 116,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                },
+                                {
+                                    "type": 3,
+                                    "id": 141,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                },
+                                {
+                                    "type": 4,
+                                    "id": 20,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                }
+                            ],
+                            "hasInfo": false,
+                            "hasOfficeHourRegistration": false,
+                            "code": 12,
+                            "cellState": "ADDITIONAL",
+                            "priority": 3,
+                            "is": {
+                                "additional": true,
+                                "event": false
+                            },
+                            "roomCapacity": 0,
+                            "studentCount": 0
+                        },
+                        {
+                            "id": 376893,
+                            "lessonId": 11502,
+                            "lessonNumber": 42100,
+                            "lessonCode": "UNTIS_LESSON",
+                            "lessonText": "",
+                            "periodText": "",
+                            "hasPeriodText": false,
+                            "date": 20190912,
+                            "startTime": 1505,
+                            "endTime": 1555,
+                            "elements": [
+                                {
+                                    "type": 1,
+                                    "id": 332,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                },
+                                {
+                                    "type": 2,
+                                    "id": 116,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                },
+                                {
+                                    "type": 3,
+                                    "id": 141,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                },
+                                {
+                                    "type": 4,
+                                    "id": 67,
+                                    "orgId": 0,
+                                    "missing": false,
+                                    "state": "REGULAR"
+                                }
+                            ],
+                            "hasInfo": false,
+                            "hasOfficeHourRegistration": false,
+                            "code": 0,
+                            "cellState": "STANDARD",
+                            "priority": 5,
+                            "is": {
+                                "standard": true,
+                                "event": false
+                            },
+                            "roomCapacity": 0,
+                            "studentCount": 0
+                        }
+                    ]
+                },
+                "elements": [
+                    {
+                        "type": 1,
+                        "id": 333,
+                        "name": "3AHWII",
+                        "longName": "3-WI-BETRIEBSINFORMATIK",
+                        "displayname": "3AHWII",
+                        "alternatename": "",
+                        "backColor": "#ffffff",
+                        "canViewTimetable": true,
+                        "roomCapacity": 0
+                    },
+                    {
+                        "type": 2,
+                        "id": 116,
+                        "name": "EGGJ",
+                        "canViewTimetable": true,
+                        "externKey": "",
+                        "roomCapacity": 0
+                    },
+                    {
+                        "type": 3,
+                        "id": 141,
+                        "name": "SOPK",
+                        "longName": "Soziale- und Personale Kompetenz",
+                        "displayname": "SOPK",
+                        "alternatename": "",
+                        "backColor": "#ffcaca",
+                        "canViewTimetable": false,
+                        "roomCapacity": 0
+                    },
+                    {
+                        "type": 4,
+                        "id": 20,
+                        "name": "EDV3",
+                        "longName": "EDV3",
+                        "displayname": "EDV3",
+                        "alternatename": "",
+                        "canViewTimetable": true,
+                        "roomCapacity": 21
+                    }
+                ]
+            },
+            "lastImportTimestamp": 1568376774743
+        }
+    }
+}

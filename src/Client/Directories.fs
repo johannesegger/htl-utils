@@ -1,6 +1,6 @@
 module Directories
 
-open Shared
+open Shared.Common
 
 type DirectoryChildren =
     | LoadedDirectoryChildren of Directory list

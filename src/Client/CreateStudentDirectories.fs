@@ -12,7 +12,7 @@ open Thoth.Fetch
 open Thoth.Json
 open Classes
 open Directories
-open Shared
+open Shared.Common
 open Shared.CreateStudentDirectories
 
 type Model =

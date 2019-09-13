@@ -6,10 +6,13 @@ let ofOption e = function
     | Some o -> Ok o
     | None -> Error e
 
+let toOption = function
+    | Ok v -> Some v
+    | Error _ -> None
+
 let bindAsync fn = function
     | Ok v -> fn v
     | Error v -> async { return Error v }
-
 
 let partition l =
     let folder t (a, b) =
@@ -18,6 +21,15 @@ let partition l =
         | Error item -> a, (item :: b)
 
     List.foldBack folder l ([], [])
+
+let sequence list =
+    let folder item state =
+        match item, state with
+        | Ok v, Ok vs -> Ok (v :: vs)
+        | Error e, Ok _ -> Error [ e ]
+        | Ok v, Error es -> Error es
+        | Error e, Error es -> Error (e :: es)
+    List.foldBack folder (Seq.toList list) (Ok [])
 
 // http://www.fssnip.net/7UJ/title/ResultBuilder-Computational-Expression
 type ResultBuilder() =

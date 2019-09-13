@@ -1,10 +1,12 @@
 group Server
     FSharp.Core
+    FSharp.Data
     Microsoft.AspNetCore
     Microsoft.AspNetCore.Authentication.AzureAD.UI
     Microsoft.AspNetCore.HttpsPolicy
     Microsoft.AspNetCore.StaticFiles
     Microsoft.Graph
+    Microsoft.Graph.Auth
     Microsoft.Identity.Client
     MySqlConnector
     Polly
