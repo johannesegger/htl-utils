@@ -3,7 +3,7 @@ module String
 open System
 
 let split (separator: string) (text: string) =
-    text.Split(separator, StringSplitOptions.None)
+    text.Split([| separator |], StringSplitOptions.None)
 
 let trySubstringFrom idx (text: string) =
     if idx <= text.Length
