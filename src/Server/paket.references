@@ -1,7 +1,9 @@
 group Server
     FSharp.Core
+    Microsoft.AspNetCore
     Microsoft.AspNetCore.Authentication.AzureAD.UI
     Microsoft.AspNetCore.HttpsPolicy
+    Microsoft.AspNetCore.StaticFiles
     Microsoft.Graph
     Microsoft.Identity.Client
     MySqlConnector
@@ -9,5 +11,3 @@ group Server
     SixLabors.ImageSharp
     Thoth.Json.Giraffe
     WakeOnLan
-    Microsoft.AspNetCore
-    Microsoft.AspNetCore.StaticFiles
