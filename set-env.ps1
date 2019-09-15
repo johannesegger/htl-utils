@@ -1,4 +1,4 @@
-$env:DOTNET_ROOT=Split-Path -Parent (Get-Command dotnet).Path
+$env:DOTNET_ROOT=Split-Path -Parent (scoop which dotnet)
 $env:SISDB_CONNECTION_STRING="Server=localhost;Port=8081;Database=sis2;User=root;Password=1234"
 $env:SSL_CERT_PATH="$pwd\test\ssl\cert.pfx"
 $env:SSL_CERT_PASSWORD="1234"
