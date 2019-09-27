@@ -84,7 +84,7 @@ let tryGetClassNamesFromTeacherTimetable (httpClient: HttpClient) (date: DateTim
 let tryGetClassNamesFromTeacherTimetableInInterval httpClient dateFrom dateTo teacherId =
     let rec fn date errors = async {
         if date > dateTo then return Error (List.rev errors)
-        else 
+        else
             match! tryGetClassNamesFromTeacherTimetable httpClient date teacherId with
             | Ok classNames -> return Ok classNames
             | Error e -> return! fn (date.AddDays 7.) (e :: errors)
@@ -96,7 +96,7 @@ let getClassesWithTeachers httpClient date = async {
     let! teachersWithClasses =
         teachers
         |> List.map (fun t -> async {
-            match! tryGetClassNamesFromTeacherTimetableInInterval httpClient date (date.AddMonths 1) t.Id with
+            match! tryGetClassNamesFromTeacherTimetableInInterval httpClient date (date.AddMonths 2) t.Id with
             | Ok classNames -> return Ok (t, classNames)
             | Error errors -> return Error (t, errors)
         })

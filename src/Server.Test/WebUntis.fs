@@ -44,10 +44,11 @@ let tests = testList "WebUntis" [
             use httpClient = new HttpClient(handler)
             return! WebUntis.getTeachers httpClient date
         }
+        let teacher = teachers |> List.find (fun t -> String.equalsCaseInsensitive t.ShortName "eggj")
         let! classNames = async {
             use handler = new HttpClientHandler(CookieContainer = cookieContainer)
             use httpClient = new HttpClient(handler)
-            return! WebUntis.tryGetClassNamesFromTeacherTimetable httpClient date (List.head teachers).Id
+            return! WebUntis.tryGetClassNamesFromTeacherTimetable httpClient date teacher.Id
         }
         Expect.isOk classNames "Couldn't get class names"
         Expect.isNonEmpty (classNames |> Result.toOption |> Option.defaultValue Set.empty) "Class names are empty"
@@ -66,10 +67,11 @@ let tests = testList "WebUntis" [
             use httpClient = new HttpClient(handler)
             return! WebUntis.getTeachers httpClient date
         }
+        let teacher = teachers |> List.find (fun t -> String.equalsCaseInsensitive t.ShortName "eggj")
         let! classNames = async {
             use handler = new HttpClientHandler(CookieContainer = cookieContainer)
             use httpClient = new HttpClient(handler)
-            return! WebUntis.tryGetClassNamesFromTeacherTimetable httpClient date (List.head teachers).Id
+            return! WebUntis.tryGetClassNamesFromTeacherTimetable httpClient date teacher.Id
         }
         Expect.isError classNames "Unexpectedly got class names"
     }
@@ -87,10 +89,11 @@ let tests = testList "WebUntis" [
             use httpClient = new HttpClient(handler)
             return! WebUntis.getTeachers httpClient date
         }
+        let teacher = teachers |> List.find (fun t -> String.equalsCaseInsensitive t.ShortName "eggj")
         let! classNames = async {
             use handler = new HttpClientHandler(CookieContainer = cookieContainer)
             use httpClient = new HttpClient(handler)
-            return! WebUntis.tryGetClassNamesFromTeacherTimetableInInterval httpClient date (DateTime(2019, 10, 07)) (List.head teachers).Id
+            return! WebUntis.tryGetClassNamesFromTeacherTimetableInInterval httpClient date (DateTime(2019, 10, 07)) teacher.Id
         }
         Expect.isOk classNames "Couldn't get class names"
         Expect.isNonEmpty (classNames |> Result.toOption |> Option.defaultValue Set.empty) "Class names are empty"
