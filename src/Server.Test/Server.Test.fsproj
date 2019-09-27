@@ -8,6 +8,7 @@
     <Compile Include="AAD.fs" />
     <Compile Include="Untis.fs" />
     <Compile Include="WebUntis.fs" />
+    <Compile Include="FinalTheses.fs" />
     <Compile Include="AADGroups.fs" />
     <Compile Include="Thoth.fs" />
     <Compile Include="Program.fs" />

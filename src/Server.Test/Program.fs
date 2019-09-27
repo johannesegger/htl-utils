@@ -4,6 +4,7 @@ let tests = testList "All" [
     AAD.tests
     Untis.tests
     WebUntis.tests
+    FinalTheses.tests
     AADGroups.tests
     Thoth.tests
 ]

@@ -18,6 +18,7 @@
         <Compile Include="Untis.fs" />
         <Compile Include="WebUntis.fs" />
         <Compile Include="Sokrates.fs" />
+        <Compile Include="FinalTheses.fs" />
         <Compile Include="AADGroups.fs" />
         <Compile Include="Db.fs" />
         <Compile Include="WakeUp.fs" />
