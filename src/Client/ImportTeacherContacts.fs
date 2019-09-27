@@ -75,7 +75,8 @@ let stream authHeader model msgs =
                     let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                     return! Fetch.post("/api/teachers/import-contacts", Encode.nil, requestProperties)
                 })
-                |> AsyncRx.map ignore
+                |> AsyncRx.map (ignore >> Ok)
+                |> AsyncRx.catch (Error >> AsyncRx.single)
             )
 
         let responseToast response =
@@ -91,8 +92,6 @@ let stream authHeader model msgs =
         |> AsyncRx.choose (function | Import -> Some import | _ -> None)
         |> AsyncRx.showToast (fun _ -> importStartedToast)
         |> AsyncRx.switchLatest
-        |> AsyncRx.map (ignore >> Ok)
-        |> AsyncRx.catch (Error >> AsyncRx.single)
         |> AsyncRx.showToast responseToast
         |> AsyncRx.map ImportResponse
     | None, Disabled
