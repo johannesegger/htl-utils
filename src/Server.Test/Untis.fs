@@ -30,7 +30,7 @@ let tests = testList "Untis" [
             |> Set.ofList
         Expect.equal classesWithTeachers expected "Classes with teachers don't match"
 
-    ftestCase "Get class teachers" <| fun () ->
+    testCase "Get class teachers" <| fun () ->
         let classTeachers = Untis.TeachingData.ParseRows untisExportData |> Untis.getClassTeachers
         let expected =
             [
