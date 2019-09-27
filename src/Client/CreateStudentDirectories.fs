@@ -79,32 +79,7 @@ let view model dispatch =
         | NotLoadedClassList ->
             Progress.progress [ Progress.Color IsInfo ] []
         | FailedToLoadClassList ->
-            Notification.notification [ Notification.Color IsDanger ]
-                [
-                    Level.level []
-                        [
-                            Level.left []
-                                [
-                                    Level.item []
-                                        [
-                                            Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
-                                            span [] [ str "Error while loading class list" ]
-                                        ]
-                                    Level.item []
-                                        [
-                                            Button.button
-                                                [
-                                                    Button.Color IsSuccess
-                                                    Button.OnClick (fun _ev -> dispatch LoadClassList)
-                                                ]
-                                                [
-                                                    Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
-                                                    span [] [ str "Retry" ]
-                                                ]
-                                        ]
-                                ]
-                        ]
-                ]
+            Views.errorWithRetryButton "Error while loading class list" (fun () -> dispatch LoadClassList)
         | LoadedClassList classList ->
             Container.container []
                 [ for group in classList ->
@@ -127,8 +102,10 @@ let view model dispatch =
 
     let directoryView level directory =
         match directory.Children with
-        | NotLoadedDirectoryChildren // TODO show progress bar
-        | FailedToLoadDirectoryChildren -> None // TODO show error and retry button
+        | NotLoadedDirectoryChildren ->
+            Progress.progress [ Progress.Color IsInfo ] []
+        | FailedToLoadDirectoryChildren ->
+            Views.errorWithRetryButton "Error while loading directory children" (fun () -> dispatch (SelectDirectory directory.Path))
         | LoadedDirectoryChildren children ->
             Container.container []
                 [ if level > 0 then
@@ -146,56 +123,32 @@ let view model dispatch =
                                     dispatch (AddChildDirectory (name, directory.Path))) ]
                                 [ Icon.icon [] [ Fa.i [ Fa.Solid.Plus ] [] ] ] ] ]
                   yield Button.list [] [ yield! List.map directoryLevelItem children ] ]
-            |> Some
 
     let isAnyDirectorySelected =
         getSelectedDirectory model.Directory
         |> Option.map ((fun d -> d.Path) >> DirectoryPath.isRoot >> not)
         |> Option.defaultValue false
 
-    Container.container []
-        [ yield classListView
-          yield Divider.divider []
-          match model.Directory.Children with
-          | LoadedDirectoryChildren _ ->
+    Container.container [] [
+        yield classListView
+
+        yield Divider.divider []
+
+        match model.Directory.Children with
+        | LoadedDirectoryChildren _ ->
             yield!
                 mapDirectory directoryView model.Directory
-                |> List.choose id
                 |> List.intersperse (Divider.divider [])
-          | NotLoadedDirectoryChildren ->
+        | NotLoadedDirectoryChildren ->
             yield Notification.notification [ Notification.Color IsWarning ]
                 [ Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
                   span [] [ str "Sign in to view directories" ] ]
-          | FailedToLoadDirectoryChildren ->
-            yield
-                Notification.notification [ Notification.Color IsDanger ]
-                    [
-                        Level.level []
-                            [
-                                Level.left []
-                                    [
-                                        Level.item []
-                                            [
-                                                Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
-                                                span [] [ str "Error while loading directory children" ]
-                                            ]
-                                        Level.item []
-                                            [
-                                                Button.button
-                                                    [
-                                                        Button.Color IsSuccess
-                                                        Button.OnClick (fun _ev -> dispatch (SelectDirectory model.Directory.Path))
-                                                    ]
-                                                    [
-                                                        Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
-                                                        span [] [ str "Retry" ]
-                                                    ]
-                                            ]
-                                    ]
-                            ]
-                    ]
-          yield Divider.divider []
-          yield Button.button
+        | FailedToLoadDirectoryChildren ->
+            yield Views.errorWithRetryButton "Error while loading directory children" (fun () -> dispatch (SelectDirectory model.Directory.Path))
+
+        yield Divider.divider []
+
+        yield Button.button
             [
                 yield Button.Color IsSuccess
                 yield Button.Disabled (not isAnyDirectorySelected || model.SelectedClass.IsNone)
@@ -203,8 +156,10 @@ let view model dispatch =
                 | Some selectedDirectory, Some className ->
                     let data = { ClassName = className; Path = selectedDirectory.Path }
                     yield Button.OnClick (fun _ev -> dispatch (CreateDirectories data))
-                | _ -> () ]
-            [ str "Create" ] ]
+                | _ -> ()
+            ]
+            [ str "Create" ]
+    ]
 
 let stream authHeader states msgs =
     authHeader

@@ -123,32 +123,7 @@ let view model dispatch =
         | NotLoadedClassList ->
             Progress.progress [ Progress.Color IsInfo ] []
         | FailedToLoadClassList ->
-            Notification.notification [ Notification.Color IsDanger ]
-                [
-                    Level.level []
-                        [
-                            Level.left []
-                                [
-                                    Level.item []
-                                        [
-                                            Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
-                                            span [] [ str "Error while loading class list" ]
-                                        ]
-                                    Level.item []
-                                        [
-                                            Button.button
-                                                [
-                                                    Button.Color IsSuccess
-                                                    Button.OnClick (fun _ev -> dispatch LoadClassList)
-                                                ]
-                                                [
-                                                    Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
-                                                    span [] [ str "Retry" ]
-                                                ]
-                                        ]
-                                ]
-                        ]
-                ]
+            Views.errorWithRetryButton "Error while loading class list" (fun () -> dispatch LoadClassList)
         | LoadedClassList classList ->
             Container.container []
                 [ for group in classList ->

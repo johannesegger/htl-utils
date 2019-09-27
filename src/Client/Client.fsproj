@@ -10,6 +10,7 @@
         <Compile Include="List.fs" />
         <Compile Include="Msal.fs" />
         <Compile Include="Toast.fs" />
+        <Compile Include="Views.fs" />
         <Compile Include="Authentication.fs" />
         <Compile Include="Classes.fs" />
         <Compile Include="Directories.fs" />
