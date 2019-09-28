@@ -199,7 +199,8 @@ let createGroup (graphServiceClient: GraphServiceClient) name = async {
             MailEnabled = Nullable true,
             MailNickname = name,
             SecurityEnabled = Nullable true,
-            GroupTypes = [ "Unified" ]
+            GroupTypes = [ "Unified" ],
+            Visibility = "Private"
         )
     return! retryRequest (graphServiceClient.Groups.Request().AddAsync) group
 }
