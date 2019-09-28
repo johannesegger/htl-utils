@@ -75,7 +75,7 @@ let calculateSingleGroupUpdates aadGroups groupName memberIds =
     | None ->
         Some (CreateGroup (groupName, memberIds))
 
-let calculateAllGroupUpdates classesWithTeacherIds classTeacherIds allTeacherIds aadGroups =
+let calculateAllGroupUpdates classesWithTeacherIds classTeacherIds allTeacherIds finalThesesMentorIds aadGroups =
     let getGroupName = Class.toString >> sprintf "GrpLehrer%s"
     [
         yield!
@@ -86,11 +86,12 @@ let calculateAllGroupUpdates classesWithTeacherIds classTeacherIds allTeacherIds
 
         yield! calculateSingleGroupUpdates aadGroups "GrpKV" classTeacherIds |> Option.toList
         yield! calculateSingleGroupUpdates aadGroups "GrpLehrer" allTeacherIds |> Option.toList
+        yield! calculateSingleGroupUpdates aadGroups "GrpDA-Betreuer" finalThesesMentorIds |> Option.toList
 
         let desiredGroupNames =
             List.concat [
                 classesWithTeacherIds |> List.map (fst >> getGroupName)
-                [ "GrpKV"; "GrpLehrer" ]
+                [ "GrpKV"; "GrpLehrer"; "GrpDA-Betreuer" ]
             ]
         yield!
             aadGroups
@@ -102,28 +103,35 @@ let calculateAllGroupUpdates classesWithTeacherIds classTeacherIds allTeacherIds
             |> List.map (fun g -> DeleteGroup g.Id)
     ]
 
-let private lookupTeacherId aadUsers teacherShortName =
+let private lookupTeacherId (aadUsers: AAD.User list) isMatch =
     aadUsers
-    |> List.tryFind (fun (aadUser: AAD.User) ->
-        String.equalsCaseInsensitive aadUser.ShortName teacherShortName
-    )
+    |> List.tryFind isMatch
     |> Option.map (fun u -> u.Id)
 
+let private lookupTeacherIdFromShortName aadUsers teacherShortName =
+    lookupTeacherId aadUsers (fun u -> String.equalsCaseInsensitive u.ShortName teacherShortName)
+
+let private lookupTeacherIdFromMailAddress aadUsers teacherMailAddress =
+    lookupTeacherId aadUsers (fun u -> u.MailAddresses |> List.exists (String.equalsCaseInsensitive teacherMailAddress))
+
 // TODO combine `classesWithTeachers`, `classTeachers` and `allTeachers` to a single list
-let getGroupUpdates aadGroups aadUsers classesWithTeachers classTeachers allTeachers =
+let getGroupUpdates aadGroups aadUsers classesWithTeachers classTeachers allTeachers finalThesesMentors =
     let classesWithTeacherIds =
         classesWithTeachers
-        |> Seq.map (Tuple.mapSnd (Seq.choose (lookupTeacherId aadUsers) >> Seq.toList))
+        |> Seq.map (Tuple.mapSnd (Seq.choose (lookupTeacherIdFromShortName aadUsers) >> Seq.toList))
         |> Seq.toList
     let classTeacherIds =
         classTeachers
         |> Map.toList
         |> List.map snd
-        |> List.choose (lookupTeacherId aadUsers)
+        |> List.choose (lookupTeacherIdFromShortName aadUsers)
     let allTeacherIds =
         allTeachers
-        |> List.choose (fun (t: Sokrates.Teacher) -> lookupTeacherId aadUsers t.ShortName)
-    calculateAllGroupUpdates classesWithTeacherIds classTeacherIds allTeacherIds aadGroups
+        |> List.choose (fun (t: Sokrates.Teacher) -> lookupTeacherIdFromShortName aadUsers t.ShortName)
+    let finalThesesMentorIds =
+        finalThesesMentors
+        |> List.choose (fun (m: FinalTheses.Mentor) -> lookupTeacherIdFromMailAddress aadUsers m.MailAddress)
+    calculateAllGroupUpdates classesWithTeacherIds classTeacherIds allTeacherIds finalThesesMentorIds aadGroups
 
 let applyGroupUpdate graphServiceClient update = async {
     match update with

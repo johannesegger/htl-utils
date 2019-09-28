@@ -243,6 +243,14 @@ let getAADGroupUpdates clientApp : HttpHandler =
             use stream = ctx.Request.Form.Files.["sokrates-teachers"].OpenReadStream()
             return! Sokrates.getTeachers stream
         }
+        let! finalThesesMentors = task {
+            use stream = ctx.Request.Form.Files.["final-theses-mentors"].OpenReadStream()
+            use reader = new StreamReader(stream) // TODO use Windows-1252 encoding - https://stackoverflow.com/q/49215791/1293659
+            let! content = reader.ReadToEndAsync()
+            return
+                FinalTheses.Mentors.ParseRows content
+                |> FinalTheses.getMentors
+        }
         let groupUpdates =
             let groups =
                 aadGroups
@@ -252,7 +260,7 @@ let getAADGroupUpdates clientApp : HttpHandler =
                 aadUsers
                 |> List.map (fun u -> (u.Id, { User.Id = u.Id; ShortName = u.ShortName; FirstName = u.FirstName; LastName = u.LastName }))
                 |> Map.ofList
-            AADGroups.getGroupUpdates aadGroups aadUsers classesWithTeachers classTeachers allTeachers
+            AADGroups.getGroupUpdates aadGroups aadUsers classesWithTeachers classTeachers allTeachers finalThesesMentors
             |> List.map (AADGroups.GroupUpdate.toDto users groups)
         return! Successful.OK groupUpdates next ctx
     }

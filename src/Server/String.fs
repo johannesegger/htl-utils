@@ -14,4 +14,8 @@ let toLower (text: string) =
     text.ToLower()
 
 let equalsCaseInsensitive (a: string) (b: string) =
-    a.Equals(b, StringComparison.InvariantCultureIgnoreCase)
+    if isNull a then isNull b
+    else a.Equals(b, StringComparison.InvariantCultureIgnoreCase)
+
+let startsWithCaseInsensitive (value: string) (text: string) =
+    text.StartsWith(value, StringComparison.InvariantCultureIgnoreCase)

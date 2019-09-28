@@ -90,12 +90,14 @@ type Model =
     {
         UntisTeachingDataFile: File option
         SokratesTeachersFile: File option
+        FinalThesesMentorsFile: File option
         GroupUpdates: GroupUpdates
     }
 
 type Msg =
     | SetUntisTeachingDataFile of Browser.Types.File
     | SetSokratesTeachersFile of Browser.Types.File
+    | SetFinalThesesMentorsFile of Browser.Types.File
     | LoadGroupUpdates
     | LoadGroupUpdatesResponse of Result<Shared.AADGroups.GroupUpdate list, exn>
     | ToggleEnableGroupUpdate of GroupUpdate
@@ -138,6 +140,8 @@ let rec update msg model =
         { model with UntisTeachingDataFile = Some { Name = file.name; JSFile = file } }
     | SetSokratesTeachersFile file ->
         { model with SokratesTeachersFile = Some { Name = file.name; JSFile = file } }
+    | SetFinalThesesMentorsFile file ->
+        { model with FinalThesesMentorsFile = Some { Name = file.name; JSFile = file } }
     | LoadGroupUpdates -> { model with GroupUpdates = LoadingGroupUpdates }
     | LoadGroupUpdatesResponse (Ok groupUpdates) ->
         { model with GroupUpdates = LoadedGroupUpdates (Drafting, List.map GroupUpdate.fromDto groupUpdates) }
@@ -171,6 +175,7 @@ let init =
     {
         UntisTeachingDataFile = None
         SokratesTeachersFile = None
+        FinalThesesMentorsFile = None
         GroupUpdates = NotLoadedGroupUpdates
     }
 
@@ -206,10 +211,13 @@ let view model dispatch =
                 fileInput "Choose Sokrates teachers file..." (model.SokratesTeachersFile |> Option.map (fun t -> t.Name) |> Option.defaultValue "") SetSokratesTeachersFile
             ]
             Field.div [] [
+                fileInput "Choose final theses mentors file..." (model.FinalThesesMentorsFile |> Option.map (fun t -> t.Name) |> Option.defaultValue "") SetFinalThesesMentorsFile
+            ]
+            Field.div [] [
                 Control.div [] [
                     Button.button
                         [
-                            Button.Disabled (isLocked || model.UntisTeachingDataFile.IsNone || model.SokratesTeachersFile.IsNone)
+                            Button.Disabled (isLocked || model.UntisTeachingDataFile.IsNone || model.SokratesTeachersFile.IsNone || model.FinalThesesMentorsFile.IsNone)
                             Button.IsLoading (model.GroupUpdates = LoadingGroupUpdates)
                             Button.OnClick (fun e -> dispatch LoadGroupUpdates)
                         ]
@@ -334,13 +342,14 @@ let stream authHeader states msgs =
                     Toast.toast "Loading AAD group updates failed" e.Message
                     |> Toast.error
 
-            let loadGroupUpdates (untisTeachingDataFile: Browser.Types.File) (sokratesTeachersFile: Browser.Types.File) =
+            let loadGroupUpdates (untisTeachingDataFile: Browser.Types.File) (sokratesTeachersFile: Browser.Types.File) (finalThesesMentorsFile: Browser.Types.File) =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = sprintf "/api/aad/group-updates"
                         let formData = FormData.Create()
                         formData.append("untis-teaching-data", untisTeachingDataFile)
                         formData.append("sokrates-teachers", sokratesTeachersFile)
+                        formData.append("final-theses-mentors", finalThesesMentorsFile)
                         let requestProperties = [
                             Method HttpMethod.POST
                             Fetch.requestHeaders [ authHeader ]
@@ -358,8 +367,8 @@ let stream authHeader states msgs =
                 msgs
                 |> AsyncRx.withLatestFrom states
                 |> AsyncRx.choose (function
-                    | (LoadGroupUpdates, { UntisTeachingDataFile = Some untisTeachingDataFile; SokratesTeachersFile = Some sokratesTeachersFile }) ->
-                        Some (loadGroupUpdates untisTeachingDataFile.JSFile sokratesTeachersFile.JSFile)
+                    | (LoadGroupUpdates, { UntisTeachingDataFile = Some untisTeachingDataFile; SokratesTeachersFile = Some sokratesTeachersFile; FinalThesesMentorsFile = Some finalThesesMentorsFile }) ->
+                        Some (loadGroupUpdates untisTeachingDataFile.JSFile sokratesTeachersFile.JSFile finalThesesMentorsFile.JSFile)
                     | _ -> None)
                 |> AsyncRx.switchLatest
                 |> AsyncRx.showToast loadGroupUpdatesResponseToast

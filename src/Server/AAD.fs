@@ -119,15 +119,23 @@ type User = {
     ShortName: string
     FirstName: string
     LastName: string
+    MailAddresses: string list
 }
 
 module User =
+    let internal fields = "id,userPrincipalName,givenName,surname,proxyAddresses"
     let toDomain (user: Microsoft.Graph.User) =
+        let tryGetMailAddressFromProxyAddress (proxyAddress: string) =
+            let prefix = "smtp:"
+            if String.startsWithCaseInsensitive prefix proxyAddress
+            then Some (proxyAddress.Substring prefix.Length)
+            else None
         {
             Id = UserId user.Id
             ShortName = trimEMailAddressDomain user.UserPrincipalName
             FirstName = user.GivenName
             LastName = user.Surname
+            MailAddresses = user.ProxyAddresses |> Seq.choose tryGetMailAddressFromProxyAddress |> Seq.toList
         }
 
 type Group = {
@@ -142,7 +150,7 @@ let loadGroups (graphServiceClient: GraphServiceClient) graphGroups =
     |> Seq.map (fun (g: Microsoft.Graph.Group) -> async {
         let! members =
             readAll
-                (graphServiceClient.Groups.[g.Id].Members.Request())
+                (graphServiceClient.Groups.[g.Id].Members.Request().Select(User.fields))
                 (fun r -> r.GetAsync())
                 (fun items -> items.NextPageRequest)
         return
@@ -184,7 +192,7 @@ let getGrpGroups (graphServiceClient: GraphServiceClient) = async {
 let getUsers (graphServiceClient: GraphServiceClient) = async {
     let! users =
         readAll
-            (graphServiceClient.Users.Request())
+            (graphServiceClient.Users.Request().Select(User.fields))
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
     return
