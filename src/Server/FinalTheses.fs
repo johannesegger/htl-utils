@@ -4,7 +4,7 @@ open FSharp.Data
 
 [<Literal>]
 let MentorsDataPath = __SOURCE_DIRECTORY__ + "/data/final-theses/mentors.csv"
-type Mentors = CsvProvider<MentorsDataPath, ";">
+type Mentors = CsvProvider<MentorsDataPath, Separators = ";">
 
 type Mentor = {
     FirstName: string
