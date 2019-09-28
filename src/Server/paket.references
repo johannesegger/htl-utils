@@ -11,5 +11,6 @@ group Server
     MySqlConnector
     Polly
     SixLabors.ImageSharp
+    System.Text.Encoding.CodePages
     Thoth.Json.Giraffe
     WakeOnLan

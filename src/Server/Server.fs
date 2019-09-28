@@ -21,9 +21,12 @@ open Shared.AADGroups
 open Shared.Common
 open Shared.CreateStudentDirectories
 open Shared.InspectDirectory
+open System.Text
 open WakeUp
 open Students
 open StudentDirectories
+
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)
 
 let publicPath = Path.GetFullPath "../Client/public"
 
@@ -245,7 +248,7 @@ let getAADGroupUpdates clientApp : HttpHandler =
         }
         let! finalThesesMentors = task {
             use stream = ctx.Request.Form.Files.["final-theses-mentors"].OpenReadStream()
-            use reader = new StreamReader(stream) // TODO use Windows-1252 encoding - https://stackoverflow.com/q/49215791/1293659
+            use reader = new StreamReader(stream, Encoding.GetEncoding 1252)
             let! content = reader.ReadToEndAsync()
             return
                 FinalTheses.Mentors.ParseRows content
