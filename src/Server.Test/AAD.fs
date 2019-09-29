@@ -52,4 +52,12 @@ let tests = testList "AAD" [
         Expect.exists users (fun m -> not <| String.IsNullOrEmpty m.FirstName) "All members must have a first name"
         Expect.exists users (fun m -> not <| String.IsNullOrEmpty m.LastName) "All members must have a last name"
     }
+
+    ptestCaseAsync "Create group" <| async {
+        let! authProvider = authProvider
+        let graphServiceClient = GraphServiceClient(authProvider)
+        let! group = AAD.createGroup graphServiceClient "test"
+        do! AAD.deleteGroup graphServiceClient (GroupId group.Id)
+        Expect.equal group.AutoSubscribeNewMembers (Nullable true) "AutoSubscribeNewMembers should be `true`"
+    }
 ]

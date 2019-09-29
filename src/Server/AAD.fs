@@ -210,7 +210,9 @@ let createGroup (graphServiceClient: GraphServiceClient) name = async {
             GroupTypes = [ "Unified" ],
             Visibility = "Private"
         )
-    return! retryRequest (graphServiceClient.Groups.Request().AddAsync) group
+    let! group = retryRequest (graphServiceClient.Groups.Request().AddAsync) group
+    let groupUpdate = Group(AutoSubscribeNewMembers = Nullable true)
+    return! retryRequest (graphServiceClient.Groups.[group.Id].Request().UpdateAsync) groupUpdate
 }
 
 let deleteGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) =
