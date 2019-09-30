@@ -100,20 +100,25 @@ type Msg =
     | SetFinalThesesMentorsFile of Browser.Types.File
     | LoadGroupUpdates
     | LoadGroupUpdatesResponse of Result<Shared.AADGroups.GroupUpdate list, exn>
+    | SelectAllUpdates of bool
     | ToggleEnableGroupUpdate of GroupUpdate
     | ToggleEnableMemberUpdate of GroupUpdate * UserUpdate
     | ApplyGroupUpdates
     | ApplyGroupUpdatesResponse of Result<unit, exn>
 
 let rec update msg model =
-    let updateGroupUpdate groupUpdate fn =
+    let updateGroupUpdates isMatch fn =
         match model.GroupUpdates with
         | LoadedGroupUpdates (Drafting, groupUpdates) ->
             let groupUpdates' =
                 groupUpdates
-                |> List.map (fun p -> if p = groupUpdate then fn p else p)
+                |> List.map (fun p -> if isMatch p then fn p else p)
             { model with GroupUpdates = LoadedGroupUpdates (Drafting, groupUpdates') }
         | _ -> model
+
+    let updateGroupUpdate groupUpdate fn =
+        updateGroupUpdates ((=) groupUpdate) fn
+
     let updateMemberUpdate groupUpdate memberUpdate fn =
         updateGroupUpdate groupUpdate (fun groupUpdate ->
             let updateMemberUpdate memberUpdates fn =
@@ -147,6 +152,8 @@ let rec update msg model =
         { model with GroupUpdates = LoadedGroupUpdates (Drafting, List.map GroupUpdate.fromDto groupUpdates) }
     | LoadGroupUpdatesResponse (Error ex) ->
         { model with GroupUpdates = FailedToLoadGroupUpdates }
+    | SelectAllUpdates value ->
+        updateGroupUpdates (fun _ -> true) (fun p -> { p with IsEnabled = value })
     | ToggleEnableGroupUpdate groupUpdate ->
         updateGroupUpdate groupUpdate (fun p -> { p with IsEnabled = not p.IsEnabled })
     | ToggleEnableMemberUpdate (groupUpdate, memberUpdate) ->
@@ -226,12 +233,29 @@ let view model dispatch =
             ]
         ]
 
-    let groupUpdate groupUpdatesState groupUpdateModel =
-        let isLocked =
-            match groupUpdatesState with
-            | Drafting -> false
-            | Applying
-            | Applied -> true
+    let bulkOperations isLocked =
+        Button.list [] [
+            Button.button
+                [
+                    Button.Disabled isLocked
+                    Button.OnClick (fun e -> dispatch (SelectAllUpdates true))
+                ]
+                [
+                    Icon.icon [] [ Fa.i [ Fa.Solid.CheckSquare ] [] ]
+                    span [] [ str "Select all group updates" ]
+                ]
+            Button.button
+                [
+                    Button.Disabled isLocked
+                    Button.OnClick (fun e -> dispatch (SelectAllUpdates false))
+                ]
+                [
+                    Icon.icon [] [ Fa.i [ Fa.Regular.CheckSquare ] [] ]
+                    span [] [ str "Unselect all group updates" ]
+                ]
+        ]
+
+    let groupUpdate isLocked groupUpdateModel =
         let heading title icon color =
             Panel.heading [] [
                 Button.button
@@ -293,9 +317,21 @@ let view model dispatch =
         | NotLoadedGroupUpdates
         | LoadingGroupUpdates -> None
         | FailedToLoadGroupUpdates ->
-            Some [ Views.errorWithRetryButton "Error while loading group updates" (fun () -> dispatch LoadGroupUpdates) ]
+            Section.section [] [ Views.errorWithRetryButton "Error while loading group updates" (fun () -> dispatch LoadGroupUpdates) ]
+            |> Some
         | LoadedGroupUpdates (state, updates) ->
-            List.map (groupUpdate state) updates
+            let isLocked =
+                match state with
+                | Drafting -> false
+                | Applying
+                | Applied -> true
+            Section.section [] [
+                yield bulkOperations isLocked
+                yield!
+                    updates
+                    |> List.map (groupUpdate isLocked)
+                    |> List.intersperse (Divider.divider [])
+            ]
             |> Some
 
     let saveButton =
@@ -321,10 +357,7 @@ let view model dispatch =
 
     Container.container [] [
         yield form
-        yield!
-            updates
-            |> Option.map (List.intersperse (Divider.divider []) >> Section.section [])
-            |> Option.toList
+        yield! Option.toList updates
         yield! Option.toList saveButton
     ]
 
