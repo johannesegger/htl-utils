@@ -409,7 +409,9 @@ let stream authHeader states msgs =
 
             let applyGroupUpdatesResponseToast response =
                 match response with
-                | Ok _ -> Cmd.none
+                | Ok _ ->
+                    Toast.toast "Applying AAD group updates" "Successfully applied AAD group updates"
+                    |> Toast.success
                 | Error (e: exn) ->
                     Toast.toast "Applying AAD group updates failed" e.Message
                     |> Toast.error
