@@ -5,7 +5,7 @@ open System
 
 [<Literal>]
 let TeachingDataPath = __SOURCE_DIRECTORY__ + "/data/Untis/GPU002.TXT"
-type TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject">
+type TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject", Separators="\t">
 
 let getClassesWithTeachers (teachingData: TeachingData.Row array) =
     teachingData
