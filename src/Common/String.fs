@@ -13,6 +13,9 @@ let trySubstringFrom idx (text: string) =
 let toLower (text: string) =
     text.ToLower()
 
+let toUpper (text: string) =
+    text.ToUpper()
+
 let equalsCaseInsensitive (a: string) (b: string) =
     if isNull a then isNull b
     else a.Equals(b, StringComparison.InvariantCultureIgnoreCase)

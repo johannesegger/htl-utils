@@ -1,0 +1,12 @@
+version: "2"
+services:
+    wake-up-computer:
+        build:
+            context: src
+            dockerfile: WakeUpComputer/Dockerfile
+        # network_mode: "host" # doesn't work on Windows (https://docs.docker.com/network/host/)
+        ports:
+            - 3000:3000
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:3000"
