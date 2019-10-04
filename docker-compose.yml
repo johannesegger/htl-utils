@@ -10,3 +10,14 @@ services:
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:3000"
+    sokrates:
+        build:
+            context: src/Sokrates
+            dockerfile: Dockerfile
+        # network_mode: "host" # doesn't work on Windows (https://docs.docker.com/network/host/)
+        ports:
+            - 3001:3001
+        environment:
+            CLIENT_CERTIFICATE_PATH: path/to/client-certificate.pfx
+            CLIENT_CERTIFICATE_PASSPHRASE: "<certificate-passphrase>"
+            PORT: 3001
