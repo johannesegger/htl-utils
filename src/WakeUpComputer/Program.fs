@@ -24,16 +24,15 @@ let tryParsePhysicalAddress value =
 // Web app
 // ---------------------------------
 
-let handleWakeUp macAddress =
-    fun (next : HttpFunc) (ctx : HttpContext) ->
-        task {
-            match tryParsePhysicalAddress macAddress with
-            | Some macAddress ->
-                let wolClient = new EasyWakeOnLanClient()
-                do! wolClient.WakeAsync(macAddress.ToString())
-                return! Successful.ok (setBody [||]) next ctx
-            | None -> return! RequestErrors.badRequest (setBodyFromString "Invalid MAC address") next ctx
-        }
+let handleWakeUp macAddress : HttpHandler =
+    fun (next : HttpFunc) (ctx : HttpContext) -> task {
+        match tryParsePhysicalAddress macAddress with
+        | Some macAddress ->
+            let wolClient = new EasyWakeOnLanClient()
+            do! wolClient.WakeAsync(macAddress.ToString())
+            return! Successful.ok (setBody [||]) next ctx
+        | None -> return! RequestErrors.badRequest (setBodyFromString "Invalid MAC address") next ctx
+    }
 
 let webApp =
     choose [
