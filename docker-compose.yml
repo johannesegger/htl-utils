@@ -18,6 +18,6 @@ services:
         ports:
             - 3001:3001
         environment:
-            CLIENT_CERTIFICATE_PATH: path/to/client-certificate.pfx
-            CLIENT_CERTIFICATE_PASSPHRASE: "<certificate-passphrase>"
+            CLIENT_CERTIFICATE_PATH: ${SOKRATES_CLIENT_CERTIFICATE_PATH}
+            CLIENT_CERTIFICATE_PASSPHRASE: ${SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE}
             PORT: 3001
