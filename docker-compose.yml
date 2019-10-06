@@ -17,7 +17,9 @@ services:
         # network_mode: "host" # doesn't work on Windows (https://docs.docker.com/network/host/)
         ports:
             - 3001:3001
+        volumes:
+            - ${SOKRATES_CLIENT_CERTIFICATE_PATH}:/data/client-certificate.pfx
         environment:
-            CLIENT_CERTIFICATE_PATH: ${SOKRATES_CLIENT_CERTIFICATE_PATH}
+            CLIENT_CERTIFICATE_PATH: /data/client-certificate.pfx
             CLIENT_CERTIFICATE_PASSPHRASE: ${SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE}
             PORT: 3001

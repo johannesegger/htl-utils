@@ -7,7 +7,6 @@ RUN yarn install --frozen-lockfile
 
 # Copy everything else
 COPY server.js ./
-COPY client-certificates ./client-certificates/
 
 RUN ls -la
 
