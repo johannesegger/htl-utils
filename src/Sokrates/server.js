@@ -31,6 +31,14 @@ http
             return;
         }
 
+        let getClassesParams = /^\/api\/classes\/(?<schoolYear>\d{4})$/.exec(req.url);
+        if (getClassesParams)
+        {
+            let schoolYear = parseInt(getClassesParams.groups.schoolYear);
+            await tryGet(res, () => getClasses(schoolYear));
+            return;
+        }
+
         // if (true)
         // {
         //     await tryGet(res, () => getStudentContacts(["41742720190069", "41742720190001", "952485"], moment().startOf("day")));
@@ -136,4 +144,11 @@ let getTeachers = async () =>
             degreeBack: teacher.teacher.degree2
         })
     );
+};
+
+let getClasses = async schoolYear =>
+{
+    let soapClient = await createSoapClient();
+    let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getTSNClassesAsync({ schoolID: schoolId, schoolYear: schoolYear });
+    return result.return.lstTSNClasses.tsnClassEntry.map(schoolClass => schoolClass.className.replace(/_(WS|SS)$/, ""));
 };
