@@ -14,7 +14,6 @@ services:
         build:
             context: src/Sokrates
             dockerfile: Dockerfile
-        # network_mode: "host" # doesn't work on Windows (https://docs.docker.com/network/host/)
         ports:
             - 3001:3001
         volumes:
