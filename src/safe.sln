@@ -13,6 +13,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Common", "Common\Common.fsp
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "WakeUpComputer", "WakeUpComputer\WakeUpComputer.fsproj", "{FD8F63D6-167C-4615-A384-29FB14691941}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Untis", "Untis\Untis.fsproj", "{96548037-8053-4039-8E3D-3437B5676276}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +37,10 @@ Global
 		{FD8F63D6-167C-4615-A384-29FB14691941}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FD8F63D6-167C-4615-A384-29FB14691941}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FD8F63D6-167C-4615-A384-29FB14691941}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96548037-8053-4039-8E3D-3437B5676276}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96548037-8053-4039-8E3D-3437B5676276}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96548037-8053-4039-8E3D-3437B5676276}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96548037-8053-4039-8E3D-3437B5676276}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{73E8E820-C8AA-47CC-BB2B-152CA4D0B856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU

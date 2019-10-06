@@ -23,3 +23,15 @@ services:
             CLIENT_CERTIFICATE_PATH: /data/client-certificate.pfx
             CLIENT_CERTIFICATE_PASSPHRASE: ${SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE}
             PORT: 3001
+    untis:
+        build:
+            context: src
+            dockerfile: Untis/Dockerfile
+        ports:
+            - 3002:3002
+        volumes:
+            - ${UNTIS_GPU002_FILE_PATH}:/data/GPU002.txt
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:3002"
+            GPU002_FILE_PATH: "/data/GPU002.txt"
