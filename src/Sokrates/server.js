@@ -89,7 +89,7 @@ const schoolId = "*****";
 let getStudents = async date =>
 {
     let soapClient = await createSoapClient();
-    let [result, rawResponse, soapheader, rawRequest] = await soapClient.getPupilsAsync({ schoolID: schoolId, dateOfInterest: date.format() });
+    let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getPupilsAsync({ schoolID: schoolId, dateOfInterest: date.format() });
     return result.return.lstPupils.pupilEntry.map(student => (
         {
             id: student.pupil.sokratesID,
@@ -105,7 +105,7 @@ let getStudents = async date =>
 let getStudentContacts = async (personIds, date) =>
 {
     let soapClient = await createSoapClient();
-    let [result, rawResponse, soapheader, rawRequest] = await soapClient.getContactInfosAsync({ schoolID: schoolId, personIDs: { personIDEntry: personIds }, dateOfInterest: date.format() });
+    let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getContactInfosAsync({ schoolID: schoolId, personIDs: { personIDEntry: personIds }, dateOfInterest: date.format() });
     return result.return.lstContactInfo.contactEntry.map(contact => (
         {
             id: contact.personID,
@@ -118,12 +118,12 @@ let getStudentContacts = async (personIds, date) =>
             streetNumber: contact.address.streetNumber
         }
     ));
-}
+};
 
 let getTeachers = async () =>
 {
     let soapClient = await createSoapClient();
-    let [result, rawResponse, soapheader, rawRequest] = await soapClient.getTeacherAsync({ schoolID: schoolId });
+    let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getTeacherAsync({ schoolID: schoolId });
     return result.return.lstTeacher.teacherEntry.map(teacher => (
         {
             id: teacher.teacher.personID,
