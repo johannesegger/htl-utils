@@ -30,7 +30,6 @@ module SchoolClass =
     let decoder : Decoder<_> = Decode.string |> Decode.map SchoolClass
     let encode (SchoolClass v) = Encode.string v
 
-
 type TeacherShortName = TeacherShortName of string
 module TeacherShortName =
     let decoder : Decoder<_> = Decode.string |> Decode.map TeacherShortName
