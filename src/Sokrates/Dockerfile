@@ -8,7 +8,5 @@ RUN yarn install --frozen-lockfile
 # Copy everything else
 COPY server.js ./
 
-RUN ls -la
-
 # Build runtime image
 CMD ["node", "server.js"]
