@@ -34,3 +34,15 @@ services:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:3002"
             GPU002_FILE_PATH: "/data/GPU002.txt"
+    aad:
+        build:
+            context: src
+            dockerfile: AAD/Dockerfile
+        ports:
+            - 3003:3003
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:3003"
+            MICROSOFT_GRAPH_CLIENT_ID: ${AAD_MICROSOFT_GRAPH_CLIENT_ID}
+            MICROSOFT_GRAPH_TENANT_ID: ${AAD_MICROSOFT_GRAPH_TENANT_ID}
+            MICROSOFT_GRAPH_APP_KEY: ${AAD_MICROSOFT_GRAPH_APP_KEY}

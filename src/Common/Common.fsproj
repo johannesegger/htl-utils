@@ -5,7 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Utils.fs" />
     <Compile Include="String.fs" />
+    <Compile Include="Tuple.fs" />
+    <Compile Include="Async.fs" />
     <Compile Include="Environment.fs" />
   </ItemGroup>
 
