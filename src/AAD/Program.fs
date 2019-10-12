@@ -84,24 +84,14 @@ let errorHandler (ex : Exception) (logger : ILogger) =
 // Config and Main
 // ---------------------------------
 
-let configureCors (builder : CorsPolicyBuilder) =
-    builder
-        .WithOrigins("http://localhost:8080")
-        .AllowAnyMethod()
-        .AllowAnyHeader()
-    |> ignore
-
 let configureApp (app : IApplicationBuilder) =
     let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
-    (match env.IsDevelopment() with
-    | true  -> app.UseDeveloperExceptionPage()
-    | false -> app.UseGiraffeErrorHandler errorHandler)
-        .UseHttpsRedirection()
-        .UseCors(configureCors)
-        .UseGiraffe(webApp)
+    match env.IsDevelopment() with
+    | true -> app.UseDeveloperExceptionPage() |> ignore
+    | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
+    app.UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
-    services.AddCors()    |> ignore
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
@@ -109,9 +99,9 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom User.encode User.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-let configureLogging (builder : ILoggingBuilder) =
+let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     builder
-        .AddFilter(fun l -> l.Equals LogLevel.Error)
+        .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
         .AddDebug()
     |> ignore
