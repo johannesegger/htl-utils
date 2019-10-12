@@ -43,6 +43,16 @@ let handleGetAutoGroups : HttpHandler =
         return! Successful.OK aadGroups next ctx
     }
 
+let handleGetUsers : HttpHandler =
+    fun (next : HttpFunc) (ctx : HttpContext) -> task {
+        let graphServiceClient = getGraphServiceClient ()
+
+        let! aadUsers =
+            AAD.getUsers graphServiceClient
+            |> Async.map List.toArray
+        return! Successful.OK aadUsers next ctx
+    }
+
 // let handlePostGroupUpdates : HttpHandler =
 //     fun (next : HttpFunc) (ctx : HttpContext) -> task {
 //         return! Successful.OK () next ctx
@@ -54,6 +64,7 @@ let webApp =
             (choose [
                 GET >=> choose [
                     route "/auto-groups" >=> handleGetAutoGroups
+                    route "/users" >=> handleGetUsers
                 ]
                 // POST >=> choose [
                 //     route "/group-updates" >=> handlePostGroupUpdates
@@ -95,6 +106,7 @@ let configureServices (services : IServiceCollection) =
     let coders =
         Extra.empty
         |> Extra.withCustom Group.encode Group.decoder
+        |> Extra.withCustom User.encode User.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (builder : ILoggingBuilder) =
