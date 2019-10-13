@@ -128,22 +128,42 @@ let createGroup (graphServiceClient: GraphServiceClient) name = async {
 let deleteGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) =
     retryRequest (fun () -> graphServiceClient.Groups.[groupId].Request().DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask) ()
 
-let addMembersToGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) memberIds =
-    memberIds
-    |> List.map (fun (UserId memberId) ->
-        retryRequest
-            (graphServiceClient.Groups.[groupId].Members.References.Request().AddAsync >> Async.AwaitTask >> Async.StartAsTask)
-            (User(Id = memberId))
+let addGroupMember (graphServiceClient: GraphServiceClient) (GroupId groupId) (UserId userId) =
+    retryRequest
+        (graphServiceClient.Groups.[groupId].Members.References.Request().AddAsync >> Async.AwaitTask >> Async.StartAsTask)
+        (User(Id = userId))
+
+let removeGroupMember (graphServiceClient: GraphServiceClient) (GroupId groupId) (UserId userId) =
+    retryRequest
+        (fun () -> graphServiceClient.Groups.[groupId].Members.[userId].Reference.Request().DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
+        ()
+
+let applyMemberModifications graphServiceClient groupId memberModifications =
+    memberModifications
+    |> List.map (function
+        | AddMember userId -> addGroupMember graphServiceClient groupId userId
+        | RemoveMember userId -> removeGroupMember graphServiceClient groupId userId
     )
     |> Async.Parallel
     |> Async.Ignore
 
-let removeMembersFromGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) memberIds =
-    memberIds
-    |> List.map (fun (UserId memberId) ->
-        retryRequest
-            (fun () -> graphServiceClient.Groups.[groupId].Members.[memberId].Reference.Request().DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
-            ()
-    )
+let applySingleGroupModifications graphServiceClient modifications = async {
+    match modifications with
+    | CreateGroup (name, memberIds) ->
+        let! group = createGroup graphServiceClient name
+        let groupId = GroupId group.Id
+        do!
+            memberIds
+            |> List.map AddMember
+            |> applyMemberModifications graphServiceClient groupId
+    | UpdateGroup (groupId, memberModifications) ->
+        do! applyMemberModifications graphServiceClient groupId memberModifications
+    | DeleteGroup groupId ->
+        do! deleteGroup graphServiceClient groupId
+}
+
+let applyGroupsModifications graphServiceClient modifications =
+    modifications
+    |> List.map (applySingleGroupModifications graphServiceClient)
     |> Async.Parallel
     |> Async.Ignore

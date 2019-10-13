@@ -53,10 +53,14 @@ let handleGetUsers : HttpHandler =
         return! Successful.OK aadUsers next ctx
     }
 
-// let handlePostGroupUpdates : HttpHandler =
-//     fun (next : HttpFunc) (ctx : HttpContext) -> task {
-//         return! Successful.OK () next ctx
-//     }
+let handlePostGroupsModifications : HttpHandler =
+    fun (next : HttpFunc) (ctx : HttpContext) -> task {
+        let graphServiceClient = getGraphServiceClient ()
+
+        let! modifications = ctx.BindModelAsync()
+        do! AAD.applyGroupsModifications graphServiceClient modifications
+        return! Successful.OK () next ctx
+    }
 
 let webApp =
     choose [
@@ -66,9 +70,9 @@ let webApp =
                     route "/groups" >=> handleGetAutoGroups
                     route "/users" >=> handleGetUsers
                 ]
-                // POST >=> choose [
-                //     route "/group-updates" >=> handlePostGroupUpdates
-                // ]
+                POST >=> choose [
+                    route "/groups/modify" >=> handlePostGroupsModifications
+                ]
             ])
         setStatusCode 404 >=> text "Not Found" ]
 
