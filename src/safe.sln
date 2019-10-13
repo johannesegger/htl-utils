@@ -19,6 +19,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AAD", "AAD\AAD.fsproj", "{0
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AAD.Test", "AAD.Test\AAD.Test.fsproj", "{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Admin.Server", "Admin.Server\Admin.Server.fsproj", "{A7036E32-6A96-43A0-8C04-841E3F898A10}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,10 @@ Global
 		{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7036E32-6A96-43A0-8C04-841E3F898A10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7036E32-6A96-43A0-8C04-841E3F898A10}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7036E32-6A96-43A0-8C04-841E3F898A10}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7036E32-6A96-43A0-8C04-841E3F898A10}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{73E8E820-C8AA-47CC-BB2B-152CA4D0B856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
