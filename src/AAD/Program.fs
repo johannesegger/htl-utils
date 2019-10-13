@@ -63,7 +63,7 @@ let webApp =
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/auto-groups" >=> handleGetAutoGroups
+                    route "/groups" >=> handleGetAutoGroups
                     route "/users" >=> handleGetUsers
                 ]
                 // POST >=> choose [
