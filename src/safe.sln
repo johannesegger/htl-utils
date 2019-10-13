@@ -17,6 +17,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Untis", "Untis\Untis.fsproj
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AAD", "AAD\AAD.fsproj", "{0F482B11-E0F7-4454-85C8-E20DA01E0D30}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AAD.Test", "AAD.Test\AAD.Test.fsproj", "{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -47,6 +49,10 @@ Global
 		{0F482B11-E0F7-4454-85C8-E20DA01E0D30}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0F482B11-E0F7-4454-85C8-E20DA01E0D30}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0F482B11-E0F7-4454-85C8-E20DA01E0D30}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{73E8E820-C8AA-47CC-BB2B-152CA4D0B856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
