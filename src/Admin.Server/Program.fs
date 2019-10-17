@@ -12,6 +12,15 @@ open Microsoft.Extensions.Logging
 open System
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
+open System.Net.Http
+
+let httpGet (httpClientFactory: IHttpClientFactory) (url: string) = async {
+    use httpClient = httpClientFactory.CreateClient()
+    let! response = httpClient.GetAsync url |> Async.AwaitTask
+    response.EnsureSuccessStatusCode() |> ignore
+    let! responseContent = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+    // TODO deserialize
+}
 
 // ---------------------------------
 // Web app
@@ -29,6 +38,12 @@ let requiresAdmin : HttpHandler = requiresUser "admin@htlvb.at"
 
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
+        let httpClientFactory = ctx.GetService<IHttpClientFactory>()
+        let! teachingData = httpGet httpClientFactory "http://untis/api/teaching-data" |> Async.StartChild
+        let! sokratesTeachers = httpGet httpClientFactory "http://sokrates/api/teachers" |> Async.StartChild
+        // let! finalThesesMentors = httpGet httpClientFactory "http://final-theses/api/mentors" |> Async.StartChild
+        let! aadGroups = httpGet httpClientFactory "http://aad/api/groups" |> Async.StartChild
+        let! aadUsers = httpGet httpClientFactory "http://aad/api/users" |> Async.StartChild
         return! Successful.OK () next ctx
     }
 
@@ -70,6 +85,7 @@ let configureApp (app : IApplicationBuilder) =
     app.UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
+    services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
