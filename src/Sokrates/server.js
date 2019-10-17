@@ -6,7 +6,7 @@ var moment = require("moment");
 let clientCertFile = fs.readFileSync(process.env.CLIENT_CERTIFICATE_PATH);
 let clientCertPassphrase = process.env.CLIENT_CERTIFICATE_PASSPHRASE;
 
-let port = process.env.PORT || 80;
+let port = 80;
 
 http
     .createServer(async (req, res) => {

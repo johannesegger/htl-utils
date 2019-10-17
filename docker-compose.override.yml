@@ -1,0 +1,29 @@
+version: "3.7"
+services:
+    wake-up-computer:
+        ports:
+            - 3000:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"
+    sokrates:
+        ports:
+            - 3001:80
+    untis:
+        ports:
+            - 3002:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"
+    aad:
+        ports:
+            - 3003:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"
+    admin-server:
+        ports:
+            - 3004:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"

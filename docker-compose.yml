@@ -4,45 +4,28 @@ services:
         build:
             context: src
             dockerfile: WakeUpComputer/Dockerfile
-        # network_mode: "host" # doesn't work on Windows (https://docs.docker.com/network/host/)
-        ports:
-            - 3000:3000
-        environment:
-            ASPNETCORE_ENVIRONMENT: Development
-            ASPNETCORE_URLS: "http://*:3000"
     sokrates:
         build:
             context: src/Sokrates
             dockerfile: Dockerfile
-        ports:
-            - 3001:3001
         volumes:
             - ${SOKRATES_CLIENT_CERTIFICATE_PATH}:/data/client-certificate.pfx
         environment:
             CLIENT_CERTIFICATE_PATH: /data/client-certificate.pfx
             CLIENT_CERTIFICATE_PASSPHRASE: ${SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE}
-            PORT: 3001
     untis:
         build:
             context: src
             dockerfile: Untis/Dockerfile
-        ports:
-            - 3002:3002
         volumes:
             - ${UNTIS_GPU002_FILE_PATH}:/data/GPU002.txt
         environment:
-            ASPNETCORE_ENVIRONMENT: Development
-            ASPNETCORE_URLS: "http://*:3002"
             GPU002_FILE_PATH: "/data/GPU002.txt"
     aad:
         build:
             context: src
             dockerfile: AAD/Dockerfile
-        ports:
-            - 3003:3003
         environment:
-            ASPNETCORE_ENVIRONMENT: Development
-            ASPNETCORE_URLS: "http://*:3003"
             MICROSOFT_GRAPH_CLIENT_ID: ${AAD_MICROSOFT_GRAPH_CLIENT_ID}
             MICROSOFT_GRAPH_TENANT_ID: ${AAD_MICROSOFT_GRAPH_TENANT_ID}
             MICROSOFT_GRAPH_APP_KEY: ${AAD_MICROSOFT_GRAPH_APP_KEY}
@@ -50,10 +33,10 @@ services:
         build:
             context: src
             dockerfile: Admin.Server/Dockerfile
-        ports:
-            - 3004:3004
         environment:
-            ASPNETCORE_ENVIRONMENT: Development
-            ASPNETCORE_URLS: "http://*:3004"
             MICROSOFT_GRAPH_CLIENT_ID: ${ADMIN_SERVER_MICROSOFT_GRAPH_CLIENT_ID}
             MICROSOFT_GRAPH_AUTHORITY: ${ADMIN_SERVER_MICROSOFT_GRAPH_AUTHORITY}
+        depends_on:
+            - sokrates
+            - untis
+            - aad
