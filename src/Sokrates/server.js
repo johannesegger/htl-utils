@@ -135,13 +135,13 @@ let getTeachers = async () =>
     return result.return.lstTeacher.teacherEntry.map(teacher => (
         {
             id: teacher.teacher.personID,
-            title: teacher.teacher.title,
+            title: teacher.teacher.title || null,
             lastName: teacher.teacher.lastName,
             firstName: teacher.teacher.firstName,
-            shortName: teacher.teacher.token,
+            shortName: teacher.teacher.token || null,
             dateOfBirth: moment(teacher.teacher.dateOfBirth, "YYYY-MM-DDZ").format("YYYY-MM-DD"),
-            degreeFront: teacher.teacher.degree,
-            degreeBack: teacher.teacher.degree2
+            degreeFront: teacher.teacher.degree || null,
+            degreeBack: teacher.teacher.degree2 || null
         })
     );
 };

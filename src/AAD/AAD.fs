@@ -1,8 +1,8 @@
 module AAD
 
+open Domain
 open Microsoft.Graph
 open Polly
-open Shared
 open System
 open System.Threading.Tasks
 
@@ -54,11 +54,12 @@ module User =
             if String.startsWithCaseInsensitive prefix proxyAddress
             then Some (proxyAddress.Substring prefix.Length)
             else None
+        let ifNullEmpty v = if isNull v then "" else v
         {
             Id = UserId user.Id
-            ShortName = trimEMailAddressDomain user.UserPrincipalName
-            FirstName = user.GivenName
-            LastName = user.Surname
+            UserName = trimEMailAddressDomain user.UserPrincipalName
+            FirstName = ifNullEmpty user.GivenName
+            LastName = ifNullEmpty user.Surname
             MailAddresses = user.ProxyAddresses |> Seq.choose tryGetMailAddressFromProxyAddress |> Seq.toList
         }
 
@@ -92,10 +93,10 @@ let getAutoGroups (graphServiceClient: GraphServiceClient) = async {
         |> Async.map Array.toList
 }
 
-let getUsers (graphServiceClient: GraphServiceClient) = async {
+let getTeachers (graphServiceClient: GraphServiceClient) = async {
     let! users =
         readAll
-            (graphServiceClient.Users.Request().Select(User.fields))
+            (graphServiceClient.Users.Request().Select(User.fields).Filter("department eq 'Lehrer'"))
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
     return

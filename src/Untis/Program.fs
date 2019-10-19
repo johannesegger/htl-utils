@@ -5,7 +5,6 @@ open FSharp.Data
 open Giraffe
 open Giraffe.Serialization
 open Microsoft.AspNetCore.Builder
-open Microsoft.AspNetCore.Cors.Infrastructure
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
@@ -27,17 +26,14 @@ let teachingData =
 
 type SchoolClass = SchoolClass of string
 module SchoolClass =
-    let decoder : Decoder<_> = Decode.string |> Decode.map SchoolClass
     let encode (SchoolClass v) = Encode.string v
 
 type TeacherShortName = TeacherShortName of string
 module TeacherShortName =
-    let decoder : Decoder<_> = Decode.string |> Decode.map TeacherShortName
     let encode (TeacherShortName v) = Encode.string v
 
 type Subject = Subject of string
 module Subject =
-    let decoder : Decoder<_> = Decode.string |> Decode.map Subject
     let encode (Subject v) = Encode.string v
 
 type TeacherTask =
@@ -46,35 +42,6 @@ type TeacherTask =
     | Custodian of TeacherShortName * Subject
 
 module TeacherTask =
-    let normalTeacherDecoder =
-        Decode.object (fun get ->
-            let schoolClass = get.Required.Field "schoolClass" SchoolClass.decoder
-            let teacher = get.Required.Field "teacher" TeacherShortName.decoder
-            let subject = get.Required.Field "subject" Subject.decoder
-            NormalTeacher (schoolClass, teacher, subject)
-        )
-
-    let formTeacherDecoder =
-        Decode.object (fun get ->
-            let schoolClass = get.Required.Field "schoolClass" SchoolClass.decoder
-            let teacher = get.Required.Field "teacher" TeacherShortName.decoder
-            FormTeacher (schoolClass, teacher)
-        )
-
-    let custodianDecoder =
-        Decode.object (fun get ->
-            let teacher = get.Required.Field "teacher" TeacherShortName.decoder
-            let subject = get.Required.Field "subject" Subject.decoder
-            Custodian (teacher, subject)
-        )
-
-    let decoder : Decoder<_> =
-        Decode.oneOf [
-            Decode.field "normalTeacher" normalTeacherDecoder
-            Decode.field "formTeacher" formTeacherDecoder
-            Decode.field "custodian" custodianDecoder
-        ]
-
     let encode = function
         | NormalTeacher (schoolClass, teacher, subject) ->
             let fields = [
@@ -155,7 +122,7 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
-        |> Extra.withCustom TeacherTask.encode TeacherTask.decoder
+        |> Extra.withCustom TeacherTask.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =

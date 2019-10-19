@@ -6,6 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Shared.fs" />
+    <Compile Include="AAD.fs" />
+    <Compile Include="Sokrates.fs" />
+    <Compile Include="Untis.fs" />
+    <Compile Include="AADGroupUpdates.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

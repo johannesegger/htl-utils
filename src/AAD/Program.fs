@@ -1,5 +1,6 @@
 ﻿module App
 
+open Domain
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open Giraffe.Serialization
@@ -12,7 +13,6 @@ open Microsoft.Extensions.Logging
 open Microsoft.Graph
 open Microsoft.Graph.Auth
 open Microsoft.Identity.Client
-open Shared
 open System
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
@@ -42,14 +42,14 @@ let handleGetAutoGroups : HttpHandler =
         return! Successful.OK aadGroups next ctx
     }
 
-let handleGetUsers : HttpHandler =
+let handleGetTeachers : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) -> task {
         let graphServiceClient = getGraphServiceClient ()
 
-        let! aadUsers =
-            AAD.getUsers graphServiceClient
+        let! aadTeachers =
+            AAD.getTeachers graphServiceClient
             |> Async.map List.toArray
-        return! Successful.OK aadUsers next ctx
+        return! Successful.OK aadTeachers next ctx
     }
 
 let handlePostGroupsModifications : HttpHandler =
@@ -66,11 +66,11 @@ let webApp =
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/groups" >=> handleGetAutoGroups
-                    route "/users" >=> handleGetUsers
+                    route "/auto-groups" >=> handleGetAutoGroups
+                    route "/teachers" >=> handleGetTeachers
                 ]
                 POST >=> choose [
-                    route "/groups/modify" >=> handlePostGroupsModifications
+                    route "/auto-groups/modify" >=> handlePostGroupsModifications
                 ]
             ])
         setStatusCode 404 >=> text "Not Found" ]
@@ -98,8 +98,8 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
-        |> Extra.withCustom Group.encode Group.decoder
-        |> Extra.withCustom User.encode User.decoder
+        |> Extra.withCustom Group.encode (Decode.fail "Not implemented")
+        |> Extra.withCustom User.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
