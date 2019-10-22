@@ -6,7 +6,7 @@ open Elmish.Debug
 open Elmish.Navigation
 open Elmish.React
 open Elmish.UrlParser
-// open Elmish.HMR // Must be last Elmish.* open declaration (see https://elmish.github.io/hmr/#Usage)
+open Elmish.HMR // Must be last Elmish.* open declaration (see https://elmish.github.io/hmr/#Usage)
 open Fable.Core.JsInterop
 open Fable.Elmish.Nile
 open Fable.React
