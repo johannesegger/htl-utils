@@ -1,0 +1,1 @@
+mklink /D src\Admin.Client\src\Client.Shared ..\..\Client.Shared
