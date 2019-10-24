@@ -6,25 +6,29 @@ open Fulma
 open Pages
 
 let view =
-    Tile.ancestor []
+    Container.container []
         [
-            Tile.parent
+            Tile.ancestor []
                 [
-                    Tile.IsVertical
-                    Tile.Size Tile.Is2
-                ]
-                [
-                    Tile.child []
+                    Tile.parent
                         [
-                            Button.a
+                            // Tile.IsVertical
+                            Tile.Size Tile.Is2
+                        ]
+                        [
+                            Tile.child []
                                 [
-                                    Button.Props
+                                    Button.a
                                         [
-                                            Href (toHash SyncAADGroups)
+                                            Button.Props
+                                                [
+                                                    Href (toHash SyncAADGroups)
+                                                ]
                                         ]
-                                ]
-                                [
-                                    span [ Class "title" ] [ str "Sync AAD groups" ]
+                                        [
+                                            span [ Class "title" ] [ str "Sync AAD groups" ]
+                                            span [] [ str "Update members of Azure Active Directory groups based on data from Sokrates, Untis and more" ]
+                                        ]
                                 ]
                         ]
                 ]
