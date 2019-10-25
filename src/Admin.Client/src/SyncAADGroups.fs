@@ -17,12 +17,6 @@ open Thoth.Elmish
 open Thoth.Fetch
 open Thoth.Json
 
-type File =
-    {
-        Name: string
-        JSFile: Browser.Types.File
-    }
-
 type UserUpdate = {
     IsEnabled: bool
     User: AADGroupUpdates.User
@@ -89,16 +83,10 @@ type GroupUpdates =
 
 type Model =
     {
-        UntisTeachingDataFile: File option
-        SokratesTeachersFile: File option
-        FinalThesesMentorsFile: File option
         GroupUpdates: GroupUpdates
     }
 
 type Msg =
-    | SetUntisTeachingDataFile of Browser.Types.File
-    | SetSokratesTeachersFile of Browser.Types.File
-    | SetFinalThesesMentorsFile of Browser.Types.File
     | LoadGroupUpdates
     | LoadGroupUpdatesResponse of Result<AADGroupUpdates.GroupUpdate list, exn>
     | SelectAllUpdates of bool
@@ -142,12 +130,6 @@ let rec update msg model =
         )
 
     match msg with
-    | SetUntisTeachingDataFile file ->
-        { model with UntisTeachingDataFile = Some { Name = file.name; JSFile = file } }
-    | SetSokratesTeachersFile file ->
-        { model with SokratesTeachersFile = Some { Name = file.name; JSFile = file } }
-    | SetFinalThesesMentorsFile file ->
-        { model with FinalThesesMentorsFile = Some { Name = file.name; JSFile = file } }
     | LoadGroupUpdates -> { model with GroupUpdates = LoadingGroupUpdates }
     | LoadGroupUpdatesResponse (Ok groupUpdates) ->
         { model with GroupUpdates = LoadedGroupUpdates (Drafting, List.map GroupUpdate.fromDto groupUpdates) }
@@ -181,9 +163,6 @@ let rec update msg model =
 
 let init =
     {
-        UntisTeachingDataFile = None
-        SokratesTeachersFile = None
-        FinalThesesMentorsFile = None
         GroupUpdates = NotLoadedGroupUpdates
     }
 
@@ -213,19 +192,10 @@ let view model dispatch =
             | FailedToLoadGroupUpdates -> false
         Section.section [] [
             Field.div [] [
-                fileInput "Choose Untis teaching data file..." (model.UntisTeachingDataFile |> Option.map (fun t -> t.Name) |> Option.defaultValue "") SetUntisTeachingDataFile
-            ]
-            Field.div [] [
-                fileInput "Choose Sokrates teachers file..." (model.SokratesTeachersFile |> Option.map (fun t -> t.Name) |> Option.defaultValue "") SetSokratesTeachersFile
-            ]
-            Field.div [] [
-                fileInput "Choose final theses mentors file..." (model.FinalThesesMentorsFile |> Option.map (fun t -> t.Name) |> Option.defaultValue "") SetFinalThesesMentorsFile
-            ]
-            Field.div [] [
                 Control.div [] [
                     Button.button
                         [
-                            Button.Disabled (isLocked || model.UntisTeachingDataFile.IsNone || model.SokratesTeachersFile.IsNone || model.FinalThesesMentorsFile.IsNone)
+                            Button.Disabled isLocked
                             Button.IsLoading (model.GroupUpdates = LoadingGroupUpdates)
                             Button.OnClick (fun e -> dispatch LoadGroupUpdates)
                         ]
@@ -369,22 +339,12 @@ let stream authHeader states msgs =
         [
             yield msgs
 
-            let loadGroupUpdates (untisTeachingDataFile: Browser.Types.File) (sokratesTeachersFile: Browser.Types.File) (finalThesesMentorsFile: Browser.Types.File) =
+            let loadGroupUpdates =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = sprintf "/api/aad/group-updates"
-                        let formData = FormData.Create()
-                        formData.append("untis-teaching-data", untisTeachingDataFile)
-                        formData.append("sokrates-teachers", sokratesTeachersFile)
-                        formData.append("final-theses-mentors", finalThesesMentorsFile)
-                        let requestProperties = [
-                            Method HttpMethod.POST
-                            Fetch.requestHeaders [ authHeader ]
-                            Body (U3.Case2 formData)
-                        ]
-                        let! response = Fetch.fetch url requestProperties
-                        let! body = response.text()
-                        return Decode.unsafeFromString (Decode.list AADGroupUpdates.GroupUpdate.decode) body
+                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                        return! Fetch.get(url, Decode.list AADGroupUpdates.GroupUpdate.decode, requestProperties)
                     })
                     |> AsyncRx.map Ok
                     |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -392,11 +352,7 @@ let stream authHeader states msgs =
 
             yield
                 msgs
-                |> AsyncRx.withLatestFrom states
-                |> AsyncRx.choose (function
-                    | (LoadGroupUpdates, { UntisTeachingDataFile = Some untisTeachingDataFile; SokratesTeachersFile = Some sokratesTeachersFile; FinalThesesMentorsFile = Some finalThesesMentorsFile }) ->
-                        Some (loadGroupUpdates untisTeachingDataFile.JSFile sokratesTeachersFile.JSFile finalThesesMentorsFile.JSFile)
-                    | _ -> None)
+                |> AsyncRx.choose (function | LoadGroupUpdates -> Some loadGroupUpdates | _ -> None)
                 |> AsyncRx.switchLatest
                 |> AsyncRx.showErrorToast (fun e -> "Loading AAD group updates failed", e.Message)
                 |> AsyncRx.map LoadGroupUpdatesResponse
@@ -416,7 +372,7 @@ let stream authHeader states msgs =
 
             yield
                 msgs
-                |> AsyncRx.withLatestFrom states
+                |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
                 |> AsyncRx.choose (function
                     | (ApplyGroupUpdates, { GroupUpdates = LoadedGroupUpdates (_, groupUpdates) }) ->
                         Some (applyGroupUpdates (List.choose GroupUpdate.toDto groupUpdates))

@@ -12,7 +12,6 @@
     <Compile Include="Async.fs" />
     <Compile Include="List.fs" />
     <Compile Include="Environment.fs" />
-    <Compile Include="Views.fs" />
   </ItemGroup>
 
 </Project>

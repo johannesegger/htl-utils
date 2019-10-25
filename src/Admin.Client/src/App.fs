@@ -83,6 +83,19 @@ let stream states msgs =
         )
         ||> Authentication.stream
         |> AsyncRx.map AuthenticationMsg
+
+        (
+            states
+            |> AsyncRx.choose (fun (msg, model) ->
+                match msg with
+                | None
+                | Some (SyncAADGroupsMsg _) as msg -> Some (msg, model.SyncAADGroups)
+                | Some _ -> None
+            ),
+            msgs |> AsyncRx.choose (function SyncAADGroupsMsg msg -> Some msg | _ -> None)
+        )
+        ||> SyncAADGroups.stream authHeader
+        |> AsyncRx.map SyncAADGroupsMsg
     ]
     |> AsyncRx.mergeSeq
 
