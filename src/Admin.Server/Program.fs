@@ -9,27 +9,39 @@ open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open Microsoft.Graph
+open Microsoft.Graph.Auth
+open Microsoft.Identity.Client
 open System
-open Thoth.Json.Giraffe
-open Thoth.Json.Net
 open System.Net
 open System.Net.Http
+open Thoth.Json.Giraffe
+open Thoth.Json.Net
 
 type FetchError =
     | HttpError of url: string * HttpStatusCode * reasonPhrase: string
     | DecodeError of url: string * message: string
 
-let httpGet (httpClientFactory: IHttpClientFactory) (url: string) decoder = async {
+let httpGetWithHeaders (httpClientFactory: IHttpClientFactory) (url: string) headers decoder = async {
     use httpClient = httpClientFactory.CreateClient()
-    let! response = httpClient.GetAsync url |> Async.AwaitTask
+    use requestMessage = new HttpRequestMessage(HttpMethod.Get, url)
+    headers
+    |> Seq.iter (fun (key, value: string) -> requestMessage.Headers.Add(key, value))
+    let! response = httpClient.SendAsync(requestMessage) |> Async.AwaitTask
     if not response.IsSuccessStatusCode then
-        return Error (HttpError (url, response.StatusCode, response.ReasonPhrase))
+        return Result.Error (HttpError (url, response.StatusCode, response.ReasonPhrase))
     else
         let! responseContent = response.Content.ReadAsStringAsync() |> Async.AwaitTask
         return
             Decode.fromString decoder responseContent
             |> Result.mapError (fun message -> DecodeError(url, message))
 }
+
+let httpGetAuthorized httpClientFactory url authHeaderValue decoder =
+    httpGetWithHeaders httpClientFactory url [ "Authorization", authHeaderValue ] decoder
+
+let httpGet httpClientFactory url decoder =
+    httpGetWithHeaders httpClientFactory url [] decoder
 
 // ---------------------------------
 // Web app
@@ -115,11 +127,44 @@ let applyAADGroupUpdates : HttpHandler =
         return! Successful.OK () next ctx
     }
 
+let authTest : HttpHandler =
+    fun next ctx -> task {
+        let httpClientFactory = ctx.GetService<IHttpClientFactory>()
+        let graphUser = ctx.User.ToGraphUserAccount()
+        let url = sprintf "http://aad/api/users/%s/groups" graphUser.ObjectId
+        let! groups = httpGet httpClientFactory url (Decode.list Decode.string)
+        let groups =
+            match groups with
+            | Error e ->
+                sprintf "Error: %O" e
+            | Ok groups ->
+                groups
+                |> Seq.map (sprintf "%s  * %s" Environment.NewLine)
+                |> String.concat ""
+                |> sprintf "%s"
+        
+        let result =
+            [
+                sprintf "User: %O" ctx.User
+                sprintf "User identity: %O" ctx.User.Identity
+                sprintf "User identity name: %O" ctx.User.Identity.Name
+                sprintf "User identity is authenticated: %O" ctx.User.Identity.IsAuthenticated
+                ctx.User.Claims
+                |> Seq.map (fun claim -> sprintf "%s  * %s: %s" Environment.NewLine claim.Type claim.Value)
+                |> String.concat ""
+                |> sprintf "Claims: %s"
+                sprintf "Groups: %s" groups
+            ]
+            |> String.concat Environment.NewLine
+        return! Successful.ok (setBodyFromString result) next ctx
+    }
+
 let webApp =
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
+                    route "/auth-test" >=> authTest
                     route "/aad/group-updates" >=> requiresAdmin >=> getAADGroupUpdates
                 ]
                 POST >=> choose [

@@ -27,6 +27,7 @@ services:
             dockerfile: AAD/Dockerfile
         environment:
             MICROSOFT_GRAPH_CLIENT_ID: ${AAD_MICROSOFT_GRAPH_CLIENT_ID}
+            MICROSOFT_GRAPH_AUTHORITY: ${AAD_MICROSOFT_GRAPH_AUTHORITY}
             MICROSOFT_GRAPH_TENANT_ID: ${AAD_MICROSOFT_GRAPH_TENANT_ID}
             MICROSOFT_GRAPH_APP_KEY: ${AAD_MICROSOFT_GRAPH_APP_KEY}
     admin-server:
@@ -36,6 +37,7 @@ services:
         environment:
             MICROSOFT_GRAPH_CLIENT_ID: ${ADMIN_SERVER_MICROSOFT_GRAPH_CLIENT_ID}
             MICROSOFT_GRAPH_AUTHORITY: ${ADMIN_SERVER_MICROSOFT_GRAPH_AUTHORITY}
+            MICROSOFT_GRAPH_APP_KEY: ${ADMIN_SERVER_MICROSOFT_GRAPH_APP_KEY}
         depends_on:
             - sokrates
             - untis

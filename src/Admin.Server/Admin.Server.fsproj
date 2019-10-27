@@ -18,6 +18,8 @@
     <PackageReference Include="Giraffe" Version="4.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="3.0.0" />
+    <PackageReference Include="Microsoft.Graph" Version="1.18.0" />
+    <PackageReference Include="Microsoft.Graph.Auth" Version="1.0.0-preview.2" />
     <PackageReference Include="Thoth.Json.Giraffe" Version="2.2.0" />
   </ItemGroup>
 

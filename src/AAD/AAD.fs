@@ -168,3 +168,9 @@ let applyGroupsModifications graphServiceClient modifications =
     |> List.map (applySingleGroupModifications graphServiceClient)
     |> Async.Parallel
     |> Async.Ignore
+
+let getUserGroups (graphServiceClient: GraphServiceClient) userId =
+    readAll
+        (graphServiceClient.Users.[userId].MemberOf.Request())
+        (fun request -> request.GetAsync())
+        (fun items -> items.NextPageRequest)

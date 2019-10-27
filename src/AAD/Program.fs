@@ -4,9 +4,9 @@ open Domain
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open Giraffe.Serialization
+open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
-open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
@@ -20,22 +20,21 @@ open Thoth.Json.Net
 let private clientApp =
     ConfidentialClientApplicationBuilder
         .Create(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_CLIENT_ID")
-        .WithTenantId(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_TENANT_ID")
+        // .WithTenantId(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_TENANT_ID")
+        .WithRedirectUri("https://localhost:8080")
         .WithClientSecret(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_APP_KEY")
         .Build()
 
-let getGraphServiceClient () =
-    ClientCredentialProvider(clientApp)
-    |> GraphServiceClient
+let authProvider = OnBehalfOfProvider(clientApp)
+
+let graphServiceClient = GraphServiceClient(authProvider)
 
 // ---------------------------------
 // Web app
 // ---------------------------------
 
 let handleGetAutoGroups : HttpHandler =
-    fun (next : HttpFunc) (ctx : HttpContext) -> task {
-        let graphServiceClient = getGraphServiceClient ()
-
+    fun next ctx -> task {
         let! aadGroups =
             AAD.getAutoGroups graphServiceClient
             |> Async.map List.toArray
@@ -43,9 +42,7 @@ let handleGetAutoGroups : HttpHandler =
     }
 
 let handleGetTeachers : HttpHandler =
-    fun (next : HttpFunc) (ctx : HttpContext) -> task {
-        let graphServiceClient = getGraphServiceClient ()
-
+    fun next ctx -> task {
         let! aadTeachers =
             AAD.getTeachers graphServiceClient
             |> Async.map List.toArray
@@ -53,12 +50,20 @@ let handleGetTeachers : HttpHandler =
     }
 
 let handlePostGroupsModifications : HttpHandler =
-    fun (next : HttpFunc) (ctx : HttpContext) -> task {
-        let graphServiceClient = getGraphServiceClient ()
-
+    fun next ctx -> task {
         let! modifications = ctx.BindModelAsync()
         do! AAD.applyGroupsModifications graphServiceClient modifications
         return! Successful.OK () next ctx
+    }
+
+let handleGetUserGroups : HttpHandler =
+    fun next ctx -> task {
+        let userId = ctx.User.ToGraphUserAccount().ObjectId
+        let! groups = AAD.getUserGroups graphServiceClient userId 
+        let groupIds =
+            groups
+            |> List.map (fun group -> group.Id)
+        return! Successful.OK groupIds next ctx
     }
 
 let webApp =
@@ -68,6 +73,7 @@ let webApp =
                 GET >=> choose [
                     route "/auto-groups" >=> handleGetAutoGroups
                     route "/teachers" >=> handleGetTeachers
+                    route "/logged-in-user/groups" >=> handleGetUserGroups
                 ]
                 POST >=> choose [
                     route "/auto-groups/modify" >=> handlePostGroupsModifications
@@ -92,7 +98,9 @@ let configureApp (app : IApplicationBuilder) =
     match env.IsDevelopment() with
     | true -> app.UseDeveloperExceptionPage() |> ignore
     | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
-    app.UseGiraffe(webApp)
+    app
+        .UseAuthentication()
+        .UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
@@ -101,6 +109,16 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom Group.encode (Decode.fail "Not implemented")
         |> Extra.withCustom User.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
+    services
+        .AddAuthentication(fun config ->
+            config.DefaultScheme <- JwtBearerDefaults.AuthenticationScheme
+            config.DefaultChallengeScheme <- JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(fun config ->
+            config.Audience <- Environment.getEnvVarOrFail "MICROSOFT_GRAPH_CLIENT_ID"
+            config.Authority <- Environment.getEnvVarOrFail "MICROSOFT_GRAPH_AUTHORITY"
+            config.TokenValidationParameters.ValidateIssuer <- false
+            config.TokenValidationParameters.SaveSigninToken <- true
+        ) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     builder
