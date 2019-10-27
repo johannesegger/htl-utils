@@ -14,6 +14,7 @@ open Fable.React.Props
 open FSharp.Control
 open Fulma
 open Pages
+open Thoth.Elmish.Toast
 
 importAll "../sass/main.sass"
 
@@ -105,6 +106,8 @@ Program.mkSimple init update root
 |> Program.toNavigable (parseHash pageParser) urlUpdate
 #if DEBUG
 |> Program.withDebugger
+|> Program.withConsoleTrace
 #endif
+|> Program.withToast Toast.renderFulma
 |> Program.withReactBatched "elmish-app"
 |> Program.run

@@ -7,6 +7,7 @@ open Giraffe.Serialization
 open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
+open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
@@ -20,60 +21,136 @@ open Thoth.Json.Net
 let private clientApp =
     ConfidentialClientApplicationBuilder
         .Create(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_CLIENT_ID")
-        // .WithTenantId(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_TENANT_ID")
-        .WithRedirectUri("https://localhost:8080")
         .WithClientSecret(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_APP_KEY")
+        .WithRedirectUri("https://localhost:8080")
         .Build()
 
 let authProvider = OnBehalfOfProvider(clientApp)
 
 let graphServiceClient = GraphServiceClient(authProvider)
 
+let getBearerToken (request: HttpRequest) =
+    match request.Headers.TryGetValue "Authorization" with
+    | (true, values) ->
+        values
+        |> Seq.tryPick (fun v ->
+            if v.StartsWith("Bearer ", StringComparison.InvariantCultureIgnoreCase)
+            then Some (v.Substring ("Bearer ".Length))
+            else None
+        )
+        |> Option.defaultValue ""
+    | _ -> ""
+
+let acquireToken request scopes = async {
+    let jwtToken = getBearerToken request
+    let userAssertion = UserAssertion jwtToken
+    do! clientApp.AcquireTokenOnBehalfOf(scopes, userAssertion).ExecuteAsync() |> Async.AwaitTask |> Async.Ignore
+}
 // ---------------------------------
 // Web app
 // ---------------------------------
 
 let handleGetAutoGroups : HttpHandler =
     fun next ctx -> task {
+        do! acquireToken ctx.Request [ "Group.ReadWrite.All" ]
         let! aadGroups =
             AAD.getAutoGroups graphServiceClient
             |> Async.map List.toArray
         return! Successful.OK aadGroups next ctx
     }
 
-let handleGetTeachers : HttpHandler =
+let handleGetUsers : HttpHandler =
     fun next ctx -> task {
-        let! aadTeachers =
-            AAD.getTeachers graphServiceClient
+        do! acquireToken ctx.Request [ "User.Read.All" ]
+        let! aadUsers =
+            AAD.getUsers graphServiceClient
             |> Async.map List.toArray
-        return! Successful.OK aadTeachers next ctx
+        return! Successful.OK aadUsers next ctx
     }
 
 let handlePostGroupsModifications : HttpHandler =
     fun next ctx -> task {
+        do! acquireToken ctx.Request [ "Group.ReadWrite.All" ]
         let! modifications = ctx.BindModelAsync()
         do! AAD.applyGroupsModifications graphServiceClient modifications
         return! Successful.OK () next ctx
     }
 
-let handleGetUserGroups : HttpHandler =
+type Role = Admin | Teacher
+module Role =
+    let encode role =
+        match role with
+        | Admin -> Encode.string "admin"
+        | Teacher -> Encode.string "teacher"
+
+let handleGetSignedInUserRoles : HttpHandler =
     fun next ctx -> task {
+        do! acquireToken ctx.Request [ "Directory.Read.All" ]
         let userId = ctx.User.ToGraphUserAccount().ObjectId
-        let! groups = AAD.getUserGroups graphServiceClient userId 
-        let groupIds =
+        let! groups = AAD.getUserGroups graphServiceClient userId
+        let groups =
             groups
-            |> List.map (fun group -> group.Id)
-        return! Successful.OK groupIds next ctx
+            |> List.choose (function
+                | :? DirectoryRole as role when role.Id = "9fcd5602-ac0d-4492-a0b2-74da85f14c41" -> Some Admin // Global admin
+                | :? Group as group when group.Id = "a37b7d02-38b0-4fbc-a9ed-3a032483251e" -> Some Teacher // GrpLehrer
+                | other -> None
+            )
+            |> List.distinct
+        return! Successful.OK groups next ctx
     }
+
+#if DEBUG
+let authTest : HttpHandler =
+    fun next ctx -> task {
+        let! groups = async {
+            try
+                do! acquireToken ctx.Request [ "Directory.Read.All" ]
+                let graphUser = ctx.User.ToGraphUserAccount()
+                let! groups = AAD.getUserGroups graphServiceClient graphUser.ObjectId
+                return
+                    groups
+                    |> Seq.map (function
+                        | :? Group as group ->
+                            sprintf "%s  * %s (Group, Id = %s)" Environment.NewLine group.DisplayName group.Id
+                        | :? DirectoryRole as role ->
+                            sprintf "%s  * %s (Directory role, Id = %s)" Environment.NewLine role.DisplayName role.Id
+                        | other ->
+                            sprintf "%s  * Unknown (Type = %s, Id = %s)" Environment.NewLine other.ODataType other.Id
+                    )
+                    |> String.concat ""
+            with e ->
+                return sprintf "%O" e
+        }
+
+        let result =
+            [
+                sprintf "User: %O" ctx.User
+                sprintf "User identity: %O" ctx.User.Identity
+                sprintf "User identity name: %O" ctx.User.Identity.Name
+                sprintf "User identity is authenticated: %O" ctx.User.Identity.IsAuthenticated
+                ctx.User.Claims
+                |> Seq.map (fun claim -> sprintf "%s  * %s: %s" Environment.NewLine claim.Type claim.Value)
+                |> String.concat ""
+                |> sprintf "Claims: %s"
+                groups
+                |> sprintf "Groups: %s"
+            ]
+            |> String.concat Environment.NewLine
+        return! Successful.ok (setBodyFromString result) next ctx
+    }
+#endif
 
 let webApp =
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
+#if DEBUG
+                    route "/auth-test" >=> authTest
+#endif
                     route "/auto-groups" >=> handleGetAutoGroups
-                    route "/teachers" >=> handleGetTeachers
-                    route "/logged-in-user/groups" >=> handleGetUserGroups
+                    route "/users" >=> handleGetUsers
+                    route "/signed-in-user/roles" >=> handleGetSignedInUserRoles
                 ]
                 POST >=> choose [
                     route "/auto-groups/modify" >=> handlePostGroupsModifications
@@ -108,6 +185,8 @@ let configureServices (services : IServiceCollection) =
         Extra.empty
         |> Extra.withCustom Group.encode (Decode.fail "Not implemented")
         |> Extra.withCustom User.encode (Decode.fail "Not implemented")
+        |> Extra.withCustom Role.encode (Decode.fail "Not implemented")
+        |> Extra.withCustom (fun _ -> Encode.nil) (GroupModification.decoder)
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
     services
         .AddAuthentication(fun config ->

@@ -2,63 +2,18 @@ module AADGroupUpdates
 
 open AAD
 
-type MemberUpdates =
-    {
-        AddMembers: UserId list
-        RemoveMembers: UserId list
-    }
-
-// module MemberUpdates =
-//     let toDto users memberUpdates =
-//         {
-//             Shared.AADGroups.MemberUpdates.AddMembers = memberUpdates.AddMembers |> List.map (flip Map.find users)
-//             Shared.AADGroups.MemberUpdates.RemoveMembers = memberUpdates.RemoveMembers |> List.map (flip Map.find users)
-//         }
-
-//     let fromDto (memberUpdates: Shared.AADGroups.MemberUpdates) =
-//         {
-//             AddMembers = memberUpdates.AddMembers |> List.map (fun m -> m.Id)
-//             RemoveMembers = memberUpdates.RemoveMembers |> List.map (fun m -> m.Id)
-//         }
-
-type GroupUpdate =
-    | CreateGroup of string * UserId list
-    | UpdateGroup of GroupId * MemberUpdates
-    | DeleteGroup of GroupId
-
-// module GroupUpdate =
-//     let toDto users groups = function
-//         | CreateGroup (groupName, memberIds) ->
-//             let members = memberIds |> List.map (flip Map.find users)
-//             Shared.AADGroups.CreateGroup (groupName, members)
-//         | UpdateGroup (groupId, memberUpdates) ->
-//             let group = groups |> Map.find groupId
-//             Shared.AADGroups.UpdateGroup (group, MemberUpdates.toDto users memberUpdates)
-//         | DeleteGroup groupId ->
-//             let group = groups |> Map.find groupId
-//             Shared.AADGroups.DeleteGroup group
-
-//     let fromDto = function
-//         | Shared.AADGroups.CreateGroup (name, members) ->
-//             CreateGroup (name, members |> List.map (fun m -> m.Id))
-//         | Shared.AADGroups.UpdateGroup (group, memberUpdates) ->
-//             UpdateGroup (group.Id, MemberUpdates.fromDto memberUpdates)
-//         | Shared.AADGroups.DeleteGroup group ->
-//             DeleteGroup group.Id
-
 let calculateMemberUpdates teacherIds aadGroupMemberIds =
-    let memberUpdates = {
-        AddMembers =
+    [
+        yield!
             teacherIds
             |> List.except aadGroupMemberIds
+            |> List.map AddMember
 
-        RemoveMembers =
+        yield!
             aadGroupMemberIds
             |> List.except teacherIds
-    }
-    match memberUpdates.AddMembers, memberUpdates.RemoveMembers with
-    | [], [] -> None
-    | _ -> Some memberUpdates
+            |> List.map RemoveMember
+    ]
 
 let calculateAll aadGroups desiredGroups =
     [
@@ -69,11 +24,11 @@ let calculateAll aadGroups desiredGroups =
                 |> List.tryFind (fun aadGroup -> String.equalsCaseInsensitive groupName aadGroup.Name)
                 |> function
                 | Some aadGroup ->
-                    calculateMemberUpdates userIds aadGroup.Members
-                    |> Option.map (fun memberUpdates -> UpdateGroup (aadGroup.Id, memberUpdates))
+                    match calculateMemberUpdates userIds aadGroup.Members with
+                    | [] -> None
+                    | memberUpdates -> UpdateGroup (aadGroup.Id, memberUpdates) |> Some
                 | None ->
-                    CreateGroup (groupName, userIds)
-                    |> Some
+                    CreateGroup (groupName, userIds) |> Some
             )
 
         yield!

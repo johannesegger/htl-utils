@@ -7,7 +7,7 @@ open System
 open System.Threading.Tasks
 
 let private retryRequest (fn: 'a -> Task<_>) arg =
-    let retryCount = 5
+    let retryCount = 3
     Policy
         .HandleInner<ServiceException>()
         .WaitAndRetryAsync(
@@ -18,7 +18,7 @@ let private retryRequest (fn: 'a -> Task<_>) arg =
                     |> Option.bind (fun p -> p.ResponseHeaders |> Option.ofObj)
                     |> Option.bind (fun p -> p.RetryAfter |> Option.ofObj)
                     |> Option.bind (fun p -> p.Delta |> Option.ofNullable)
-                    |> Option.defaultValue (TimeSpan.FromSeconds (pown 2. i))
+                    |> Option.defaultValue (TimeSpan.FromSeconds 2.)
                 printfn "Warning: Request #%d/%d failed. Waiting %O before retrying. %s" i retryCount timeout ex.Message
                 timeout
             ),
@@ -93,10 +93,10 @@ let getAutoGroups (graphServiceClient: GraphServiceClient) = async {
         |> Async.map Array.toList
 }
 
-let getTeachers (graphServiceClient: GraphServiceClient) = async {
+let getUsers (graphServiceClient: GraphServiceClient) = async {
     let! users =
         readAll
-            (graphServiceClient.Users.Request().Select(User.fields).Filter("department eq 'Lehrer'"))
+            (graphServiceClient.Users.Request().Select(User.fields))
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
     return
@@ -106,7 +106,7 @@ let getTeachers (graphServiceClient: GraphServiceClient) = async {
 
 // see https://github.com/microsoftgraph/msgraph-sdk-dotnet/issues/528#issuecomment-523083170
 type ExtendedGroup() =
-    inherit Microsoft.Graph.Group()
+    inherit Group()
         [<Newtonsoft.Json.JsonProperty(DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore, PropertyName = "resourceBehaviorOptions")>]
         member val ResourceBehaviorOptions = [||] with get, set
 

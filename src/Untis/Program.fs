@@ -17,7 +17,7 @@ open Thoth.Json.Net
 
 [<Literal>]
 let TeachingDataPath = __SOURCE_DIRECTORY__ + "/data/GPU002.TXT"
-type TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject">
+type TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject", Separators="\t">
 
 let teachingData =
     Environment.getEnvVarOrFail "GPU002_FILE_PATH"

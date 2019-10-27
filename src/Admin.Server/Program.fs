@@ -3,18 +3,16 @@
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open Giraffe.Serialization
-open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
+open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
-open Microsoft.Graph
-open Microsoft.Graph.Auth
-open Microsoft.Identity.Client
 open System
 open System.Net
 open System.Net.Http
+open System.Text
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
@@ -22,26 +20,36 @@ type FetchError =
     | HttpError of url: string * HttpStatusCode * reasonPhrase: string
     | DecodeError of url: string * message: string
 
-let httpGetWithHeaders (httpClientFactory: IHttpClientFactory) (url: string) headers decoder = async {
+let private httpWithHeaders (ctx: HttpContext) (url: string) httpMethod headers body decoder = async {
+    let httpClientFactory = ctx.GetService<IHttpClientFactory>()
     use httpClient = httpClientFactory.CreateClient()
-    use requestMessage = new HttpRequestMessage(HttpMethod.Get, url)
+    use requestMessage = new HttpRequestMessage(httpMethod, url)
+
     headers
     |> Seq.iter (fun (key, value: string) -> requestMessage.Headers.Add(key, value))
+
+    match ctx.Request.Headers.TryGetValue("Authorization") with
+    | (true, values) -> requestMessage.Headers.Add("Authorization", values)
+    | (false, _) -> ()
+
+    body
+    |> Option.iter (fun content -> requestMessage.Content <- new StringContent(Encode.toString 0 content, Encoding.UTF8, "application/json"))
+
     let! response = httpClient.SendAsync(requestMessage) |> Async.AwaitTask
+    let! responseContent = response.Content.ReadAsStringAsync() |> Async.AwaitTask
     if not response.IsSuccessStatusCode then
-        return Result.Error (HttpError (url, response.StatusCode, response.ReasonPhrase))
+        return Error (HttpError (url, response.StatusCode, responseContent))
     else
-        let! responseContent = response.Content.ReadAsStringAsync() |> Async.AwaitTask
         return
             Decode.fromString decoder responseContent
             |> Result.mapError (fun message -> DecodeError(url, message))
 }
 
-let httpGetAuthorized httpClientFactory url authHeaderValue decoder =
-    httpGetWithHeaders httpClientFactory url [ "Authorization", authHeaderValue ] decoder
+let httpGet (ctx: HttpContext) url decoder =
+    httpWithHeaders ctx url HttpMethod.Get [] None decoder
 
-let httpGet httpClientFactory url decoder =
-    httpGetWithHeaders httpClientFactory url [] decoder
+let httpPost (ctx: HttpContext) url body decoder =
+    httpWithHeaders ctx url HttpMethod.Post [] (Some body) decoder
 
 // ---------------------------------
 // Web app
@@ -50,29 +58,35 @@ let httpGet httpClientFactory url decoder =
 let handleGetAutoGroups : HttpHandler =
     fun next ctx -> Successful.OK () next ctx
 
-let requiresUser preferredUsername : HttpHandler =
-    authorizeUser
-        (fun user -> user.HasClaim("preferred_username", preferredUsername))
-        (RequestErrors.forbidden (setBody [||]))
+let requiresRole roleName : HttpHandler =
+    fun next ctx -> task {
+        let! userRoles = httpGet ctx "http://aad/api/signed-in-user/roles" (Decode.list Decode.string)
+        match userRoles with
+        | Ok userRoles ->
+            if List.contains roleName userRoles
+            then return! next ctx
+            else return! RequestErrors.forbidden (setBody [||]) next ctx
+        | Error e ->
+            return! ServerErrors.internalError (setBodyFromString (sprintf "%O" e)) next ctx
+    }
 
-let requiresAdmin : HttpHandler = requiresUser "admin@htlvb.at"
+let requiresAdmin : HttpHandler = requiresRole "admin"
 
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
-        let httpClientFactory = ctx.GetService<IHttpClientFactory>()
-        let! teachingData = httpGet httpClientFactory "http://untis/api/teaching-data" (Decode.list Untis.TeacherInClass.decoder) |> Async.StartChild
-        let! sokratesTeachers = httpGet httpClientFactory "http://sokrates/api/teachers" (Decode.list Sokrates.Teacher.decoder) |> Async.StartChild
-        // let! finalThesesMentors = httpGet httpClientFactory "http://final-theses/api/mentors" |> Async.StartChild
-        let! aadAutoGroups = httpGet httpClientFactory "http://aad/api/auto-groups" (Decode.list AAD.Group.decoder) |> Async.StartChild
-        let! aadTeachers = httpGet httpClientFactory "http://aad/api/teachers" (Decode.list AAD.User.decoder)
+        let! teachingData = httpGet ctx "http://untis/api/teaching-data" (Decode.list Untis.TeacherInClass.decoder) |> Async.StartChild
+        let! sokratesTeachers = httpGet ctx "http://sokrates/api/teachers" (Decode.list Sokrates.Teacher.decoder) |> Async.StartChild
+        // let! finalThesesMentors = httpGet ctx "http://final-theses/api/mentors" |> Async.StartChild
+        let! aadAutoGroups = httpGet ctx "http://aad/api/auto-groups" (Decode.list AAD.Group.decoder) |> Async.StartChild
+        let! aadUsers = httpGet ctx "http://aad/api/users" (Decode.list AAD.User.decoder)
 
         let! untisTeachingData = teachingData |> Async.map (Result.map (List.choose id))
         let! sokratesTeachers = sokratesTeachers |> Async.map (Result.map (List.choose id))
         let! aadAutoGroups = aadAutoGroups
 
-        let getUpdates aadTeachers aadAutoGroups sokratesTeachers teachingData =
+        let getUpdates aadUsers aadAutoGroups sokratesTeachers teachingData =
             let aadUserMap =
-                aadTeachers
+                aadUsers
                 |> List.map (fun (user: AAD.User) -> user.UserName, user.Id)
                 |> Map.ofList
 
@@ -91,6 +105,7 @@ let getAADGroupUpdates : HttpHandler =
                     let teacherIds =
                         teachers
                         |> List.choose (snd >> fun (Untis.TeacherShortName v) -> Map.tryFind v aadUserMap)
+                        |> List.distinct
                     (sprintf "GrpLehrer%s" schoolClass, teacherIds)
                 )
 
@@ -101,6 +116,7 @@ let getAADGroupUpdates : HttpHandler =
                     | Untis.FormTeacher (schoolClass, Untis.TeacherShortName teacherShortName) -> Some teacherShortName
                 )
                 |> List.choose (flip Map.tryFind aadUserMap)
+                |> List.distinct
 
             let desiredGroups = [
                 yield ("GrpLehrer", teacherIds)
@@ -109,54 +125,41 @@ let getAADGroupUpdates : HttpHandler =
                 yield ("GrpDA-Betreuer", []) // TODO
             ]
 
+            let aadUserLookup =
+                aadUsers
+                |> List.map (fun (user: AAD.User) -> user.Id, AAD.User.toDto user)
+                |> Map.ofList
+
+            let aadAutoGroupsLookup =
+                aadAutoGroups
+                |> List.map (fun (group: AAD.Group) -> group.Id, AAD.Group.toDto group)
+                |> Map.ofList
+
             AADGroupUpdates.calculateAll aadAutoGroups desiredGroups
+            |> List.map (AAD.GroupModification.toDto aadUserLookup aadAutoGroupsLookup)
 
         return!
             Ok getUpdates
-            |> Result.apply (Result.mapError List.singleton aadTeachers)
+            |> Result.apply (Result.mapError List.singleton aadUsers)
             |> Result.apply (Result.mapError List.singleton aadAutoGroups)
             |> Result.apply (Result.mapError List.singleton sokratesTeachers)
             |> Result.apply (Result.mapError List.singleton untisTeachingData)
             |> function
             | Ok v -> Successful.OK v next ctx
-            | Error e -> ServerErrors.INTERNAL_ERROR e next ctx
+            | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
 let applyAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
-        return! Successful.OK () next ctx
-    }
-
-let authTest : HttpHandler =
-    fun next ctx -> task {
-        let httpClientFactory = ctx.GetService<IHttpClientFactory>()
-        let graphUser = ctx.User.ToGraphUserAccount()
-        let url = sprintf "http://aad/api/users/%s/groups" graphUser.ObjectId
-        let! groups = httpGet httpClientFactory url (Decode.list Decode.string)
-        let groups =
-            match groups with
-            | Error e ->
-                sprintf "Error: %O" e
-            | Ok groups ->
-                groups
-                |> Seq.map (sprintf "%s  * %s" Environment.NewLine)
-                |> String.concat ""
-                |> sprintf "%s"
-        
-        let result =
-            [
-                sprintf "User: %O" ctx.User
-                sprintf "User identity: %O" ctx.User.Identity
-                sprintf "User identity name: %O" ctx.User.Identity.Name
-                sprintf "User identity is authenticated: %O" ctx.User.Identity.IsAuthenticated
-                ctx.User.Claims
-                |> Seq.map (fun claim -> sprintf "%s  * %s: %s" Environment.NewLine claim.Type claim.Value)
-                |> String.concat ""
-                |> sprintf "Claims: %s"
-                sprintf "Groups: %s" groups
-            ]
-            |> String.concat Environment.NewLine
-        return! Successful.ok (setBodyFromString result) next ctx
+        let! input = ctx.BindJsonAsync<Shared.AADGroupUpdates.GroupUpdate list>()
+        let body =
+            input
+            |> List.map (AAD.GroupModification.fromDto >> AAD.GroupModification.encode)
+            |> Encode.list
+        let! result = httpPost ctx "http://aad/api/auto-groups/modify" body (Decode.nil ())
+        match result with
+        | Ok v -> return! Successful.OK () next ctx
+        | Error e -> return! ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
 let webApp =
@@ -164,7 +167,6 @@ let webApp =
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/auth-test" >=> authTest
                     route "/aad/group-updates" >=> requiresAdmin >=> getAADGroupUpdates
                 ]
                 POST >=> choose [
@@ -190,28 +192,15 @@ let configureApp (app : IApplicationBuilder) =
     match env.IsDevelopment() with
     | true -> app.UseDeveloperExceptionPage() |> ignore
     | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
-    app
-        .UseAuthentication()
-        .UseGiraffe(webApp)
+    app.UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
-        // |> Extra.withCustom Group.encode Group.decoder
-        // |> Extra.withCustom User.encode User.decoder
+        |> Extra.withCustom Shared.AADGroupUpdates.GroupUpdate.encode Shared.AADGroupUpdates.GroupUpdate.decode
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
-    services
-        .AddAuthentication(fun config ->
-            config.DefaultScheme <- JwtBearerDefaults.AuthenticationScheme
-            config.DefaultChallengeScheme <- JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(fun config ->
-            config.Audience <- Environment.getEnvVarOrFail "MICROSOFT_GRAPH_CLIENT_ID"
-            config.Authority <- Environment.getEnvVarOrFail "MICROSOFT_GRAPH_AUTHORITY"
-            config.TokenValidationParameters.ValidateIssuer <- false
-            config.TokenValidationParameters.SaveSigninToken <- true
-        ) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     builder

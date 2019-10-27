@@ -26,11 +26,11 @@ let showErrorToast (errorFn: 'a -> string * string) =
             |> Toast.error
     showToast fn
 
-let showSuccessToast (errorFn: 'a -> string * string) =
+let showSuccessToast (successFn: 'a -> string * string) =
     let fn = function
-        | Ok _ -> Cmd.none
-        | Error e ->
-            let (title, message) = errorFn e
+        | Ok v ->
+            let (title, message) = successFn v
             toast title message
             |> Toast.success
+        | Error _ -> Cmd.none
     showToast fn

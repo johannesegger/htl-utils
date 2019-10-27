@@ -344,7 +344,15 @@ let stream authHeader states msgs =
                     AsyncRx.ofPromise (promise {
                         let url = sprintf "/api/aad/group-updates"
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.get(url, Decode.list AADGroupUpdates.GroupUpdate.decode, requestProperties)
+                        let! updates = Fetch.tryGet(url, Decode.list AADGroupUpdates.GroupUpdate.decode, requestProperties)
+                        match updates with
+                        | Ok v -> return v
+                        | Error e ->
+                            let msg =
+                                if e.Length > 200
+                                then sprintf "%s ..." <| e.Substring(0, 197)
+                                else e
+                            return failwith msg
                     })
                     |> AsyncRx.map Ok
                     |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -360,11 +368,10 @@ let stream authHeader states msgs =
             let applyGroupUpdates groupUpdates =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
-                        let url = sprintf "/api/aad/apply-group-updates"
+                        let url = sprintf "/api/aad/group-updates/apply"
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         let data = (List.map AADGroupUpdates.GroupUpdate.encode >> Encode.list) groupUpdates
-                        let! response = Fetch.post(url, data, Decode.nil (), requestProperties)
-                        return ()
+                        return! Fetch.post(url, data, Decode.nil (), requestProperties)
                     })
                     |> AsyncRx.map Ok
                     |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -379,7 +386,7 @@ let stream authHeader states msgs =
                     | _ -> None)
                 |> AsyncRx.switchLatest
                 |> AsyncRx.showErrorToast (fun e -> "Applying AAD group updates failed", e.Message)
-                |> AsyncRx.showSuccessToast (fun _ -> "Applying AAD group updates", "Successfully applied AAD group updates")
+                |> AsyncRx.showSuccessToast (fun () -> "Applying AAD group updates", "Successfully applied AAD group updates")
                 |> AsyncRx.map ApplyGroupUpdatesResponse
         ]
         |> AsyncRx.mergeSeq
