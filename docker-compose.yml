@@ -21,6 +21,14 @@ services:
             - ${UNTIS_GPU002_FILE_PATH}:/data/GPU002.txt
         environment:
             GPU002_FILE_PATH: "/data/GPU002.txt"
+    final-theses:
+        build:
+            context: src
+            dockerfile: FinalTheses/Dockerfile
+        volumes:
+            - ${FINAL_THESES_MENTORS_FILE_PATH}:/data/mentors.csv
+        environment:
+            MENTORS_FILE_PATH: "/data/mentors.csv"
     aad:
         build:
             context: src
@@ -40,4 +48,5 @@ services:
         depends_on:
             - sokrates
             - untis
+            - final-theses
             - aad

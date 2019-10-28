@@ -10,6 +10,7 @@
     <Compile Include="AADDomain.fs" />
     <Compile Include="SokratesDomain.fs" />
     <Compile Include="UntisDomain.fs" />
+    <Compile Include="FinalThesesDomain.fs" />
     <Compile Include="AADGroupUpdates.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

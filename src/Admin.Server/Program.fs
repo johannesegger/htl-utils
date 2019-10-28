@@ -74,25 +74,26 @@ let requiresAdmin : HttpHandler = requiresRole "admin"
 
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
-        let! teachingData = httpGet ctx "http://untis/api/teaching-data" (Decode.list Untis.TeacherInClass.decoder) |> Async.StartChild
+        let! untisTeachingData = httpGet ctx "http://untis/api/teaching-data" (Decode.list Untis.TeacherInClass.decoder) |> Async.StartChild
         let! sokratesTeachers = httpGet ctx "http://sokrates/api/teachers" (Decode.list Sokrates.Teacher.decoder) |> Async.StartChild
-        // let! finalThesesMentors = httpGet ctx "http://final-theses/api/mentors" |> Async.StartChild
+        let! finalThesesMentors = httpGet ctx "http://final-theses/api/mentors" (Decode.list FinalTheses.Mentor.decoder) |> Async.StartChild
         let! aadAutoGroups = httpGet ctx "http://aad/api/auto-groups" (Decode.list AAD.Group.decoder) |> Async.StartChild
         let! aadUsers = httpGet ctx "http://aad/api/users" (Decode.list AAD.User.decoder)
 
-        let! untisTeachingData = teachingData |> Async.map (Result.map (List.choose id))
+        let! untisTeachingData = untisTeachingData |> Async.map (Result.map (List.choose id))
         let! sokratesTeachers = sokratesTeachers |> Async.map (Result.map (List.choose id))
+        let! finalThesesMentors = finalThesesMentors
         let! aadAutoGroups = aadAutoGroups
 
-        let getUpdates aadUsers aadAutoGroups sokratesTeachers teachingData =
-            let aadUserMap =
+        let getUpdates aadUsers aadAutoGroups sokratesTeachers teachingData finalThesesMentors =
+            let aadUserLookupByUserName =
                 aadUsers
                 |> List.map (fun (user: AAD.User) -> user.UserName, user.Id)
                 |> Map.ofList
 
             let teacherIds =
                 sokratesTeachers
-                |> List.choose (fun (t: Sokrates.Teacher) -> Map.tryFind t.ShortName aadUserMap)
+                |> List.choose (fun (t: Sokrates.Teacher) -> Map.tryFind t.ShortName aadUserLookupByUserName)
 
             let classGroupsWithTeacherIds =
                 teachingData
@@ -104,7 +105,7 @@ let getAADGroupUpdates : HttpHandler =
                 |> List.map (fun (Untis.SchoolClass schoolClass, teachers) ->
                     let teacherIds =
                         teachers
-                        |> List.choose (snd >> fun (Untis.TeacherShortName v) -> Map.tryFind v aadUserMap)
+                        |> List.choose (snd >> fun (Untis.TeacherShortName v) -> Map.tryFind v aadUserLookupByUserName)
                         |> List.distinct
                     (sprintf "GrpLehrer%s" schoolClass, teacherIds)
                 )
@@ -115,28 +116,40 @@ let getAADGroupUpdates : HttpHandler =
                     | Untis.NormalTeacher _ -> None
                     | Untis.FormTeacher (schoolClass, Untis.TeacherShortName teacherShortName) -> Some teacherShortName
                 )
-                |> List.choose (flip Map.tryFind aadUserMap)
+                |> List.choose (flip Map.tryFind aadUserLookupByUserName)
                 |> List.distinct
+
+            let aadUserLookupByMailAddress =
+                aadUsers
+                |> List.collect (fun (user: AAD.User) ->
+                    user.MailAddresses
+                    |> List.map (fun mailAddress -> CIString mailAddress, user.Id)
+                )
+                |> Map.ofList
+
+            let finalThesesMentorIds =
+                finalThesesMentors
+                |> List.choose (fun (m: FinalTheses.Mentor) -> Map.tryFind (CIString m.MailAddress) aadUserLookupByMailAddress)
 
             let desiredGroups = [
                 yield ("GrpLehrer", teacherIds)
                 yield! classGroupsWithTeacherIds
                 yield ("GrpKV", formTeacherIds)
-                yield ("GrpDA-Betreuer", []) // TODO
+                yield ("GrpDA-Betreuer", finalThesesMentorIds)
             ]
 
-            let aadUserLookup =
+            let aadUserLookupById =
                 aadUsers
                 |> List.map (fun (user: AAD.User) -> user.Id, AAD.User.toDto user)
                 |> Map.ofList
 
-            let aadAutoGroupsLookup =
+            let aadAutoGroupsLookupById =
                 aadAutoGroups
                 |> List.map (fun (group: AAD.Group) -> group.Id, AAD.Group.toDto group)
                 |> Map.ofList
 
             AADGroupUpdates.calculateAll aadAutoGroups desiredGroups
-            |> List.map (AAD.GroupModification.toDto aadUserLookup aadAutoGroupsLookup)
+            |> List.map (AAD.GroupModification.toDto aadUserLookupById aadAutoGroupsLookupById)
 
         return!
             Ok getUpdates
@@ -144,6 +157,7 @@ let getAADGroupUpdates : HttpHandler =
             |> Result.apply (Result.mapError List.singleton aadAutoGroups)
             |> Result.apply (Result.mapError List.singleton sokratesTeachers)
             |> Result.apply (Result.mapError List.singleton untisTeachingData)
+            |> Result.apply (Result.mapError List.singleton finalThesesMentors)
             |> function
             | Ok v -> Successful.OK v next ctx
             | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx

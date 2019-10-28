@@ -15,15 +15,21 @@ services:
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
-    aad:
+    final-theses:
         ports:
             - 3003:80
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
-    admin-server:
+    aad:
         ports:
             - 3004:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"
+    admin-server:
+        ports:
+            - 3005:80
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"

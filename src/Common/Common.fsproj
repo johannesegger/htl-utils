@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,6 +11,7 @@
     <Compile Include="Result.fs" />
     <Compile Include="Async.fs" />
     <Compile Include="List.fs" />
+    <Compile Include="CIString.fs" />
     <Compile Include="Environment.fs" />
   </ItemGroup>
 
