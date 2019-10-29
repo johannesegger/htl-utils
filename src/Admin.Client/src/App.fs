@@ -71,39 +71,50 @@ let stream states msgs =
         states
         |> AsyncRx.map (snd >> (fun model -> model.Authentication) >> Authentication.tryGetAuthHeader)
         |> AsyncRx.distinctUntilChanged
+    let pageActivated pageFn =
+        states
+        |> AsyncRx.map (fun (msg, model) ->
+            pageFn model.CurrentPage
+        )
+        |> AsyncRx.distinctUntilChanged
+        |> AsyncRx.filter ((=) true)
+        |> AsyncRx.map ignore
     [
         (
             states
             |> AsyncRx.choose (fun (msg, model) ->
                 match msg with
                 | None
-                | Some (AuthenticationMsg _) as msg -> Some (msg, model.Authentication)
+                | Some (UserMsg (AuthenticationMsg _)) as msg -> Some (msg, model.Authentication)
                 | Some _ -> None
             ),
-            msgs |> AsyncRx.choose (function AuthenticationMsg msg -> Some msg | _ -> None)
+            msgs |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None)
         )
         ||> Authentication.stream
         |> AsyncRx.map AuthenticationMsg
 
         (
+            authHeader
+            |> AsyncRx.combineLatest (pageActivated ((=) SyncAADGroups))
+            |> AsyncRx.map fst,
             states
             |> AsyncRx.choose (fun (msg, model) ->
                 match msg with
-                | None
-                | Some (SyncAADGroupsMsg _) as msg -> Some (msg, model.SyncAADGroups)
+                | None -> Some (None, model.SyncAADGroups)
+                | Some (UserMsg (SyncAADGroupsMsg msg)) -> Some (Some msg, model.SyncAADGroups)
                 | Some _ -> None
             ),
-            msgs |> AsyncRx.choose (function SyncAADGroupsMsg msg -> Some msg | _ -> None)
+            msgs |> AsyncRx.choose (function UserMsg (SyncAADGroupsMsg msg) -> Some msg | _ -> None)
         )
-        ||> SyncAADGroups.stream authHeader
+        |||> SyncAADGroups.stream
         |> AsyncRx.map SyncAADGroupsMsg
     ]
     |> AsyncRx.mergeSeq
-
+    |> AsyncRx.map UserMsg
 
 Program.mkSimple init update root
-|> Program.withStream stream
 |> Program.toNavigable (parseHash pageParser) urlUpdate
+|> Program.withStream stream
 #if DEBUG
 |> Program.withDebugger
 |> Program.withConsoleTrace

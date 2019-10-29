@@ -167,43 +167,6 @@ let init =
     }
 
 let view model dispatch =
-    let fileInput label fileName msgFn =
-        File.file [ File.HasName; File.IsFullWidth ] [
-            File.label [] [
-                File.input [ Props [ OnChange (fun e -> dispatch (msgFn (e?currentTarget :> Browser.Types.HTMLInputElement).files.[0])) ] ]
-                File.cta [] [
-                    File.icon [] [
-                        Fa.i [ Fa.Solid.Upload ] []
-                    ]
-                    span [ Class "file-label" ] [ str label ]
-                ]
-                File.name [] [ str fileName ]
-            ]
-        ]
-
-    let form =
-        let isLocked =
-            match model.GroupUpdates with
-            | LoadedGroupUpdates (Applying, _) -> true
-            | LoadedGroupUpdates (Drafting, _)
-            | LoadedGroupUpdates (Applied, _)
-            | NotLoadedGroupUpdates
-            | LoadingGroupUpdates
-            | FailedToLoadGroupUpdates -> false
-        Section.section [] [
-            Field.div [] [
-                Control.div [] [
-                    Button.button
-                        [
-                            Button.Disabled isLocked
-                            Button.IsLoading (model.GroupUpdates = LoadingGroupUpdates)
-                            Button.OnClick (fun e -> dispatch LoadGroupUpdates)
-                        ]
-                        [ str "Get AAD group updates" ]
-                ]
-            ]
-        ]
-
     let bulkOperations isLocked =
         Button.list [] [
             Button.button
@@ -264,13 +227,13 @@ let view model dispatch =
         | CreateGroup (name, memberUpdates) ->
             Panel.panel [ ] [
                 let title = sprintf "%s (+%s)" name (memberText memberUpdates.Length)
-                yield heading title Fa.Solid.Plus IsSuccess
+                heading title Fa.Solid.Plus IsSuccess
                 yield! List.map (memberUpdate Fa.Solid.Plus IsSuccess) memberUpdates
             ]
         | UpdateGroup (group, memberUpdates) ->
             Panel.panel [ ] [
                 let title = sprintf "%s (+%s, -%s)" group.Name (memberText memberUpdates.AddMembers.Length) (memberText memberUpdates.RemoveMembers.Length)
-                yield heading title Fa.Solid.Sync IsWarning
+                heading title Fa.Solid.Sync IsWarning
                 yield!
                     let addMembers = List.map (fun m -> (Fa.Solid.Plus, IsSuccess, m)) memberUpdates.AddMembers in
                     let removeMembers = List.map (fun m -> (Fa.Solid.Minus, IsDanger, m)) memberUpdates.RemoveMembers in
@@ -286,10 +249,17 @@ let view model dispatch =
     let updates =
         match model.GroupUpdates with
         | NotLoadedGroupUpdates
-        | LoadingGroupUpdates -> None
+        | LoadingGroupUpdates ->
+            Section.section [] [
+                Progress.progress
+                    [
+                        Progress.Color IsDanger
+                        Progress.Max 100
+                    ]
+                    [ str "0%" ]
+            ]
         | FailedToLoadGroupUpdates ->
             Section.section [] [ Views.errorWithRetryButton "Error while loading group updates" (fun () -> dispatch LoadGroupUpdates) ]
-            |> Some
         | LoadedGroupUpdates (state, updates) ->
             let isLocked =
                 match state with
@@ -297,47 +267,65 @@ let view model dispatch =
                 | Applying
                 | Applied -> true
             Section.section [] [
-                yield bulkOperations isLocked
+                bulkOperations isLocked
                 yield!
                     updates
                     |> List.map (groupUpdate isLocked)
                     |> List.intersperse (Divider.divider [])
             ]
-            |> Some
 
-    let saveButton =
+    let buttons =
         match model.GroupUpdates with
         | NotLoadedGroupUpdates
         | LoadingGroupUpdates
         | FailedToLoadGroupUpdates -> None
         | LoadedGroupUpdates (state, _) ->
             Section.section [] [
-                Button.button
-                    [
-                        Button.Disabled (match state with | Applied -> true | Drafting | Applying -> false)
-                        Button.IsLoading (match state with | Applying -> true | Drafting | Applied -> false)
-                        Button.Color IsSuccess
-                        Button.OnClick (fun e -> dispatch ApplyGroupUpdates)
+                Field.div [ Field.IsGrouped ] [
+                    Control.div [] [
+                        Button.button
+                            [
+                                let isLocked =
+                                    match state with
+                                    | Applying -> true
+                                    | Drafting
+                                    | Applied -> false
+                                Button.Disabled isLocked
+                                Button.OnClick (fun e -> dispatch LoadGroupUpdates)
+                            ]
+                            [
+                                Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
+                                span [] [ str "Reload AAD group updates" ]
+                            ]
                     ]
-                    [
-                        Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
-                        span [] [ str "Apply updates" ]
+                    Control.div [] [
+                        Button.button
+                            [
+                                Button.Disabled (match state with | Applied -> true | Drafting | Applying -> false)
+                                Button.IsLoading (match state with | Applying -> true | Drafting | Applied -> false)
+                                Button.Color IsSuccess
+                                Button.OnClick (fun e -> dispatch ApplyGroupUpdates)
+                            ]
+                            [
+                                Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
+                                span [] [ str "Apply updates" ]
+                            ]
                     ]
+                ]
             ]
             |> Some
 
     Container.container [] [
-        yield form
-        yield! Option.toList updates
-        yield! Option.toList saveButton
+        updates
+        yield! Option.toList buttons
     ]
 
-let stream authHeader states msgs =
+let stream authHeader states (msgs: IAsyncObservable<_>) =
     authHeader
     |> AsyncRx.choose id
     |> AsyncRx.flatMapLatest (fun authHeader ->
         [
-            yield msgs
+            msgs
 
             let loadGroupUpdates =
                 AsyncRx.defer (fun () ->
@@ -358,12 +346,13 @@ let stream authHeader states msgs =
                     |> AsyncRx.catch (Error >> AsyncRx.single)
                 )
 
-            yield
-                msgs
-                |> AsyncRx.choose (function | LoadGroupUpdates -> Some loadGroupUpdates | _ -> None)
-                |> AsyncRx.switchLatest
-                |> AsyncRx.showErrorToast (fun e -> "Loading AAD group updates failed", e.Message)
-                |> AsyncRx.map LoadGroupUpdatesResponse
+            states
+            |> AsyncRx.choose (fst >> function | Some LoadGroupUpdates -> Some loadGroupUpdates | _ -> None)
+            |> AsyncRx.switchLatest
+            |> AsyncRx.showErrorToast (fun e -> "Loading AAD group updates failed", e.Message)
+            |> AsyncRx.map LoadGroupUpdatesResponse
+
+            AsyncRx.single LoadGroupUpdates
 
             let applyGroupUpdates groupUpdates =
                 AsyncRx.defer (fun () ->
@@ -377,17 +366,16 @@ let stream authHeader states msgs =
                     |> AsyncRx.catch (Error >> AsyncRx.single)
                 )
 
-            yield
-                msgs
-                |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
-                |> AsyncRx.choose (function
-                    | (ApplyGroupUpdates, { GroupUpdates = LoadedGroupUpdates (_, groupUpdates) }) ->
-                        Some (applyGroupUpdates (List.choose GroupUpdate.toDto groupUpdates))
-                    | _ -> None)
-                |> AsyncRx.switchLatest
-                |> AsyncRx.showErrorToast (fun e -> "Applying AAD group updates failed", e.Message)
-                |> AsyncRx.showSuccessToast (fun () -> "Applying AAD group updates", "Successfully applied AAD group updates")
-                |> AsyncRx.map ApplyGroupUpdatesResponse
+            msgs
+            |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
+            |> AsyncRx.choose (function
+                | (ApplyGroupUpdates, { GroupUpdates = LoadedGroupUpdates (_, groupUpdates) }) ->
+                    Some (applyGroupUpdates (List.choose GroupUpdate.toDto groupUpdates))
+                | _ -> None)
+            |> AsyncRx.switchLatest
+            |> AsyncRx.showErrorToast (fun e -> "Applying AAD group updates failed", e.Message)
+            |> AsyncRx.showSuccessToast (fun () -> "Applying AAD group updates", "Successfully applied AAD group updates")
+            |> AsyncRx.map ApplyGroupUpdatesResponse
         ]
         |> AsyncRx.mergeSeq
     )
