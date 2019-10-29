@@ -18,4 +18,5 @@ docker run -d `
 ```
 
 ## Acknowledgements
-Hammer icon by George Patterson from the Noun Project
+* Hammer icon by George Patterson from the Noun Project
+* Management icon by Gregor Cresnar from the Noun Project
