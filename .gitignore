@@ -14,3 +14,4 @@ deploy/
 set-secrets.ps1
 .ionide/
 /src/Admin.Client/src/Client.Shared
+/local
