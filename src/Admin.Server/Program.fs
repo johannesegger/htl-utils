@@ -98,7 +98,7 @@ let getAADGroupUpdates : HttpHandler =
             let classGroupsWithTeacherIds =
                 teachingData
                 |> List.map (function
-                    | Untis.NormalTeacher (schoolClass, teacherShortName)
+                    | Untis.NormalTeacher (schoolClass, teacherShortName, _)
                     | Untis.FormTeacher (schoolClass, teacherShortName) -> (schoolClass, teacherShortName)
                 )
                 |> List.groupBy fst
@@ -131,11 +131,35 @@ let getAADGroupUpdates : HttpHandler =
                 finalThesesMentors
                 |> List.choose (fun (m: FinalTheses.Mentor) -> Map.tryFind (CIString m.MailAddress) aadUserLookupByMailAddress)
 
+            let professionalGroupsWithTeacherIds =
+                [
+                    "GrpD", [ "D" ]
+                    "GrpE", [ "E1" ]
+                    "GrpAM", [ "AM" ]
+                    "GrpCAD", [ "KOBE"; "KOP1"; "MT"; "PLP" ]
+                    "GrpWE", [ "ETAUTWP_4"; "FET1WP_3"; "FET1WP_4"; "WLA"; "WPT_3"; "WPT_4" ]
+                ]
+                |> List.map (Tuple.mapSnd (List.map CIString) >> fun (groupName, subjects) ->
+                    let teacherIds =
+                        teachingData
+                        |> List.choose (function
+                            | Untis.NormalTeacher (_, Untis.TeacherShortName teacherShortName, Untis.Subject subject) ->
+                                Some (teacherShortName, subject)
+                            | Untis.FormTeacher _ -> None
+                        )
+                        |> List.filter (snd >> fun subject ->
+                            subjects |> List.contains (CIString subject)
+                        )
+                        |> List.choose (fst >> flip Map.tryFind aadUserLookupByUserName)
+                    (groupName, teacherIds)
+                )
+
             let desiredGroups = [
-                yield ("GrpLehrer", teacherIds)
+                ("GrpLehrer", teacherIds)
+                ("GrpKV", formTeacherIds)
+                ("GrpDA-Betreuer", finalThesesMentorIds)
                 yield! classGroupsWithTeacherIds
-                yield ("GrpKV", formTeacherIds)
-                yield ("GrpDA-Betreuer", finalThesesMentorIds)
+                yield! professionalGroupsWithTeacherIds
             ]
 
             let aadUserLookupById =
