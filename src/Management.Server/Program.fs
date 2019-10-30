@@ -151,6 +151,7 @@ let getAADGroupUpdates : HttpHandler =
                             subjects |> List.contains (CIString subject)
                         )
                         |> List.choose (fst >> flip Map.tryFind aadUserLookupByUserName)
+                        |> List.distinct
                     (groupName, teacherIds)
                 )
 
