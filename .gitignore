@@ -13,5 +13,5 @@ release.sh
 deploy/
 set-secrets.ps1
 .ionide/
-/src/Admin.Client/src/Client.Shared
+/src/Management.Client/src/Client.Shared
 /local

@@ -19,7 +19,7 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AAD", "AAD\AAD.fsproj", "{0
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AAD.Test", "AAD.Test\AAD.Test.fsproj", "{B3D5075B-D6EC-4CBC-8537-05D6CD94FC91}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Admin.Server", "Admin.Server\Admin.Server.fsproj", "{A7036E32-6A96-43A0-8C04-841E3F898A10}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Management.Server", "Management.Server\Management.Server.fsproj", "{A7036E32-6A96-43A0-8C04-841E3F898A10}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FinalTheses", "FinalTheses\FinalTheses.fsproj", "{03263A9F-787E-4622-8975-29E99D7AD7A7}"
 EndProject

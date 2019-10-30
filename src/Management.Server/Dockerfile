@@ -3,16 +3,16 @@ WORKDIR /app
 
 # Copy csproj and restore as distinct layers
 COPY Common/Common.fsproj ./Common/
-COPY Admin.Server/Admin.Server.fsproj ./Admin.Server/
-RUN dotnet restore Admin.Server
+COPY Management.Server/Management.Server.fsproj ./Management.Server/
+RUN dotnet restore Management.Server
 
 # Copy everything else and build
 COPY Common ./Common
-COPY Admin.Server ./Admin.Server
-RUN dotnet publish Admin.Server -c Release -o out
+COPY Management.Server ./Management.Server
+RUN dotnet publish Management.Server -c Release -o out
 
 # Build runtime image
 FROM mcr.microsoft.com/dotnet/core/aspnet:3.0
 WORKDIR /app
 COPY --from=build-env /app/out .
-ENTRYPOINT ["./Admin.Server"]
+ENTRYPOINT ["./Management.Server"]

@@ -37,14 +37,14 @@ services:
             MICROSOFT_GRAPH_CLIENT_ID: ${AAD_MICROSOFT_GRAPH_CLIENT_ID}
             MICROSOFT_GRAPH_AUTHORITY: ${AAD_MICROSOFT_GRAPH_AUTHORITY}
             MICROSOFT_GRAPH_APP_KEY: ${AAD_MICROSOFT_GRAPH_APP_KEY}
-    admin-server:
+    management-server:
         build:
             context: src
-            dockerfile: Admin.Server/Dockerfile
+            dockerfile: Management.Server/Dockerfile
         environment:
-            MICROSOFT_GRAPH_CLIENT_ID: ${ADMIN_SERVER_MICROSOFT_GRAPH_CLIENT_ID}
-            MICROSOFT_GRAPH_AUTHORITY: ${ADMIN_SERVER_MICROSOFT_GRAPH_AUTHORITY}
-            MICROSOFT_GRAPH_APP_KEY: ${ADMIN_SERVER_MICROSOFT_GRAPH_APP_KEY}
+            MICROSOFT_GRAPH_CLIENT_ID: ${MANAGEMENT_SERVER_MICROSOFT_GRAPH_CLIENT_ID}
+            MICROSOFT_GRAPH_AUTHORITY: ${MANAGEMENT_SERVER_MICROSOFT_GRAPH_AUTHORITY}
+            MICROSOFT_GRAPH_APP_KEY: ${MANAGEMENT_SERVER_MICROSOFT_GRAPH_APP_KEY}
         depends_on:
             - sokrates
             - untis

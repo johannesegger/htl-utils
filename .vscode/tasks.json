@@ -6,9 +6,9 @@
     "tasks": [
         {
             "options": {
-                "cwd": "${workspaceRoot}/src/Admin.Client/src"
+                "cwd": "${workspaceRoot}/src/Management.Client/src"
             },
-            "label": "Start Admin.Client",
+            "label": "Start Management.Client",
             "command": "npx",
             "args": [ "webpack-dev-server" ],
             "type": "shell",

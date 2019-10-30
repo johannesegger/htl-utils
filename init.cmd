@@ -1,1 +1,1 @@
-mklink /D src\Admin.Client\src\Client.Shared ..\..\Client.Shared
+mklink /D src\Management.Client\src\Client.Shared ..\..\Client.Shared
