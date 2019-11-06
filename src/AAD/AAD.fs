@@ -55,12 +55,20 @@ module User =
             then Some (proxyAddress.Substring prefix.Length)
             else None
         let ifNullEmpty v = if isNull v then "" else v
+        let toSortable (v: string) =
+            let a = if v.StartsWith "SMTP:" then 0 else 1
+            let b = if v.EndsWith(".onmicrosoft.com", StringComparison.InvariantCultureIgnoreCase) then 1 else 0
+            (a, b)
         {
             Id = UserId user.Id
             UserName = trimEMailAddressDomain user.UserPrincipalName
             FirstName = ifNullEmpty user.GivenName
             LastName = ifNullEmpty user.Surname
-            MailAddresses = user.ProxyAddresses |> Seq.choose tryGetMailAddressFromProxyAddress |> Seq.toList
+            MailAddresses =
+                user.ProxyAddresses
+                |> Seq.sortBy toSortable
+                |> Seq.choose tryGetMailAddressFromProxyAddress
+                |> Seq.toList
         }
 
 let getAutoGroups (graphServiceClient: GraphServiceClient) = async {
