@@ -45,6 +45,15 @@ services:
             MICROSOFT_GRAPH_CLIENT_ID: ${AAD_MICROSOFT_GRAPH_CLIENT_ID}
             MICROSOFT_GRAPH_AUTHORITY: ${AAD_MICROSOFT_GRAPH_AUTHORITY}
             MICROSOFT_GRAPH_APP_KEY: ${AAD_MICROSOFT_GRAPH_APP_KEY}
+    teaching-server:
+        build:
+            context: src
+            dockerfile: Teaching.Server/Dockerfile
+        depends_on:
+            - wake-up-computer
+            - sokrates
+            - photo-library
+            - aad
     management-server:
         build:
             context: src

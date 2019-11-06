@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Shared.fs" />
+    <Compile Include="Domain.fs" />
+    <Compile Include="AADDomain.fs" />
+    <Compile Include="SokratesDomain.fs" />
+    <Compile Include="PhotoLibraryDomain.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Giraffe" Version="4.0.0" />
+    <PackageReference Include="Thoth.Json.Giraffe" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.fsproj" />
+    <ProjectReference Include="..\Common.Server\Common.Server.fsproj" />
+  </ItemGroup>
+
+</Project>

@@ -33,6 +33,12 @@ services:
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
+    teaching-server:
+        ports:
+            - 3006:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"
     management-server:
         ports:
             - 3007:80

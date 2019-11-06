@@ -23,6 +23,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Management.Server", "Manage
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FinalTheses", "FinalTheses\FinalTheses.fsproj", "{03263A9F-787E-4622-8975-29E99D7AD7A7}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Teaching.Server", "Teaching.Server\Teaching.Server.fsproj", "{17E334FF-2D2D-46CC-92A1-30B8F12B8FBD}"
+EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Common.Server", "Common.Server\Common.Server.fsproj", "{84AD681E-CC4C-4F45-B24D-9BC1E20E107A}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "PhotoLibrary", "PhotoLibrary\PhotoLibrary.fsproj", "{9E83C737-505D-4997-A78C-C59B2688D5F9}"
@@ -69,6 +71,18 @@ Global
 		{03263A9F-787E-4622-8975-29E99D7AD7A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{03263A9F-787E-4622-8975-29E99D7AD7A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{03263A9F-787E-4622-8975-29E99D7AD7A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{17E334FF-2D2D-46CC-92A1-30B8F12B8FBD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17E334FF-2D2D-46CC-92A1-30B8F12B8FBD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17E334FF-2D2D-46CC-92A1-30B8F12B8FBD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17E334FF-2D2D-46CC-92A1-30B8F12B8FBD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{84AD681E-CC4C-4F45-B24D-9BC1E20E107A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{84AD681E-CC4C-4F45-B24D-9BC1E20E107A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{84AD681E-CC4C-4F45-B24D-9BC1E20E107A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{84AD681E-CC4C-4F45-B24D-9BC1E20E107A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9E83C737-505D-4997-A78C-C59B2688D5F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9E83C737-505D-4997-A78C-C59B2688D5F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9E83C737-505D-4997-A78C-C59B2688D5F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9E83C737-505D-4997-A78C-C59B2688D5F9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{73E8E820-C8AA-47CC-BB2B-152CA4D0B856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
