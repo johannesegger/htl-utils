@@ -101,6 +101,7 @@ let handleGetSignedInUserRoles : HttpHandler =
 
 let handlePostAutoContacts : HttpHandler =
     fun next ctx -> task {
+        do! acquireToken ctx.Request [ "Contacts.ReadWrite" ]
         let userId = ctx.User.ToGraphUserAccount().ObjectId
         let! contacts = ctx.BindModelAsync()
         do! AAD.updateAutoContacts graphServiceClient (UserId userId) contacts
