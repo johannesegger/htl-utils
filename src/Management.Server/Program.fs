@@ -81,7 +81,7 @@ let getAADGroupUpdates : HttpHandler =
         let! aadUsers = httpGet ctx "http://aad/api/users" (Decode.list AAD.User.decoder)
 
         let! untisTeachingData = untisTeachingData |> Async.map (Result.map (List.choose id))
-        let! sokratesTeachers = sokratesTeachers |> Async.map (Result.map (List.choose id))
+        let! sokratesTeachers = sokratesTeachers
         let! finalThesesMentors = finalThesesMentors
         let! aadAutoGroups = aadAutoGroups
 
