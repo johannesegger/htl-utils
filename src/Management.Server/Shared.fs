@@ -11,13 +11,13 @@ module AADGroupUpdates =
 
     module UserId =
         let encode (UserId userId) = Encode.string userId
-        let decode : Decoder<_> = Decode.string |> Decode.map UserId
+        let decoder : Decoder<_> = Decode.string |> Decode.map UserId
 
     type GroupId = GroupId of string
 
     module GroupId =
         let encode (GroupId userId) = Encode.string userId
-        let decode : Decoder<_> = Decode.string |> Decode.map GroupId
+        let decoder : Decoder<_> = Decode.string |> Decode.map GroupId
 
     type User =
         {
@@ -35,10 +35,10 @@ module AADGroupUpdates =
                 "firstName", Encode.string u.FirstName
                 "lastName", Encode.string u.LastName
             ]
-        let decode : Decoder<_> =
+        let decoder : Decoder<_> =
             Decode.object (fun get ->
                 {
-                    Id = get.Required.Field "id" UserId.decode
+                    Id = get.Required.Field "id" UserId.decoder
                     ShortName = get.Required.Field "shortName" Decode.string
                     FirstName = get.Required.Field "firstName" Decode.string
                     LastName = get.Required.Field "lastName" Decode.string
@@ -57,10 +57,10 @@ module AADGroupUpdates =
                 "addMembers", (List.map User.encode >> Encode.list) memberUpdates.AddMembers
                 "removeMembers", (List.map User.encode >> Encode.list) memberUpdates.RemoveMembers
             ]
-        let decode : Decoder<_> =
+        let decoder : Decoder<_> =
             Decode.object (fun get -> {
-                AddMembers = get.Required.Field "addMembers" (Decode.list User.decode)
-                RemoveMembers = get.Required.Field "removeMembers" (Decode.list User.decode)
+                AddMembers = get.Required.Field "addMembers" (Decode.list User.decoder)
+                RemoveMembers = get.Required.Field "removeMembers" (Decode.list User.decoder)
             })
 
     type Group = {
@@ -74,10 +74,10 @@ module AADGroupUpdates =
                 "id", GroupId.encode u.Id
                 "name", Encode.string u.Name
             ]
-        let decode : Decoder<_> =
+        let decoder : Decoder<_> =
             Decode.object (fun get ->
                 {
-                    Id = get.Required.Field "id" GroupId.decode
+                    Id = get.Required.Field "id" GroupId.decoder
                     Name = get.Required.Field "name" Decode.string
                 }
             )
@@ -92,9 +92,9 @@ module AADGroupUpdates =
             | CreateGroup (name, members) -> Encode.object [ "createGroup", Encode.tuple2 Encode.string (List.map User.encode >> Encode.list) (name, members) ]
             | UpdateGroup (group, memberUpdates) -> Encode.object [ "updateGroup", Encode.tuple2 Group.encode MemberUpdates.encode (group, memberUpdates) ]
             | DeleteGroup group -> Encode.object [ "deleteGroup", Group.encode group ]
-        let decode : Decoder<_> =
+        let decoder : Decoder<_> =
             Decode.oneOf [
-                Decode.field "createGroup" (Decode.tuple2 Decode.string (Decode.list User.decode)) |> Decode.map CreateGroup
-                Decode.field "updateGroup" (Decode.tuple2 Group.decode MemberUpdates.decode) |> Decode.map UpdateGroup
-                Decode.field "deleteGroup" Group.decode |> Decode.map DeleteGroup
+                Decode.field "createGroup" (Decode.tuple2 Decode.string (Decode.list User.decoder)) |> Decode.map CreateGroup
+                Decode.field "updateGroup" (Decode.tuple2 Group.decoder MemberUpdates.decoder) |> Decode.map UpdateGroup
+                Decode.field "deleteGroup" Group.decoder|> Decode.map DeleteGroup
             ]

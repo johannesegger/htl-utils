@@ -238,7 +238,7 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
-        |> Extra.withCustom Shared.AADGroupUpdates.GroupUpdate.encode Shared.AADGroupUpdates.GroupUpdate.decode
+        |> Extra.withCustom Shared.AADGroupUpdates.GroupUpdate.encode Shared.AADGroupUpdates.GroupUpdate.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
