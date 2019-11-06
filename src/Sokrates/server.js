@@ -16,16 +16,24 @@ http
             return;
         }
 
-        let getStudentsParams = /^\/api\/students\/(?<date>\d{4}-\d{2}-\d{2})$/.exec(req.url);
+        let getStudentsParams = /^\/api\/students(\/(?<date>\d{4}-\d{2}-\d{2}))?$/.exec(req.url);
         if (getStudentsParams)
         {
-            let date = moment(getStudentsParams.groups.date, "YYYY-MM-DD");
-            if (!date.isValid())
+            let date;
+            if (getStudentsParams.groups.date)
             {
-                res.statusCode = 400;
-                res.write(`Invalid date: ${getStudentsParams.groups.date}`);
-                res.end();
-                return;
+                date = moment(getStudentsParams.groups.date, "YYYY-MM-DD");
+                if (!date.isValid())
+                {
+                    res.statusCode = 400;
+                    res.write(`Invalid date: ${getStudentsParams.groups.date}`);
+                    res.end();
+                    return;
+                }
+            }
+            else
+            {
+                date = moment().startOf("day");
             }
             await tryGet(res, () => getStudents(date));
             return;
