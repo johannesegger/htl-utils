@@ -41,10 +41,6 @@ services:
         build:
             context: src
             dockerfile: Management.Server/Dockerfile
-        environment:
-            MICROSOFT_GRAPH_CLIENT_ID: ${MANAGEMENT_SERVER_MICROSOFT_GRAPH_CLIENT_ID}
-            MICROSOFT_GRAPH_AUTHORITY: ${MANAGEMENT_SERVER_MICROSOFT_GRAPH_AUTHORITY}
-            MICROSOFT_GRAPH_APP_KEY: ${MANAGEMENT_SERVER_MICROSOFT_GRAPH_APP_KEY}
         depends_on:
             - sokrates
             - untis
