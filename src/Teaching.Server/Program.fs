@@ -58,50 +58,41 @@ let handleAddTeachersAsContacts : HttpHandler =
         let! teacherPhotos = teacherPhotos
 
         let getContacts aadUsers sokratesTeachers teacherPhotos =
-            let sokratesTeacherMap =
-                sokratesTeachers
-                |> List.map (fun (teacher: Sokrates.Teacher) -> CIString teacher.ShortName, teacher)
+            let aadUserMap =
+                aadUsers
+                |> List.map (fun (user: AAD.User) -> CIString user.UserName, user)
                 |> Map.ofList
             let photoLibraryTeacherMap =
                 teacherPhotos
                 |> List.map (fun (photo: PhotoLibrary.TeacherPhoto) -> (CIString photo.LastName, CIString photo.FirstName), photo.Data)
                 |> Map.ofList
-            aadUsers
-            |> List.choose (fun (aadUser: AAD.User) ->
-                let sokratesTeacher = Map.tryFind (CIString aadUser.UserName) sokratesTeacherMap
-                let photo = Map.tryFind (CIString aadUser.LastName, CIString aadUser.FirstName) photoLibraryTeacherMap
-                match sokratesTeacher, photo with
-                | None, None -> None
-                | Some _, Some _
-                | None, Some _
-                | Some _, None ->
-                    Some {
-                        AAD.Contact.FirstName = aadUser.FirstName
-                        AAD.Contact.LastName = aadUser.LastName
-                        AAD.Contact.DisplayName = sprintf "%s %s (%s)" aadUser.LastName aadUser.FirstName aadUser.UserName
-                        AAD.Contact.Birthday = sokratesTeacher |> Option.map (fun v -> v.DateOfBirth)
-                        AAD.Contact.HomePhones =
-                            sokratesTeacher
-                            |> Option.map (fun v ->
-                                v.Phones
-                                |> List.choose (function
-                                    | Sokrates.Home number -> Some number
-                                    | Sokrates.Mobile _ -> None
-                                )
-                            )
-                            |> Option.defaultValue []
-                        AAD.Contact.MobilePhone =
-                            sokratesTeacher
-                            |> Option.bind (fun v ->
-                                v.Phones
-                                |> List.tryPick (function
-                                    | Sokrates.Home _ -> None
-                                    | Sokrates.Mobile number -> Some number
-                                )
-                            )
-                        AAD.Contact.MailAddresses = aadUser.MailAddresses |> List.take 1
-                        AAD.Contact.Photo = photo
-                    }
+            sokratesTeachers
+            |> List.map (fun (sokratesTeacher: Sokrates.Teacher) ->
+                let aadUser = Map.tryFind (CIString sokratesTeacher.ShortName) aadUserMap
+                let photo = Map.tryFind (CIString sokratesTeacher.LastName, CIString sokratesTeacher.FirstName) photoLibraryTeacherMap
+                {
+                    AAD.Contact.FirstName = sokratesTeacher.FirstName
+                    AAD.Contact.LastName = sokratesTeacher.LastName
+                    AAD.Contact.DisplayName = sprintf "%s %s (%s)" sokratesTeacher.LastName sokratesTeacher.FirstName sokratesTeacher.ShortName
+                    AAD.Contact.Birthday = Some sokratesTeacher.DateOfBirth
+                    AAD.Contact.HomePhones =
+                        sokratesTeacher.Phones
+                        |> List.choose (function
+                            | Sokrates.Home number -> Some number
+                            | Sokrates.Mobile _ -> None
+                        )
+                    AAD.Contact.MobilePhone =
+                        sokratesTeacher.Phones
+                        |> List.tryPick (function
+                            | Sokrates.Home _ -> None
+                            | Sokrates.Mobile number -> Some number
+                        )
+                    AAD.Contact.MailAddresses =
+                        aadUser
+                        |> Option.map (fun user -> user.MailAddresses |> List.take 1)
+                        |> Option.defaultValue []
+                    AAD.Contact.Photo = photo
+                }
             )
 
         let contacts =
