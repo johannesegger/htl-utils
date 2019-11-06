@@ -1,4 +1,4 @@
-module WakeUpComputer.App
+module App
 
 open EasyWakeOnLan
 open FSharp.Control.Tasks.V2.ContextInsensitive

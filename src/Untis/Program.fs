@@ -1,4 +1,4 @@
-module Untis.App
+module App
 
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open FSharp.Data
