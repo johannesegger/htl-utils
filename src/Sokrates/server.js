@@ -180,22 +180,70 @@ let getStudentContacts = async (personIds, date) =>
     ));
 };
 
+let parsePhoneNumber = v =>
+{
+    v = v.replace(/[\/\s]/g, "");
+    let prefix = parseInt(v.substring(0, 4));
+    // see https://de.wikipedia.org/wiki/Telefonvorwahl_(%C3%96sterreich)#Mobilfunk
+    if ((prefix >= 650 && prefix <= 653) ||
+        (prefix == 655) || (prefix == 657) ||
+        (prefix >= 659 && prefix <= 661) ||
+        (prefix >= 663 && prefix <= 699))
+    {
+        return {
+            type: "mobile",
+            number: v
+        }
+    }
+    return {
+        type: "home",
+        number: v
+    }
+};
+
+let addPhoneNumber = (list, phoneNumber) =>
+{
+    let newList = Object.assign({ [phoneNumber.type]: [] }, list);
+    newList[phoneNumber.type].push(phoneNumber.number);
+    return newList;
+}
+
 let getTeachers = async () =>
 {
     let soapClient = await createSoapClient();
     let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getTeacherAsync({ schoolID: schoolId });
-    return result.return.lstTeacher.teacherEntry.map(teacher => (
-        {
-            id: teacher.teacher.personID,
-            title: teacher.teacher.title || null,
-            lastName: teacher.teacher.lastName,
-            firstName: teacher.teacher.firstName,
-            shortName: teacher.teacher.token || null,
-            dateOfBirth: moment(teacher.teacher.dateOfBirth, "YYYY-MM-DDZ").format("YYYY-MM-DD"),
-            degreeFront: teacher.teacher.degree || null,
-            degreeBack: teacher.teacher.degree2 || null
-        })
-    );
+    return result.return.lstTeacher.teacherEntry
+        .filter(teacher => teacher.teacher.token)
+        .map(teacher => {
+            let address;
+            if (teacher.addressHome)
+            {
+                address = {
+                    country: teacher.addressHome.country,
+                    zip: teacher.addressHome.plz,
+                    city: teacher.addressHome.city,
+                    street: teacher.addressHome.streetNumber
+                        ? `${teacher.addressHome.street} ${teacher.addressHome.streetNumber}`
+                        : teacher.addressHome.street
+                }
+            }
+            else
+            {
+                address = null;
+            }
+            return {
+                id: teacher.teacher.personID,
+                title: teacher.teacher.title || null,
+                lastName: teacher.teacher.lastName,
+                firstName: teacher.teacher.firstName,
+                shortName: teacher.teacher.token,
+                dateOfBirth: moment(teacher.teacher.dateOfBirth, "YYYY-MM-DDZ").format("YYYY-MM-DD"),
+                degreeFront: teacher.teacher.degree || null,
+                degreeBack: teacher.teacher.degree2 || null,
+                phones: teacher.addressHome ? [teacher.addressHome.phone1, teacher.addressHome.phone2].filter(v => v).map(parsePhoneNumber).reduce(addPhoneNumber, {}) : [],
+                address: address
+            };
+        });
 };
 
 let getClasses = async schoolYear =>
