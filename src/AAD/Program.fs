@@ -87,7 +87,7 @@ let handleGetSignedInUserRoles : HttpHandler =
     fun next ctx -> task {
         do! acquireToken ctx.Request [ "Directory.Read.All" ]
         let userId = ctx.User.ToGraphUserAccount().ObjectId
-        let! groups = AAD.getUserGroups graphServiceClient userId
+        let! groups = AAD.getUserGroups graphServiceClient (UserId userId)
         let groups =
             groups
             |> List.choose (function
@@ -106,7 +106,7 @@ let authTest : HttpHandler =
             try
                 do! acquireToken ctx.Request [ "Directory.Read.All" ]
                 let graphUser = ctx.User.ToGraphUserAccount()
-                let! groups = AAD.getUserGroups graphServiceClient graphUser.ObjectId
+                let! groups = AAD.getUserGroups graphServiceClient (UserId graphUser.ObjectId)
                 return
                     groups
                     |> Seq.map (function

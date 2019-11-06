@@ -177,7 +177,7 @@ let applyGroupsModifications graphServiceClient modifications =
     |> Async.Parallel
     |> Async.Ignore
 
-let getUserGroups (graphServiceClient: GraphServiceClient) userId =
+let getUserGroups (graphServiceClient: GraphServiceClient) (UserId userId) =
     readAll
         (graphServiceClient.Users.[userId].MemberOf.Request())
         (fun request -> request.GetAsync())
