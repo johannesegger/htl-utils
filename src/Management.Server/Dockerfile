@@ -3,11 +3,13 @@ WORKDIR /app
 
 # Copy csproj and restore as distinct layers
 COPY Common/Common.fsproj ./Common/
+COPY Common.Server/Common.Server.fsproj ./Common.Server/
 COPY Management.Server/Management.Server.fsproj ./Management.Server/
 RUN dotnet restore Management.Server
 
 # Copy everything else and build
 COPY Common ./Common
+COPY Common.Server ./Common.Server
 COPY Management.Server ./Management.Server
 RUN dotnet publish Management.Server -c Release -o out
 

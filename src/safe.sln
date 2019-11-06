@@ -23,6 +23,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Management.Server", "Manage
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FinalTheses", "FinalTheses\FinalTheses.fsproj", "{03263A9F-787E-4622-8975-29E99D7AD7A7}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Common.Server", "Common.Server\Common.Server.fsproj", "{84AD681E-CC4C-4F45-B24D-9BC1E20E107A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

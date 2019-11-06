@@ -5,51 +5,12 @@ open Giraffe
 open Giraffe.Serialization
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
-open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open System
-open System.Net
-open System.Net.Http
-open System.Text
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
-
-type FetchError =
-    | HttpError of url: string * HttpStatusCode * reasonPhrase: string
-    | DecodeError of url: string * message: string
-
-let private httpWithHeaders (ctx: HttpContext) (url: string) httpMethod headers body decoder = async {
-    let httpClientFactory = ctx.GetService<IHttpClientFactory>()
-    use httpClient = httpClientFactory.CreateClient()
-    use requestMessage = new HttpRequestMessage(httpMethod, url)
-
-    headers
-    |> Seq.iter (fun (key, value: string) -> requestMessage.Headers.Add(key, value))
-
-    match ctx.Request.Headers.TryGetValue("Authorization") with
-    | (true, values) -> requestMessage.Headers.Add("Authorization", values)
-    | (false, _) -> ()
-
-    body
-    |> Option.iter (fun content -> requestMessage.Content <- new StringContent(Encode.toString 0 content, Encoding.UTF8, "application/json"))
-
-    let! response = httpClient.SendAsync(requestMessage) |> Async.AwaitTask
-    let! responseContent = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-    if not response.IsSuccessStatusCode then
-        return Error (HttpError (url, response.StatusCode, responseContent))
-    else
-        return
-            Decode.fromString decoder responseContent
-            |> Result.mapError (fun message -> DecodeError(url, message))
-}
-
-let httpGet (ctx: HttpContext) url decoder =
-    httpWithHeaders ctx url HttpMethod.Get [] None decoder
-
-let httpPost (ctx: HttpContext) url body decoder =
-    httpWithHeaders ctx url HttpMethod.Post [] (Some body) decoder
 
 // ---------------------------------
 // Web app
@@ -58,27 +19,13 @@ let httpPost (ctx: HttpContext) url body decoder =
 let handleGetAutoGroups : HttpHandler =
     fun next ctx -> Successful.OK () next ctx
 
-let requiresRole roleName : HttpHandler =
-    fun next ctx -> task {
-        let! userRoles = httpGet ctx "http://aad/api/signed-in-user/roles" (Decode.list Decode.string)
-        match userRoles with
-        | Ok userRoles ->
-            if List.contains roleName userRoles
-            then return! next ctx
-            else return! RequestErrors.forbidden (setBody [||]) next ctx
-        | Error e ->
-            return! ServerErrors.internalError (setBodyFromString (sprintf "%O" e)) next ctx
-    }
-
-let requiresAdmin : HttpHandler = requiresRole "admin"
-
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
-        let! untisTeachingData = httpGet ctx "http://untis/api/teaching-data" (Decode.list Untis.TeacherInClass.decoder) |> Async.StartChild
-        let! sokratesTeachers = httpGet ctx "http://sokrates/api/teachers" (Decode.list Sokrates.Teacher.decoder) |> Async.StartChild
-        let! finalThesesMentors = httpGet ctx "http://final-theses/api/mentors" (Decode.list FinalTheses.Mentor.decoder) |> Async.StartChild
-        let! aadAutoGroups = httpGet ctx "http://aad/api/auto-groups" (Decode.list AAD.Group.decoder) |> Async.StartChild
-        let! aadUsers = httpGet ctx "http://aad/api/users" (Decode.list AAD.User.decoder)
+        let! untisTeachingData = Http.get ctx "http://untis/api/teaching-data" (Decode.list Untis.TeacherInClass.decoder) |> Async.StartChild
+        let! sokratesTeachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.Teacher.decoder) |> Async.StartChild
+        let! finalThesesMentors = Http.get ctx "http://final-theses/api/mentors" (Decode.list FinalTheses.Mentor.decoder) |> Async.StartChild
+        let! aadAutoGroups = Http.get ctx "http://aad/api/auto-groups" (Decode.list AAD.Group.decoder) |> Async.StartChild
+        let! aadUsers = Http.get ctx "http://aad/api/users" (Decode.list AAD.User.decoder)
 
         let! untisTeachingData = untisTeachingData |> Async.map (Result.map (List.choose id))
         let! sokratesTeachers = sokratesTeachers
@@ -195,7 +142,7 @@ let applyAADGroupUpdates : HttpHandler =
             input
             |> List.map (AAD.GroupModification.fromDto >> AAD.GroupModification.encode)
             |> Encode.list
-        let! result = httpPost ctx "http://aad/api/auto-groups/modify" body (Decode.nil ())
+        let! result = Http.post ctx "http://aad/api/auto-groups/modify" body (Decode.nil ())
         match result with
         | Ok v -> return! Successful.OK () next ctx
         | Error e -> return! ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
@@ -206,10 +153,10 @@ let webApp =
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/aad/group-updates" >=> requiresAdmin >=> getAADGroupUpdates
+                    route "/aad/group-updates" >=> Auth.requiresAdmin >=> getAADGroupUpdates
                 ]
                 POST >=> choose [
-                    route "/aad/group-updates/apply" >=> requiresAdmin >=> applyAADGroupUpdates
+                    route "/aad/group-updates/apply" >=> Auth.requiresAdmin >=> applyAADGroupUpdates
                 ]
             ])
         setStatusCode 404 >=> text "Not Found" ]

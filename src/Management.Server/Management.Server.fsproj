@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.fsproj" />
+    <ProjectReference Include="..\Common.Server\Common.Server.fsproj" />
   </ItemGroup>
 
 </Project>
