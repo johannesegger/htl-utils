@@ -16,6 +16,7 @@ open System.Net.NetworkInformation
 let tryParsePhysicalAddress value =
     try
         String.toUpper value
+        |> String.replace ":" "-"
         |> PhysicalAddress.Parse
         |> Some
     with _e -> None

@@ -16,6 +16,9 @@ let toLower (text: string) =
 let toUpper (text: string) =
     text.ToUpper()
 
+let replace (oldValue: string) (newValue: string) (text: string) =
+    text.Replace(oldValue, newValue)
+
 let equalsCaseInsensitive (a: string) (b: string) =
     if isNull a then isNull b
     else a.Equals(b, StringComparison.InvariantCultureIgnoreCase)
