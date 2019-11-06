@@ -2,6 +2,7 @@ module App
 
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
+open Giraffe.Serialization
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
@@ -13,6 +14,7 @@ open SixLabors.ImageSharp.Processing
 open SixLabors.Primitives
 open System
 open System.IO
+open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
 type Base64EncodedImage = Base64EncodedImage of string
@@ -119,6 +121,10 @@ let configureApp (app : IApplicationBuilder) =
 
 let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
+    let coders =
+        Extra.empty
+        |> Extra.withCustom TeacherPhoto.encode (Decode.fail "Not implemented")
+    services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     builder
