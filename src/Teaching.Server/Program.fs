@@ -112,7 +112,7 @@ let handleAddTeachersAsContacts : HttpHandler =
 
         match contacts with
         | Ok contacts ->
-            match! Http.post ctx "http://aad/api/contacts" ((List.map AAD.Contact.encode >> Encode.list) contacts) (Decode.succeed ()) with
+            match! Http.post ctx "http://aad/api/auto-contacts" ((List.map AAD.Contact.encode >> Encode.list) contacts) (Decode.succeed ()) with
             | Ok () ->
                 return! Successful.OK () next ctx
             | Error e ->
