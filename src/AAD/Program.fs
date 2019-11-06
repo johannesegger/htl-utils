@@ -104,8 +104,8 @@ let handlePostAutoContacts : HttpHandler =
         do! acquireToken ctx.Request [ "Contacts.ReadWrite" ]
         let userId = ctx.User.ToGraphUserAccount().ObjectId
         let! contacts = ctx.BindModelAsync()
-        do! AAD.updateAutoContacts graphServiceClient (UserId userId) contacts
-        return! Successful.OK () next ctx
+        AAD.updateAutoContacts graphServiceClient (UserId userId) contacts |> Async.Start
+        return! Successful.ACCEPTED () next ctx
     }
 
 #if DEBUG
