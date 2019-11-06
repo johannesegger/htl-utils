@@ -91,8 +91,8 @@ let handleGetSignedInUserRoles : HttpHandler =
         let groups =
             groups
             |> List.choose (function
-                | :? DirectoryRole as role when role.Id = "9fcd5602-ac0d-4492-a0b2-74da85f14c41" -> Some Admin // Global admin
-                | :? Group as group when group.Id = "a37b7d02-38b0-4fbc-a9ed-3a032483251e" -> Some Teacher // GrpLehrer
+                | :? DirectoryRole as role when CIString role.Id = CIString (Environment.getEnvVarOrFail "GLOBAL_ADMIN_ROLE_ID") -> Some Admin
+                | :? Group as group when CIString group.Id = CIString (Environment.getEnvVarOrFail "TEACHER_GROUP_ID") -> Some Teacher
                 | other -> None
             )
             |> List.distinct
