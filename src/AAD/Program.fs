@@ -99,6 +99,14 @@ let handleGetSignedInUserRoles : HttpHandler =
         return! Successful.OK groups next ctx
     }
 
+let handlePostAutoContacts : HttpHandler =
+    fun next ctx -> task {
+        let userId = ctx.User.ToGraphUserAccount().ObjectId
+        let! contacts = ctx.BindModelAsync()
+        do! AAD.updateAutoContacts graphServiceClient (UserId userId) contacts
+        return! Successful.OK () next ctx
+    }
+
 #if DEBUG
 let authTest : HttpHandler =
     fun next ctx -> task {
@@ -154,6 +162,7 @@ let webApp =
                 ]
                 POST >=> choose [
                     route "/auto-groups/modify" >=> handlePostGroupsModifications
+                    route "/auto-contacts" >=> handlePostAutoContacts
                 ]
             ])
         setStatusCode 404 >=> text "Not Found" ]
@@ -187,6 +196,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom User.encode (Decode.fail "Not implemented")
         |> Extra.withCustom Role.encode (Decode.fail "Not implemented")
         |> Extra.withCustom (fun _ -> Encode.nil) (GroupModification.decoder)
+        |> Extra.withCustom (fun _ -> failwith "Not implemented") Contact.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
     services
         .AddAuthentication(fun config ->

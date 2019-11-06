@@ -1,5 +1,6 @@
 module Domain
 
+open System
 open Thoth.Json.Net
 
 type UserId = UserId of string
@@ -99,3 +100,30 @@ module GroupModification =
             Decode.field "updateGroup" updateGroupDecoder
             Decode.field "deleteGroup" deleteGroupDecoder
         ]
+
+type Base64EncodedImage = Base64EncodedImage of string
+module Base64EncodedImage =
+    let decoder : Decoder<_> = Decode.string |> Decode.map Base64EncodedImage
+
+type Contact = {
+    FirstName: string
+    LastName: string
+    DisplayName: string
+    Birthday: DateTime option
+    HomePhones: string list
+    MobilePhone: string option
+    MailAddresses: string list
+    Photo: Base64EncodedImage option
+}
+module Contact =
+    let decoder : Decoder<_> =
+        Decode.object (fun get -> {
+            FirstName = get.Required.Field "firstName" Decode.string
+            LastName = get.Required.Field "lastName" Decode.string
+            DisplayName = get.Required.Field "displayName" Decode.string
+            Birthday = get.Required.Field "birthday" (Decode.option Decode.datetime)
+            HomePhones = get.Required.Field "homePhones" (Decode.list Decode.string)
+            MobilePhone = get.Required.Field "mobilePhone" (Decode.option Decode.string)
+            MailAddresses = get.Required.Field "mailAddresses" (Decode.list Decode.string)
+            Photo = get.Required.Field "photo" (Decode.option Base64EncodedImage.decoder)
+        })

@@ -4,6 +4,7 @@ open Domain
 open Microsoft.Graph
 open Polly
 open System
+open System.IO
 open System.Threading.Tasks
 
 let private retryRequest (fn: 'a -> Task<_>) arg =
@@ -182,3 +183,145 @@ let getUserGroups (graphServiceClient: GraphServiceClient) (UserId userId) =
         (graphServiceClient.Users.[userId].MemberOf.Request())
         (fun request -> request.GetAsync())
         (fun items -> items.NextPageRequest)
+
+let getAutoContactIds (graphServiceClient: GraphServiceClient) (UserId userId) = async {
+    let! contacts =
+        readAll
+            (graphServiceClient.Users.[userId].Contacts.Request().Select("id").Filter("categories/any(category: category eq 'htl-utils-auto-generated')"))
+            (fun r -> r.GetAsync())
+            (fun items -> items.NextPageRequest)
+    return
+        contacts
+        |> Seq.map (fun c -> c.Id)
+        |> Seq.toList
+}
+
+let removeContact (graphServiceClient: GraphServiceClient) (UserId userId) contactId =
+    retryRequest
+        (fun () -> graphServiceClient.Users.[userId].Contacts.[contactId].Request().DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
+        ()
+
+let removeAutoContacts (graphServiceClient: GraphServiceClient) userId = async {
+    let! existingContactIds = getAutoContactIds graphServiceClient userId
+
+    do!
+        existingContactIds
+        |> Seq.map (removeContact graphServiceClient userId)
+        |> Async.Parallel
+        |> Async.Ignore
+}
+
+let addContact (graphServiceClient: GraphServiceClient) (UserId userId) contact =
+    retryRequest
+        (graphServiceClient.Users.[userId].Contacts.Request().AddAsync)
+        contact
+
+let setContactPhoto (graphServiceClient: GraphServiceClient) (UserId userId) contactId photoStream =
+    retryRequest
+        (graphServiceClient.Users.[userId].Contacts.[contactId].Photo.Content.Request().PutAsync)
+        photoStream
+
+let addAutoContact (graphServiceClient: GraphServiceClient) userId contact = async {
+    let! newContact =
+        let birthday =
+            contact.Birthday
+            |> Option.map (fun date -> DateTimeOffset(date.Year, date.Month, date.Day, 0, 0, 0, TimeSpan.Zero))
+            |> Option.toNullable
+        let mailAddresses =
+            contact.MailAddresses
+            |> List.map (fun v -> EmailAddress(Address = v))
+        Contact(
+            GivenName = contact.FirstName,
+            Surname = contact.LastName,
+            DisplayName = contact.DisplayName,
+            FileAs = sprintf "%s, %s" contact.LastName contact.FirstName,
+            Birthday = birthday,
+            HomePhones = contact.HomePhones,
+            MobilePhone = Option.toObj contact.MobilePhone,
+            EmailAddresses = mailAddresses,
+            Categories = [ "htl-utils-auto-generated" ]
+        )
+        |> addContact graphServiceClient userId
+
+    match contact.Photo with
+    | Some (Base64EncodedImage photo) ->
+        use stream = new MemoryStream(Convert.FromBase64String photo)
+        do! setContactPhoto graphServiceClient userId newContact.Id stream |> Async.Ignore
+    | None -> ()
+}
+
+let addAutoContacts (graphServiceClient: GraphServiceClient) userId contacts =
+    contacts
+    |> List.map (addAutoContact graphServiceClient userId)
+    |> Async.Parallel
+    |> Async.Ignore
+
+type Calendar = {
+    Id: string
+    Name: string
+}
+
+let getCalendars (graphServiceClient: GraphServiceClient) = async {
+    let! calendars =
+        retryRequest
+            (fun () -> graphServiceClient.Me.Calendars.Request().Select("id,name").GetAsync())
+            ()
+    return
+        calendars
+        |> Seq.map (fun c -> { Id = c.Id; Name = c.Name })
+        |> Seq.toList
+}
+
+let getBirthdayCalendarId (graphServiceClient: GraphServiceClient) = async {
+    let! calendars = getCalendars graphServiceClient
+
+    return
+        calendars
+        |> Seq.tryFind (fun c -> String.equalsCaseInsensitive c.Name "Birthdays")
+        |> Option.map (fun c -> c.Id)
+        |> Option.defaultWith (fun () ->
+            let calendarNames =
+                calendars
+                |> Seq.map (fun c -> c.Name)
+                |> String.concat ", "
+            failwithf "Birthday calendar not found. Found calendars (%d): %s" (List.length calendars) calendarNames
+        )
+}
+
+let getCalendarEventIds (graphServiceClient: GraphServiceClient) calendarId = async {
+    let! events =
+        readAll
+            (graphServiceClient.Me.Calendars.[calendarId].Events.Request())
+            (fun r -> r.GetAsync())
+            (fun items -> items.NextPageRequest)
+    return
+        events
+        |> Seq.map (fun e -> e.Id)
+        |> Seq.toList
+}
+
+let updateCalendarEvent (graphServiceClient: GraphServiceClient) calendarId eventId updatedEvent =
+    retryRequest
+        (graphServiceClient.Me.Calendars.[calendarId].Events.[eventId].Request().UpdateAsync)
+        updatedEvent
+
+
+let turnOffBirthdayReminders (graphServiceClient: GraphServiceClient) = async {
+    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient
+    let! birthdayEventIds = getCalendarEventIds graphServiceClient birthdayCalendarId
+
+    do!
+        birthdayEventIds
+        |> Seq.map (fun eventId -> async {
+            let event' = Event(IsReminderOn = Nullable<_> false)
+            return! updateCalendarEvent graphServiceClient birthdayCalendarId eventId event'
+        })
+        |> Async.Parallel
+        |> Async.Ignore
+}
+
+let updateAutoContacts graphServiceClient userId contacts = async {
+    do! removeAutoContacts graphServiceClient userId
+    do! addAutoContacts graphServiceClient userId contacts
+    do! turnOffBirthdayReminders graphServiceClient
+}
