@@ -39,6 +39,29 @@ http
             return;
         }
 
+        let getStudentsOfClassParams = /^\/api\/classes\/(?<className>\w+)\/students(\/(?<date>\d{4}-\d{2}-\d{2}))?$/.exec(req.url);
+        if (getStudentsOfClassParams)
+        {
+            let date;
+            if (getStudentsOfClassParams.groups.date)
+            {
+                date = moment(getStudentsOfClassParams.groups.date, "YYYY-MM-DD");
+                if (!date.isValid())
+                {
+                    res.statusCode = 400;
+                    res.write(`Invalid date: ${getStudentsOfClassParams.groups.date}`);
+                    res.end();
+                    return;
+                }
+            }
+            else
+            {
+                date = moment().startOf("day");
+            }
+            await tryGet(res, () => getStudentsOfClass(getStudentsOfClassParams.groups.className, date));
+            return;
+        }
+
         let getClassesParams = /^\/api\/classes(\/(?<schoolYear>\d{4}))?$/.exec(req.url);
         if (getClassesParams)
         {
@@ -111,20 +134,32 @@ let createSoapClient = async () =>
 
 const schoolId = "*****";
 
+let sokratesStudentToDto = student => {
+    return {
+        id: student.pupil.sokratesID,
+        lastName: student.pupil.lastName,
+        firstName1: student.pupil.firstName1,
+        firstName2: student.pupil.firstName2,
+        dateOfBirth: moment(student.pupil.dateOfBirth, "YYYY-MM-DDZ").format("YYYY-MM-DD"),
+        schoolClass: student.pupil.schoolClass.replace(/_(WS|SS)$/, "")
+    };
+};
+
 let getStudents = async date =>
 {
     let soapClient = await createSoapClient();
     let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getPupilsAsync({ schoolID: schoolId, dateOfInterest: date.format() });
-    return result.return.lstPupils.pupilEntry.map(student => (
-        {
-            id: student.pupil.sokratesID,
-            lastName: student.pupil.lastName,
-            firstName1: student.pupil.firstName1,
-            firstName2: student.pupil.firstName2,
-            dateOfBirth: moment(student.pupil.dateOfBirth, "YYYY-MM-DDZ").format("YYYY-MM-DD"),
-            schoolClass: student.pupil.schoolClass
-        })
-    );
+    return result.return.lstPupils.pupilEntry.map(sokratesStudentToDto);
+};
+
+let getStudentsOfClass = async (className, date) =>
+{
+    let soapClient = await createSoapClient();
+    let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getPupilsAsync({ schoolID: schoolId, dateOfInterest: date.format() });
+    return result.return.lstPupils.pupilEntry
+        .map(sokratesStudentToDto)
+        .filter(student => student.schoolClass == className)
+        .map(student => Object.assign({}, student, { schoolClass: undefined }));
 };
 
 let getStudentContacts = async (personIds, date) =>
