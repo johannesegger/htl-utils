@@ -39,10 +39,19 @@ http
             return;
         }
 
-        let getClassesParams = /^\/api\/classes\/(?<schoolYear>\d{4})$/.exec(req.url);
+        let getClassesParams = /^\/api\/classes(\/(?<schoolYear>\d{4}))?$/.exec(req.url);
         if (getClassesParams)
         {
-            let schoolYear = parseInt(getClassesParams.groups.schoolYear);
+            let schoolYear;
+            if (getClassesParams.groups.schoolYear)
+            {
+                schoolYear = parseInt(getClassesParams.groups.schoolYear);
+            }
+            else
+            {
+                let now = moment();
+                schoolYear = now.month() < 8 ? now.year() - 1 : now.year()
+            }
             await tryGet(res, () => getClasses(schoolYear));
             return;
         }
