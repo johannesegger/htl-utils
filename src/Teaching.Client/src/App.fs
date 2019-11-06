@@ -21,12 +21,14 @@ importAll "../sass/main.sass"
 type Msg =
     | AuthenticationMsg of Authentication.Msg
     | WakeUpMsg of WakeUp.Msg
+    | AddAADTeacherContactsMsg of AddAADTeacherContacts.Msg
 
 type Model =
     {
         CurrentPage: Page
         Authentication: Authentication.Model
         WakeUp: WakeUp.Model
+        AddAADTeacherContacts: AddAADTeacherContacts.Model
     }
 
 let urlUpdate (result : Page option) model =
@@ -42,6 +44,7 @@ let init page =
         CurrentPage = Option.defaultValue Home page
         Authentication = Authentication.init
         WakeUp = WakeUp.init
+        AddAADTeacherContacts = AddAADTeacherContacts.init
     }
 
 let update msg model =
@@ -50,11 +53,14 @@ let update msg model =
         { model with Authentication = Authentication.update msg model.Authentication }
     | WakeUpMsg msg ->
         { model with WakeUp = WakeUp.update msg model.WakeUp }
+    | AddAADTeacherContactsMsg msg ->
+        { model with AddAADTeacherContacts = AddAADTeacherContacts.update msg model.AddAADTeacherContacts }
 
 let root model dispatch =
     let pageHtml = function
         | Home -> Home.view
         | WakeUp -> WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
+        | AddAADTeacherContacts -> AddAADTeacherContacts.view model.AddAADTeacherContacts (AddAADTeacherContactsMsg >> dispatch)
 
     div []
         [ yield Navbar.navbar [ Navbar.Color IsWarning ]
@@ -107,6 +113,14 @@ let stream states msgs =
         )
         |||> WakeUp.stream
         |> AsyncRx.map WakeUpMsg
+
+        (
+            authHeaderAndPageActivated (function AddAADTeacherContacts -> true | _ -> false),
+            subStates (function AddAADTeacherContactsMsg msg -> Some msg | _ -> None) (fun m -> m.AddAADTeacherContacts),
+            msgs |> AsyncRx.choose (function UserMsg (AddAADTeacherContactsMsg msg) -> Some msg | _ -> None)
+        )
+        |||> AddAADTeacherContacts.stream
+        |> AsyncRx.map AddAADTeacherContactsMsg
     ]
     |> AsyncRx.mergeSeq
     |> AsyncRx.map UserMsg

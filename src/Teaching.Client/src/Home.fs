@@ -19,9 +19,9 @@ let view =
                 ]
                 Tile.parent [ Tile.Size Tile.Is4 ] [
                     Tile.child [ Tile.CustomClass "box" ] [
-                        a [ Href (toHash Home); Style [ Display DisplayOptions.Block ] ] [
-                            span [ Class "title"; Style [ Display DisplayOptions.Block ] ] [ str "Sync AAD user info" ]
-                            span [] [ str "Update photos, contact information and more of Office 365 users." ]
+                        a [ Href (toHash AddAADTeacherContacts); Style [ Display DisplayOptions.Block ] ] [
+                            span [ Class "title"; Style [ Display DisplayOptions.Block ] ] [ str "Add teacher contacts" ]
+                            span [] [ str "Add teachers as Outlook contacts with photo, contact information and more." ]
                         ]
                     ]
                 ]
