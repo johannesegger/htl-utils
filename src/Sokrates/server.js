@@ -240,7 +240,7 @@ let getTeachers = async () =>
                 dateOfBirth: moment(teacher.teacher.dateOfBirth, "YYYY-MM-DDZ").format("YYYY-MM-DD"),
                 degreeFront: teacher.teacher.degree || null,
                 degreeBack: teacher.teacher.degree2 || null,
-                phones: teacher.addressHome ? [teacher.addressHome.phone1, teacher.addressHome.phone2].filter(v => v).map(parsePhoneNumber).reduce(addPhoneNumber, {}) : [],
+                phones: teacher.addressHome ? [teacher.addressHome.phone1, teacher.addressHome.phone2].filter(v => v).map(parsePhoneNumber).reduce(addPhoneNumber, {}) : {},
                 address: address
             };
         });
