@@ -67,43 +67,42 @@ let root model dispatch =
           yield pageHtml model.CurrentPage ]
 
 let stream states msgs =
+    let subStates chooseMsgFn subStateFn =
+        states
+        |> AsyncRx.choose (fun (msg, model) ->
+            match msg with
+            | None -> Some (None, subStateFn model)
+            | Some (UserMsg msg) ->
+                match chooseMsgFn msg with
+                | Some msg -> Some (Some msg, subStateFn model)
+                | None -> None
+            | Some _ -> None
+        )
     let authHeader =
         states
         |> AsyncRx.map (snd >> (fun model -> model.Authentication) >> Authentication.tryGetAuthHeader)
         |> AsyncRx.distinctUntilChanged
-    let pageActivated pageFn =
+    let pageActivated filterPage =
         states
-        |> AsyncRx.map (fun (msg, model) ->
-            pageFn model.CurrentPage
-        )
+        |> AsyncRx.map (fun (msg, model) -> filterPage model.CurrentPage)
         |> AsyncRx.distinctUntilChanged
         |> AsyncRx.filter ((=) true)
         |> AsyncRx.map ignore
+    let authHeaderAndPageActivated filterPage =
+        authHeader
+        |> AsyncRx.combineLatest (pageActivated filterPage)
+        |> AsyncRx.map fst
     [
         (
-            states
-            |> AsyncRx.choose (fun (msg, model) ->
-                match msg with
-                | None
-                | Some (UserMsg (AuthenticationMsg _)) as msg -> Some (msg, model.Authentication)
-                | Some _ -> None
-            ),
+            subStates (function AuthenticationMsg msg -> Some msg | _ -> None) (fun m -> m.Authentication),
             msgs |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None)
         )
         ||> Authentication.stream
         |> AsyncRx.map AuthenticationMsg
 
         (
-            authHeader
-            |> AsyncRx.combineLatest (pageActivated ((=) WakeUp))
-            |> AsyncRx.map fst,
-            states
-            |> AsyncRx.choose (fun (msg, model) ->
-                match msg with
-                | None -> Some (None, model.WakeUp)
-                | Some (UserMsg (WakeUpMsg msg)) -> Some (Some msg, model.WakeUp)
-                | Some _ -> None
-            ),
+            authHeaderAndPageActivated (function WakeUp -> true | _ -> false),
+            subStates (function WakeUpMsg msg -> Some msg | _ -> None) (fun m -> m.WakeUp),
             msgs |> AsyncRx.choose (function UserMsg (WakeUpMsg msg) -> Some msg | _ -> None)
         )
         |||> WakeUp.stream
