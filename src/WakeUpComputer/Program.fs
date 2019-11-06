@@ -31,8 +31,8 @@ let handleWakeUp macAddress : HttpHandler =
         | Some macAddress ->
             let wolClient = new EasyWakeOnLanClient()
             do! wolClient.WakeAsync(macAddress.ToString())
-            return! Successful.ok (setBody [||]) next ctx
-        | None -> return! RequestErrors.badRequest (setBodyFromString "Invalid MAC address") next ctx
+            return! Successful.OK () next ctx
+        | None -> return! RequestErrors.BAD_REQUEST (sprintf "Invalid MAC address \"%s\"" macAddress) next ctx
     }
 
 let webApp =
