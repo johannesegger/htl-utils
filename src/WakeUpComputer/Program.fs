@@ -4,7 +4,6 @@ open EasyWakeOnLan
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open Microsoft.AspNetCore.Builder
-open Microsoft.AspNetCore.Cors.Infrastructure
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
