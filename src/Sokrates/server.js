@@ -167,5 +167,7 @@ let getClasses = async schoolYear =>
 {
     let soapClient = await createSoapClient();
     let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getTSNClassesAsync({ schoolID: schoolId, schoolYear: schoolYear });
-    return result.return.lstTSNClasses.tsnClassEntry.map(schoolClass => schoolClass.className.replace(/_(WS|SS)$/, ""));
+    return result.return.lstTSNClasses.tsnClassEntry
+        .filter(schoolClass => !schoolClass.className.startsWith("AP_")) // looks like final classes
+        .map(schoolClass => schoolClass.className.replace(/_(WS|SS)$/, ""));
 };
