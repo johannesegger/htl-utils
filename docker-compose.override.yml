@@ -21,15 +21,21 @@ services:
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
-    aad:
+    photo-library:
         ports:
             - 3004:80
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
-    management-server:
+    aad:
         ports:
             - 3005:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"
+    management-server:
+        ports:
+            - 3007:80
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"

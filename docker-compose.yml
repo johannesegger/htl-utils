@@ -29,6 +29,14 @@ services:
             - ${FINAL_THESES_MENTORS_FILE_PATH}:/data/mentors.csv
         environment:
             MENTORS_FILE_PATH: "/data/mentors.csv"
+    photo-library:
+        build:
+            context: src
+            dockerfile: PhotoLibrary/Dockerfile
+        volumes:
+            - ${PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY}:/data/teacher-photos
+        environment:
+            TEACHER_PHOTOS_DIRECTORY: "/data/teacher-photos"
     aad:
         build:
             context: src
