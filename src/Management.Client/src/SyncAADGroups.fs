@@ -1,19 +1,13 @@
 module SyncAADGroups
 
-open Browser.Blob
-open Elmish
-open Fable.Core
-open Fable.Core.JsInterop
 open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
 open Fable.Reaction
-open Fetch.Types
 open FSharp.Control
 open Fulma
 open Fulma.Extensions.Wikiki
 open Shared
-open Thoth.Elmish
 open Thoth.Fetch
 open Thoth.Json
 
@@ -330,9 +324,8 @@ let stream authHeader states (msgs: IAsyncObservable<_>) =
             let loadGroupUpdates =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
-                        let url = sprintf "/api/aad/group-updates"
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        let! updates = Fetch.tryGet(url, Decode.list AADGroupUpdates.GroupUpdate.decode, requestProperties)
+                        let! updates = Fetch.tryGet("/api/aad/group-updates", Decode.list AADGroupUpdates.GroupUpdate.decoder, requestProperties)
                         match updates with
                         | Ok v -> return v
                         | Error e ->
