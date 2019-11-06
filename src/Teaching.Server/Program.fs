@@ -67,32 +67,32 @@ let handleAddTeachersAsContacts : HttpHandler =
                 |> List.map (fun (photo: PhotoLibrary.TeacherPhoto) -> (CIString photo.LastName, CIString photo.FirstName), photo.Data)
                 |> Map.ofList
             sokratesTeachers
-            |> List.map (fun (sokratesTeacher: Sokrates.Teacher) ->
+            |> List.choose (fun (sokratesTeacher: Sokrates.Teacher) ->
                 let aadUser = Map.tryFind (CIString sokratesTeacher.ShortName) aadUserMap
                 let photo = Map.tryFind (CIString sokratesTeacher.LastName, CIString sokratesTeacher.FirstName) photoLibraryTeacherMap
-                {
-                    AAD.Contact.FirstName = sokratesTeacher.FirstName
-                    AAD.Contact.LastName = sokratesTeacher.LastName
-                    AAD.Contact.DisplayName = sprintf "%s %s (%s)" sokratesTeacher.LastName sokratesTeacher.FirstName sokratesTeacher.ShortName
-                    AAD.Contact.Birthday = Some sokratesTeacher.DateOfBirth
-                    AAD.Contact.HomePhones =
-                        sokratesTeacher.Phones
-                        |> List.choose (function
-                            | Sokrates.Home number -> Some number
-                            | Sokrates.Mobile _ -> None
-                        )
-                    AAD.Contact.MobilePhone =
-                        sokratesTeacher.Phones
-                        |> List.tryPick (function
-                            | Sokrates.Home _ -> None
-                            | Sokrates.Mobile number -> Some number
-                        )
-                    AAD.Contact.MailAddresses =
-                        aadUser
-                        |> Option.map (fun user -> user.MailAddresses |> List.take 1)
-                        |> Option.defaultValue []
-                    AAD.Contact.Photo = photo
-                }
+                match aadUser with
+                | Some aadUser ->
+                    Some {
+                        AAD.Contact.FirstName = sokratesTeacher.FirstName
+                        AAD.Contact.LastName = sokratesTeacher.LastName
+                        AAD.Contact.DisplayName = sprintf "%s %s (%s)" sokratesTeacher.LastName sokratesTeacher.FirstName sokratesTeacher.ShortName
+                        AAD.Contact.Birthday = Some sokratesTeacher.DateOfBirth
+                        AAD.Contact.HomePhones =
+                            sokratesTeacher.Phones
+                            |> List.choose (function
+                                | Sokrates.Home number -> Some number
+                                | Sokrates.Mobile _ -> None
+                            )
+                        AAD.Contact.MobilePhone =
+                            sokratesTeacher.Phones
+                            |> List.tryPick (function
+                                | Sokrates.Home _ -> None
+                                | Sokrates.Mobile number -> Some number
+                            )
+                        AAD.Contact.MailAddresses = List.take 1 aadUser.MailAddresses
+                        AAD.Contact.Photo = photo
+                    }
+                | None -> None
             )
 
         let contacts =
