@@ -130,7 +130,7 @@ let webApp =
                     routef "/classes/%s/students" handleGetClassStudents
                 ]
                 POST >=> choose [
-                    routef "/wake-up/%s" handlePostWakeUp
+                    routef "/wake-up/%s" (fun macAddress -> Auth.requiresTeacher >=> handlePostWakeUp macAddress)
                     route "/teachers/add-as-contacts" >=> Auth.requiresTeacher >=> handleAddTeachersAsContacts
                     // route "/child-directories" >=> Auth.requiresTeacher >=> getChildDirectories baseDirectories
                     // route "/directory-info" >=> Auth.requiresTeacher >=> getDirectoryInfo baseDirectories
