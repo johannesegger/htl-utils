@@ -195,7 +195,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom Group.encode (Decode.fail "Not implemented")
         |> Extra.withCustom User.encode (Decode.fail "Not implemented")
         |> Extra.withCustom Role.encode (Decode.fail "Not implemented")
-        |> Extra.withCustom (fun _ -> Encode.nil) (GroupModification.decoder)
+        |> Extra.withCustom (fun _ -> failwith "Not implemented") GroupModification.decoder
         |> Extra.withCustom (fun _ -> failwith "Not implemented") Contact.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
     services
