@@ -3,15 +3,13 @@ module Domain
 open Thoth.Json.Net
 
 type UserId = UserId of string
-
 module UserId =
     let encode (UserId userId) = Encode.string userId
     let decoder : Decoder<_> = Decode.string |> Decode.map UserId
 
 type GroupId = GroupId of string
-
 module GroupId =
-    let encode (GroupId userId) = Encode.string userId
+    let encode (GroupId groupId) = Encode.string groupId
     let decoder : Decoder<_> = Decode.string |> Decode.map GroupId
 
 type User = {
@@ -21,7 +19,6 @@ type User = {
     LastName: string
     MailAddresses: string list
 }
-
 module User =
     let encode u =
         Encode.object [
@@ -38,7 +35,6 @@ type Group = {
     Mail: string
     Members: UserId list
 }
-
 module Group =
     let encode u =
         Encode.object [
@@ -51,7 +47,6 @@ module Group =
 type MemberModification =
     | AddMember of UserId
     | RemoveMember of UserId
-
 module MemberModification =
     let encode = function
         | AddMember userId -> Encode.object [ "addMember", UserId.encode userId ]
@@ -66,7 +61,6 @@ type GroupModification =
     | CreateGroup of name: string * memberIds: UserId list
     | UpdateGroup of GroupId * MemberModification list
     | DeleteGroup of GroupId
-
 module GroupModification =
     let encode = function
         | CreateGroup (name, memberIds) ->
