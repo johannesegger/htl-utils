@@ -112,6 +112,37 @@ let handleAddTeachersAsContacts : HttpHandler =
             return! ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
+let handleGetChildDirectories : HttpHandler =
+    fun next ctx -> task {
+        let! body = ctx.BindJsonAsync<string>()
+        let! result = Http.post ctx "http://file-storage/api/child-directories" (Encode.string body) (Decode.list Decode.string)
+        return!
+            match result with
+            | Ok v -> Successful.OK v next ctx
+            | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
+    }
+
+let handlePostStudentDirectories : HttpHandler =
+    fun next ctx -> task {
+        let! body = ctx.BindJsonAsync<Shared.CreateDirectoriesData>()
+        let! students = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" body.ClassName) (Decode.list Sokrates.Student.decoder)
+        let! result =
+            students
+            |> Result.bindAsync (fun students ->
+                let data = {
+                    FileStorage.Path = body.Path
+                    FileStorage.Names =
+                        students
+                        |> List.map (fun student -> sprintf "%s_%s" student.LastName student.FirstName)
+                }
+                Http.post ctx "http://file-storage/api/exercise-directories" (FileStorage.CreateDirectoriesData.encode data) (Decode.succeed ())
+            )
+        return!
+            match result with
+            | Ok () -> Successful.OK () next ctx
+            | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
+    }
+
 let webApp =
     choose [
         subRoute "/api"
@@ -123,9 +154,9 @@ let webApp =
                 POST >=> choose [
                     routef "/wake-up/%s" (fun macAddress -> Auth.requiresTeacher >=> handlePostWakeUp macAddress)
                     route "/teachers/add-as-contacts" >=> Auth.requiresTeacher >=> handleAddTeachersAsContacts
-                    // route "/child-directories" >=> Auth.requiresTeacher >=> getChildDirectories baseDirectories
+                    route "/child-directories" >=> Auth.requiresTeacher >=> handleGetChildDirectories
+                    route "/create-student-directories" >=> Auth.requiresTeacher >=> handlePostStudentDirectories
                     // route "/directory-info" >=> Auth.requiresTeacher >=> getDirectoryInfo baseDirectories
-                    // route "/create-student-directories" >=> Auth.requiresTeacher >=> createStudentDirectories baseDirectories students
                 ]
             ])
         setStatusCode 404 >=> text "Not Found" ]
@@ -154,7 +185,7 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
-        // |> Extra.withCustom Shared.AADGroupUpdates.GroupUpdate.encode Shared.AADGroupUpdates.GroupUpdate.decode
+        |> Extra.withCustom (fun _ -> failwith "Not implemented") Shared.CreateDirectoriesData.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =

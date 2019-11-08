@@ -11,6 +11,7 @@
     <Compile Include="AADDomain.fs" />
     <Compile Include="SokratesDomain.fs" />
     <Compile Include="PhotoLibraryDomain.fs" />
+    <Compile Include="FileStorageDomain.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

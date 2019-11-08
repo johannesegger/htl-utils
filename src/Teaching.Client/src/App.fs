@@ -22,6 +22,7 @@ type Msg =
     | AuthenticationMsg of Authentication.Msg
     | WakeUpMsg of WakeUp.Msg
     | AddAADTeacherContactsMsg of AddAADTeacherContacts.Msg
+    | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
 
 type Model =
     {
@@ -29,6 +30,7 @@ type Model =
         Authentication: Authentication.Model
         WakeUp: WakeUp.Model
         AddAADTeacherContacts: AddAADTeacherContacts.Model
+        CreateStudentDirectories: CreateStudentDirectories.Model
     }
 
 let urlUpdate (result : Page option) model =
@@ -45,6 +47,7 @@ let init page =
         Authentication = Authentication.init
         WakeUp = WakeUp.init
         AddAADTeacherContacts = AddAADTeacherContacts.init
+        CreateStudentDirectories = CreateStudentDirectories.init
     }
 
 let update msg model =
@@ -55,12 +58,15 @@ let update msg model =
         { model with WakeUp = WakeUp.update msg model.WakeUp }
     | AddAADTeacherContactsMsg msg ->
         { model with AddAADTeacherContacts = AddAADTeacherContacts.update msg model.AddAADTeacherContacts }
+    | CreateStudentDirectoriesMsg msg ->
+        { model with CreateStudentDirectories = CreateStudentDirectories.update msg model.CreateStudentDirectories }
 
 let root model dispatch =
     let pageHtml = function
         | Home -> Home.view
         | WakeUp -> WakeUp.view model.WakeUp (WakeUpMsg >> dispatch)
         | AddAADTeacherContacts -> AddAADTeacherContacts.view model.AddAADTeacherContacts (AddAADTeacherContactsMsg >> dispatch)
+        | CreateStudentDirectories -> CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch)
 
     div []
         [ yield Navbar.navbar [ Navbar.Color IsWarning ]
@@ -121,6 +127,14 @@ let stream states msgs =
         )
         |||> AddAADTeacherContacts.stream
         |> AsyncRx.map AddAADTeacherContactsMsg
+
+        (
+            authHeaderAndPageActivated (function CreateStudentDirectories -> true | _ -> false),
+            subStates (function CreateStudentDirectoriesMsg msg -> Some msg | _ -> None) (fun m -> m.CreateStudentDirectories),
+            msgs |> AsyncRx.choose (function UserMsg (CreateStudentDirectoriesMsg msg) -> Some msg | _ -> None)
+        )
+        |||> CreateStudentDirectories.stream
+        |> AsyncRx.map CreateStudentDirectoriesMsg
     ]
     |> AsyncRx.mergeSeq
     |> AsyncRx.map UserMsg
