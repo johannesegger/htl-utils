@@ -37,6 +37,14 @@ services:
             - ${PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY}:/data/teacher-photos
         environment:
             TEACHER_PHOTOS_DIRECTORY: "/data/teacher-photos"
+    file-storage:
+        build:
+            context: src
+            dockerfile: FileStorage/Dockerfile
+        volumes:
+            - ${FILE_STORAGE_ROOT_DIRECTORY}:/data
+        environment:
+            BASE_DIRECTORIES: ${FILE_STORAGE_BASE_DIRECTORIES}
     aad:
         build:
             context: src
@@ -55,6 +63,7 @@ services:
             - wake-up-computer
             - sokrates
             - photo-library
+            - file-storage
             - aad
     management-server:
         build:

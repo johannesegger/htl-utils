@@ -6,3 +6,17 @@ let apply v fn =
     | Error e, Ok _
     | Ok _, Error e -> Error e
     | Error e1, Error e2 -> Error (e1 @ e2)
+
+let bindAsync fn = function
+    | Ok v -> fn v
+    | Error v -> async { return Error v }
+
+let sequence list =
+    (list, Ok [])
+    ||> Seq.foldBack (fun item state ->
+        match item, state with
+        | Ok v, Ok vs -> Ok (v :: vs)
+        | Error e, Ok _ -> Error [ e ]
+        | Ok _, Error es -> Error es
+        | Error e, Error es -> Error (e :: es)
+    )

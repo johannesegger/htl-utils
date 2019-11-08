@@ -27,21 +27,27 @@ services:
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
-    aad:
+    file-storage:
         ports:
             - 3005:80
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
-    teaching-server:
+    aad:
         ports:
             - 3006:80
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"
-    management-server:
+    teaching-server:
         ports:
             - 3007:80
+        environment:
+            ASPNETCORE_ENVIRONMENT: Development
+            ASPNETCORE_URLS: "http://*:80"
+    management-server:
+        ports:
+            - 3008:80
         environment:
             ASPNETCORE_ENVIRONMENT: Development
             ASPNETCORE_URLS: "http://*:80"

@@ -29,6 +29,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Common.Server", "Common.Ser
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "PhotoLibrary", "PhotoLibrary\PhotoLibrary.fsproj", "{9E83C737-505D-4997-A78C-C59B2688D5F9}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FileStorage", "FileStorage\FileStorage.fsproj", "{2AB522C0-53E0-480F-A419-CFED802D4923}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,10 @@ Global
 		{9E83C737-505D-4997-A78C-C59B2688D5F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9E83C737-505D-4997-A78C-C59B2688D5F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9E83C737-505D-4997-A78C-C59B2688D5F9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2AB522C0-53E0-480F-A419-CFED802D4923}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2AB522C0-53E0-480F-A419-CFED802D4923}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2AB522C0-53E0-480F-A419-CFED802D4923}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2AB522C0-53E0-480F-A419-CFED802D4923}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{73E8E820-C8AA-47CC-BB2B-152CA4D0B856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU

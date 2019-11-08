@@ -24,7 +24,7 @@ var CONFIG = {
     // When using webpack-dev-server, you may need to redirect some calls
     // to a external API server. See https://webpack.js.org/configuration/dev-server/#devserver-proxy
     devServerProxy: {
-        "/api": "http://localhost:3006"
+        "/api": "http://localhost:3007"
     },
     // Use babel-preset-env to generate JS compatible with most-used browsers.
     // More info at https://babeljs.io/docs/en/next/babel-preset-env.html
