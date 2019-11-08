@@ -71,12 +71,12 @@ let root model dispatch =
     div []
         [ yield Navbar.navbar [ Navbar.Color IsWarning ]
             [ Navbar.Item.div []
-                [ Heading.h2 [ Heading.Props [ Style [ FontVariant "small-caps" ] ] ]
-                    [ str "Htl Utils" ] ]
+                [ h1 [ Class "title" ]
+                    [ str "Htl utils" ] ]
               Navbar.End.div []
                 [ Navbar.Item.div []
                     [ Authentication.view model.Authentication (AuthenticationMsg >> dispatch) ] ] ]
-          yield pageHtml model.CurrentPage ]
+          yield div [ Style [ MarginTop "1em" ] ] [ pageHtml model.CurrentPage ] ]
 
 let stream states msgs =
     let subStates chooseMsgFn subStateFn =
