@@ -74,7 +74,7 @@ let virtualPathToRealPath (v: string) =
     | baseDirectory :: pathTail ->
         match baseDirectories |> Map.tryFind baseDirectory with
         | Some baseDirectory ->
-            Path.Combine([| baseDirectory; yield! pathTail |]) // TODO verify that absolute input.Path works as expected
+            Path.Combine([| baseDirectory; yield! pathTail |]) // TODO verify that absolute pathTail works as expected
             |> Ok
         | None -> Error (InvalidBaseDirectory baseDirectory)
 
