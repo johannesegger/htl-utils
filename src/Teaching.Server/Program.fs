@@ -29,7 +29,10 @@ let handleGetClasses : HttpHandler =
 
 let handleGetClassStudents schoolClass : HttpHandler =
     fun next ctx -> task {
-        let decoder = Decode.list (Sokrates.Student.decoder |> Decode.map Sokrates.Student.toDto)
+        let decoder =
+            Sokrates.Student.decoder |> Decode.map (fun s -> sprintf "%s %s" (s.LastName.ToUpper()) s.FirstName)
+            |> Decode.list
+            |> Decode.map List.sort
         let! result = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" schoolClass) decoder
         return!
             match result with

@@ -12,6 +12,9 @@ let view =
             AddAADTeacherContacts, Tile.Is4, "Add teacher contacts", str "Add teachers as Outlook contacts with photo, contact information and more."
             CreateStudentDirectories, Tile.Is4, "Create student directories", str "Create a directory per student for exercises, tests, etc."
         ]
+        [
+            CreateStudentGroups, Tile.Is4, "Create student groups", str "Create random groups of students for team work, seating plans, ordering and more."
+        ]
     ]
     Container.container [] [
         Section.section [] [

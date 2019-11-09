@@ -21,14 +21,3 @@ module CreateDirectoriesData =
             ClassName = get.Required.Field "className" Decode.string
             Path = get.Required.Field "path" Decode.string
         })
-
-type Student = {
-    LastName: string
-    FirstName: string
-}
-module Student =
-    let encode v =
-        Encode.object [
-            "lastName", Encode.string v.LastName
-            "firstName", Encode.string v.FirstName
-        ]

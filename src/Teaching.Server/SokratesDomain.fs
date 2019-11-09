@@ -16,11 +16,6 @@ module Student =
             LastName = get.Required.Field "lastName" Decode.string
             FirstName = get.Required.Field "firstName1" Decode.string
         })
-    let toDto student =
-        {
-            Shared.Student.LastName = student.LastName
-            Shared.Student.FirstName = student.FirstName
-        }
 
 type Phone =
     | Home of string
