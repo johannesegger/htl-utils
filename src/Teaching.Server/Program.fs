@@ -24,7 +24,7 @@ let handleGetClasses : HttpHandler =
             match result with
             | Ok list -> Successful.OK list next ctx
             | Error e ->
-                ServerErrors.internalError (text (sprintf "%O" e)) next ctx
+                ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
 let handleGetClassStudents schoolClass : HttpHandler =
@@ -38,7 +38,7 @@ let handleGetClassStudents schoolClass : HttpHandler =
             match result with
             | Ok list -> Successful.OK list next ctx
             | Error e ->
-                ServerErrors.internalError (text (sprintf "%O" e)) next ctx
+                ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
 let handlePostWakeUp macAddress : HttpHandler =
