@@ -127,7 +127,7 @@ let handleGetChildDirectories : HttpHandler =
 
 let handlePostStudentDirectories : HttpHandler =
     fun next ctx -> task {
-        let! body = ctx.BindJsonAsync<Shared.CreateDirectoriesData>()
+        let! body = ctx.BindJsonAsync<Shared.CreateStudentDirectories.CreateDirectoriesData>()
         let! students = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" body.ClassName) (Decode.list Sokrates.Student.decoder)
         let! result =
             students
@@ -146,6 +146,20 @@ let handlePostStudentDirectories : HttpHandler =
             | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
+let handleGetDirectoryInfo : HttpHandler =
+    fun next ctx -> task {
+        let! body = ctx.BindJsonAsync<string>()
+        let decoder =
+            let path = body.Split('\\', '/') |> Seq.rev |> Seq.skip 1 |> Seq.rev |> Seq.toList
+            FileStorage.DirectoryInfo.decoder
+            |> Decode.map (FileStorage.DirectoryInfo.toDto path)
+        let! result = Http.post ctx "http://file-storage/api/directory-info" (Encode.string body) decoder
+        return!
+            match result with
+            | Ok v -> Successful.OK v next ctx
+            | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
+    }
+
 let webApp =
     choose [
         subRoute "/api"
@@ -159,7 +173,7 @@ let webApp =
                     route "/teachers/add-as-contacts" >=> Auth.requiresTeacher >=> handleAddTeachersAsContacts
                     route "/child-directories" >=> Auth.requiresTeacher >=> handleGetChildDirectories
                     route "/create-student-directories" >=> Auth.requiresTeacher >=> handlePostStudentDirectories
-                    // route "/directory-info" >=> Auth.requiresTeacher >=> getDirectoryInfo baseDirectories
+                    route "/directory-info" >=> Auth.requiresTeacher >=> handleGetDirectoryInfo
                 ]
             ])
         setStatusCode 404 >=> text "Not Found" ]
@@ -188,7 +202,8 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
-        |> Extra.withCustom (fun _ -> failwith "Not implemented") Shared.CreateDirectoriesData.decoder
+        |> Extra.withCustom (fun _ -> failwith "Not implemented") Shared.CreateStudentDirectories.CreateDirectoriesData.decoder
+        |> Extra.withCustom Shared.InspectDirectory.DirectoryInfo.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =

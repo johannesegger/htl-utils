@@ -5,7 +5,6 @@ open Giraffe
 open Giraffe.Serialization
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
-open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.DependencyInjection
@@ -60,6 +59,40 @@ module CreateDirectoriesData =
             Names = get.Required.Field "names" (Decode.list Decode.string)
         })
 
+type Bytes = Bytes of int64
+module Bytes =
+    let encode (Bytes v) = Encode.int64 v
+
+type FileInfo = {
+    Name: string
+    Size: Bytes
+    CreationTime: DateTime
+    LastAccessTime: DateTime
+    LastWriteTime: DateTime
+}
+module FileInfo =
+    let encode v =
+        Encode.object [
+            "name", Encode.string v.Name
+            "size", Bytes.encode v.Size
+            "creationTime", Encode.datetime v.CreationTime
+            "lastAccessTime", Encode.datetime v.LastAccessTime
+            "lastWriteTime", Encode.datetime v.LastWriteTime
+        ]
+
+type DirectoryInfo = {
+    Name: string
+    Directories: DirectoryInfo list
+    Files: FileInfo list
+}
+module DirectoryInfo =
+    let rec encode v =
+        Encode.object [
+            "name", Encode.string v.Name
+            "directories", (List.map encode >> Encode.list) v.Directories
+            "files", (List.map FileInfo.encode >> Encode.list) v.Files
+        ]
+
 let private baseDirectories =
     Environment.getEnvVarOrFail "BASE_DIRECTORIES"
     |> String.split ";"
@@ -92,6 +125,33 @@ let createStudentDirectories parentDirectory names = async {
         |> Result.sequence
         |> Result.mapError CreatingSomeDirectoriesFailed
 }
+
+let fileInfo path =
+    let info = System.IO.FileInfo path
+    {
+        Name = info.Name
+        Size = Bytes info.Length
+        CreationTime = info.CreationTime
+        LastAccessTime = info.LastAccessTime
+        LastWriteTime = info.LastWriteTime
+    }
+
+let rec directoryInfo path =
+    let childDirectories =
+        path
+        |> Directory.GetDirectories
+        |> Seq.map directoryInfo
+        |> Seq.toList
+    let childFiles =
+        path
+        |> Directory.GetFiles
+        |> Seq.map fileInfo
+        |> Seq.toList
+    {
+        Name = Path.GetFileName path
+        Directories = childDirectories
+        Files = childFiles
+    }
 
 // ---------------------------------
 // Web app
@@ -141,6 +201,29 @@ let handlePostExerciseDirectories : HttpHandler =
                 ServerErrors.INTERNAL_ERROR e next ctx
     }
 
+let handleGetDirectoryInfo : HttpHandler =
+    fun next ctx -> task {
+        let! path = ctx.BindJsonAsync<string>()
+        let result =
+            virtualPathToRealPath path
+            |> Result.mapError GetChildDirectoriesError.PathMappingFailed
+            |> Result.bind (fun realPath ->
+                try
+                    let result = directoryInfo realPath
+                    let dirName = Path.GetFileName path
+                    Ok { result with Name = if dirName = String.Empty then path else dirName }
+                with e -> Error (EnumeratingDirectoryFailed e.Message)
+            )
+        return!
+            match result with
+            | Ok directoryInfo -> Successful.OK directoryInfo next ctx
+            | Error (GetChildDirectoriesError.PathMappingFailed EmptyPath as e)
+            | Error (GetChildDirectoriesError.PathMappingFailed (InvalidBaseDirectory _) as e) ->
+                RequestErrors.BAD_REQUEST e next ctx
+            | Error (EnumeratingDirectoryFailed _ as e) ->
+                ServerErrors.INTERNAL_ERROR e next ctx
+    }
+
 let webApp =
     choose [
         subRoute "/api"
@@ -148,6 +231,7 @@ let webApp =
                 POST >=> choose [
                     route "/child-directories" >=> handleGetChildDirectories
                     route "/exercise-directories" >=> handlePostExerciseDirectories
+                    route "/directory-info" >=> handleGetDirectoryInfo
                 ]
             ])
         setStatusCode 404 >=> text "Not Found"
@@ -180,6 +264,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom PathMappingError.encode (Decode.fail "Not implemented")
         |> Extra.withCustom GetChildDirectoriesError.encode (Decode.fail "Not implemented")
         |> Extra.withCustom CreateStudentDirectoriesError.encode (Decode.fail "Not implemented")
+        |> Extra.withCustom DirectoryInfo.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =

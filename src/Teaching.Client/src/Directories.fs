@@ -1,30 +1,36 @@
 namespace global
 
-open Thoth.Json
-
 [<Fable.Core.Erase>] // enables equality
-type DirectoryPath = DirectoryPath of string list
+type StoragePath = StoragePath of string list
 
-module DirectoryPath =
+module StoragePath =
     let empty =
-        DirectoryPath []
+        StoragePath []
 
-    let getName (DirectoryPath path) =
+    let getName (StoragePath path) =
         List.head path
 
-    let combine (DirectoryPath path) children =
-        DirectoryPath (List.rev children @ path)
+    let combine (StoragePath path) children =
+        StoragePath (List.rev children @ path)
 
-    let isChildDirectory (DirectoryPath ``base``) (DirectoryPath child) =
+    let isChildDirectory (StoragePath ``base``) (StoragePath child) =
         let lengthDiff = List.length child - List.length ``base``
         if lengthDiff >= 0 then
             List.skip lengthDiff child = ``base``
         else false
 
-    let isRoot (DirectoryPath path) =
+    let isRoot (StoragePath path) =
         List.isEmpty path
 
-    let toNormalized (DirectoryPath path) = List.rev path
+    let toNormalized (StoragePath path) = List.rev path
+
+    let length (StoragePath path) = List.length path
+
+    let skip skipPath fullPath =
+        fullPath
+        |> toNormalized
+        |> List.skip (length skipPath)
+        |> combine empty
 
     let toString = toNormalized >> String.concat "/"
 
@@ -34,13 +40,21 @@ type DirectoryChildren =
     | FailedToLoadDirectoryChildren
 and Directory =
     {
-        Path: DirectoryPath
+        Path: StoragePath
         IsSelected: bool
         IsLoading: bool
         Children: DirectoryChildren
     }
 
 module Directory =
+    let root =
+        {
+            Path = StoragePath.empty
+            IsSelected = true
+            IsLoading = false
+            Children = NotLoadedDirectoryChildren
+        }
+
     let private update path map directory =
         let rec fn path directory =
             match path, directory with
@@ -50,7 +64,7 @@ module Directory =
                 let childDirs =
                     children
                     |> List.map (fun childDir ->
-                        if DirectoryPath.getName childDir.Path = path
+                        if StoragePath.getName childDir.Path = path
                         then fn xs childDir
                         else childDir
                     )
@@ -58,14 +72,14 @@ module Directory =
             | _ :: _, { Children = NotLoadedDirectoryChildren }
             | _ :: _, { Children = FailedToLoadDirectoryChildren } ->
                 directory
-        fn (DirectoryPath.toNormalized path) directory
+        fn (StoragePath.toNormalized path) directory
 
     let setChildDirectories path childDirectories directory =
         let fn dir =
             let childDirectories' =
                 childDirectories
                 |> List.map (fun n -> {
-                    Path = DirectoryPath.combine dir.Path [ n ]
+                    Path = StoragePath.combine dir.Path [ n ]
                     IsSelected = false
                     IsLoading = false
                     Children = NotLoadedDirectoryChildren
@@ -83,7 +97,7 @@ module Directory =
     let select path directory =
         let rec fn (directory: Directory) =
             { directory with
-                IsSelected = DirectoryPath.isChildDirectory directory.Path path
+                IsSelected = StoragePath.isChildDirectory directory.Path path
                 Children =
                     match directory.Children with
                     | LoadedDirectoryChildren children ->
@@ -104,7 +118,7 @@ module Directory =
             | { Children = LoadedDirectoryChildren children } ->
                 let children' =
                     let child = {
-                        Path = DirectoryPath.combine dir.Path [ name ]
+                        Path = StoragePath.combine dir.Path [ name ]
                         IsSelected = false
                         IsLoading = false
                         Children = NotLoadedDirectoryChildren

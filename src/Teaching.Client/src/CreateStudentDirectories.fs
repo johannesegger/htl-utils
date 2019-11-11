@@ -8,7 +8,7 @@ open Fetch.Types
 open FSharp.Control
 open Fulma
 open Fulma.Extensions.Wikiki
-open Shared
+open Shared.CreateStudentDirectories
 open Thoth.Fetch
 open Thoth.Json
 
@@ -18,7 +18,7 @@ type Model =
         ClassList: LoadableClassList
         SelectedClass: string option
         Directory: Directory
-        NewDirectoryNames: Map<DirectoryPath, string>
+        NewDirectoryNames: Map<StoragePath, string>
     }
 
 type Msg =
@@ -27,10 +27,10 @@ type Msg =
     | LoadClassList
     | LoadClassListResponse of Result<string list, exn>
     | SelectClass of string
-    | SelectDirectory of DirectoryPath
-    | LoadChildDirectoriesResponse of Result<DirectoryPath * string list, DirectoryPath * exn>
-    | UpdateNewDirectoryValue of DirectoryPath * string
-    | AddChildDirectory of string * DirectoryPath
+    | SelectDirectory of StoragePath
+    | LoadChildDirectoriesResponse of Result<StoragePath * string list, StoragePath * exn>
+    | UpdateNewDirectoryValue of StoragePath * string
+    | AddChildDirectory of string * StoragePath
     | CreateDirectories of CreateDirectoriesData
     | CreateDirectoriesResponse of Result<unit, exn>
 
@@ -69,13 +69,7 @@ let init =
         IsEnabled = false
         ClassList = NotLoadedClassList
         SelectedClass = None
-        Directory =
-            {
-                Path = DirectoryPath.empty
-                IsSelected = true
-                IsLoading = false
-                Children = NotLoadedDirectoryChildren
-            }
+        Directory = Directory.root
         NewDirectoryNames = Map.empty
     }
 
@@ -112,7 +106,7 @@ let view model dispatch =
                 Button.OnClick (fun _ev -> directory.Path |> SelectDirectory |> dispatch)
                 Button.IsLoading directory.IsLoading
             ]
-            [ str (DirectoryPath.getName directory.Path) ]
+            [ str (StoragePath.getName directory.Path) ]
 
     let directoryView level directory =
         match directory.Children with
@@ -168,8 +162,8 @@ let view model dispatch =
                 [
                     Button.Color IsSuccess
                     match Directory.getSelectedDirectory model.Directory, model.SelectedClass with
-                    | Some selectedDirectory, Some className when not <| DirectoryPath.isRoot selectedDirectory.Path ->
-                        let data = { ClassName = className; Path = DirectoryPath.toString selectedDirectory.Path }
+                    | Some selectedDirectory, Some className when not <| StoragePath.isRoot selectedDirectory.Path ->
+                        let data = { ClassName = className; Path = StoragePath.toString selectedDirectory.Path }
                         Button.OnClick (fun _ev -> dispatch (CreateDirectories data))
                     | _ -> Button.Disabled true
                 ]
@@ -209,12 +203,12 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
                         let url = "/api/child-directories"
-                        let data = DirectoryPath.toString DirectoryPath.empty |> Encode.string
+                        let data = StoragePath.toString StoragePath.empty |> Encode.string
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                         return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
                     })
-                    |> AsyncRx.map (fun children -> Ok (DirectoryPath.empty, children))
-                    |> AsyncRx.catch ((fun e -> DirectoryPath.empty, e) >> Error >> AsyncRx.single)
+                    |> AsyncRx.map (fun children -> Ok (StoragePath.empty, children))
+                    |> AsyncRx.catch ((fun e -> StoragePath.empty, e) >> Error >> AsyncRx.single)
                 )
                 |> AsyncRx.showErrorToast (fun (_, e) -> "Loading root directories failed", e.Message)
                 |> AsyncRx.map LoadChildDirectoriesResponse
@@ -223,7 +217,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofPromise (promise {
                             let url = "/api/child-directories"
-                            let data = DirectoryPath.toString path |> Encode.string
+                            let data = StoragePath.toString path |> Encode.string
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
                         })
@@ -233,7 +227,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 msgs
                 |> AsyncRx.flatMap (function
                     | SelectDirectory path -> loadChildDirectories path
-                    | AddChildDirectory (name, path) -> loadChildDirectories (DirectoryPath.combine path [ name ])
+                    | AddChildDirectory (name, path) -> loadChildDirectories (StoragePath.combine path [ name ])
                     | _ -> AsyncRx.empty ()
                 )
                 |> AsyncRx.showErrorToast (fun (path, e) -> "Loading child directories failed", e.Message)
@@ -241,7 +235,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
 
                 msgs
                 |> AsyncRx.choose (function
-                    | AddChildDirectory (name, path) -> Some (SelectDirectory (DirectoryPath.combine path [ name ]))
+                    | AddChildDirectory (name, path) -> Some (SelectDirectory (StoragePath.combine path [ name ]))
                     | _ -> None
                 )
 

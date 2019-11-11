@@ -18,6 +18,7 @@
     <Compile Include="AddAADTeacherContacts.fs" />
     <Compile Include="CreateStudentDirectories.fs" />
     <Compile Include="CreateStudentGroups.fs" />
+    <Compile Include="InspectDirectory.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>
   <ItemGroup>

@@ -8,6 +8,7 @@ type Page =
     | AddAADTeacherContacts
     | CreateStudentDirectories
     | CreateStudentGroups
+    | InspectDirectory
 
 let toHash = function
     | Home -> ""
@@ -15,6 +16,7 @@ let toHash = function
     | AddAADTeacherContacts -> "#add-aad-teacher-contacts"
     | CreateStudentDirectories -> "#create-student-directories"
     | CreateStudentGroups -> "#create-student-groups"
+    | InspectDirectory -> "#inspect-directory"
 
 let pageParser: Parser<Page->Page,Page> =
     oneOf [
@@ -23,4 +25,5 @@ let pageParser: Parser<Page->Page,Page> =
         map AddAADTeacherContacts (s "add-aad-teacher-contacts")
         map CreateStudentDirectories (s "create-student-directories")
         map CreateStudentGroups (s "create-student-groups")
+        map InspectDirectory (s "inspect-directory")
     ]

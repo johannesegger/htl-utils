@@ -24,6 +24,7 @@ type Msg =
     | AddAADTeacherContactsMsg of AddAADTeacherContacts.Msg
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
     | CreateStudentGroupsMsg of CreateStudentGroups.Msg
+    | InspectDirectoryMsg of InspectDirectory.Msg
 
 type Model =
     {
@@ -33,6 +34,7 @@ type Model =
         AddAADTeacherContacts: AddAADTeacherContacts.Model
         CreateStudentDirectories: CreateStudentDirectories.Model
         CreateStudentGroups: CreateStudentGroups.Model
+        InspectDirectory: InspectDirectory.Model
     }
 
 let urlUpdate (result : Page option) model =
@@ -51,6 +53,7 @@ let init page =
         AddAADTeacherContacts = AddAADTeacherContacts.init
         CreateStudentDirectories = CreateStudentDirectories.init
         CreateStudentGroups = CreateStudentGroups.init
+        InspectDirectory = InspectDirectory.init
     }
 
 let update msg model =
@@ -65,6 +68,8 @@ let update msg model =
         { model with CreateStudentDirectories = CreateStudentDirectories.update msg model.CreateStudentDirectories }
     | CreateStudentGroupsMsg msg ->
         { model with CreateStudentGroups = CreateStudentGroups.update msg model.CreateStudentGroups }
+    | InspectDirectoryMsg msg ->
+        { model with InspectDirectory = InspectDirectory.update msg model.InspectDirectory }
 
 let root model dispatch =
     let pageHtml = function
@@ -73,6 +78,7 @@ let root model dispatch =
         | AddAADTeacherContacts -> AddAADTeacherContacts.view model.AddAADTeacherContacts (AddAADTeacherContactsMsg >> dispatch)
         | CreateStudentDirectories -> CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch)
         | CreateStudentGroups -> CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch)
+        | InspectDirectory -> InspectDirectory.view model.InspectDirectory (InspectDirectoryMsg >> dispatch)
 
     div []
         [ yield Navbar.navbar [ Navbar.Color IsWarning ]
@@ -149,6 +155,14 @@ let stream states msgs =
         )
         |||> CreateStudentGroups.stream
         |> AsyncRx.map CreateStudentGroupsMsg
+
+        (
+            authHeaderAndPageActivated (function InspectDirectory -> true | _ -> false),
+            subStates (function InspectDirectoryMsg msg -> Some msg | _ -> None) (fun m -> m.InspectDirectory),
+            msgs |> AsyncRx.choose (function UserMsg (InspectDirectoryMsg msg) -> Some msg | _ -> None)
+        )
+        |||> InspectDirectory.stream
+        |> AsyncRx.map InspectDirectoryMsg
     ]
     |> AsyncRx.mergeSeq
     |> AsyncRx.map UserMsg

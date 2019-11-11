@@ -10,10 +10,11 @@ let view =
         [
             WakeUp, Tile.Is3, "Wake up", str "Send a Wake-on-Lan \"magic packet\" to a computer by specifying its MAC address."
             AddAADTeacherContacts, Tile.Is4, "Add teacher contacts", str "Add teachers as Outlook contacts with photo, contact information and more."
-            CreateStudentDirectories, Tile.Is4, "Create student directories", str "Create a directory per student for exercises, tests, etc."
         ]
         [
+            CreateStudentDirectories, Tile.Is4, "Create student directories", str "Create a directory per student for exercises, tests, etc."
             CreateStudentGroups, Tile.Is4, "Create student groups", str "Create random groups of students for team work, seating plans, ordering and more."
+            InspectDirectory, Tile.Is3, "Inspect directory", str "Get information about a directory and its files."
         ]
     ]
     Container.container [] [
