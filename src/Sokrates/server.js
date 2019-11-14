@@ -217,23 +217,30 @@ let getTeachers = async () =>
             let phones, address;
             if (teacher.addressHome)
             {
-                phones = [teacher.addressHome.phone1, teacher.addressHome.phone2]
-                    .filter(v => v)
-                    .map(parsePhoneNumber)
-                    .reduce(addPhoneNumber, {});
-                address = {
-                    country: teacher.addressHome.country,
-                    zip: teacher.addressHome.plz,
-                    city: teacher.addressHome.city,
-                    street: teacher.addressHome.streetNumber
-                        ? `${teacher.addressHome.street} ${teacher.addressHome.streetNumber}`
-                        : teacher.addressHome.street
-                };
-            }
-            else
-            {
-                phones = undefined;
-                address = undefined;
+                if (teacher.addressHome.phone1 ||
+                    teacher.addressHome.phone2)
+                {
+                    phones = [teacher.addressHome.phone1, teacher.addressHome.phone2]
+                        .filter(v => v)
+                        .map(parsePhoneNumber)
+                        .reduce(addPhoneNumber, {});
+                }
+
+                if (teacher.addressHome.country ||
+                    teacher.addressHome.plz ||
+                    teacher.addressHome.city ||
+                    teacher.addressHome.street ||
+                    teacher.addressHome.streetNumber)
+                {
+                    address = {
+                        country: teacher.addressHome.country,
+                        zip: teacher.addressHome.plz,
+                        city: teacher.addressHome.city,
+                        street: teacher.addressHome.streetNumber
+                            ? `${teacher.addressHome.street} ${teacher.addressHome.streetNumber}`
+                            : teacher.addressHome.street
+                    };
+                }
             }
             return {
                 id: teacher.teacher.personID,
