@@ -1,6 +1,7 @@
-﻿module App
+﻿module AAD.Server
 
-open Domain
+open AAD.BusinessLogic
+open AAD.DataTransferTypes
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open Giraffe.Serialization
@@ -54,7 +55,7 @@ let handleGetAutoGroups : HttpHandler =
     fun next ctx -> task {
         do! acquireToken ctx.Request [ "Group.ReadWrite.All" ]
         let! aadGroups =
-            AAD.getAutoGroups graphServiceClient
+            getAutoGroups graphServiceClient
             |> Async.map List.toArray
         return! Successful.OK aadGroups next ctx
     }
@@ -63,7 +64,7 @@ let handleGetUsers : HttpHandler =
     fun next ctx -> task {
         do! acquireToken ctx.Request [ "User.Read.All" ]
         let! aadUsers =
-            AAD.getUsers graphServiceClient
+            getUsers graphServiceClient
             |> Async.map List.toArray
         return! Successful.OK aadUsers next ctx
     }
@@ -72,7 +73,7 @@ let handlePostGroupsModifications : HttpHandler =
     fun next ctx -> task {
         do! acquireToken ctx.Request [ "Group.ReadWrite.All" ]
         let! modifications = ctx.BindModelAsync()
-        do! AAD.applyGroupsModifications graphServiceClient modifications
+        do! applyGroupsModifications graphServiceClient modifications
         return! Successful.OK () next ctx
     }
 
@@ -87,7 +88,7 @@ let handleGetSignedInUserRoles : HttpHandler =
     fun next ctx -> task {
         do! acquireToken ctx.Request [ "Directory.Read.All" ]
         let userId = ctx.User.ToGraphUserAccount().ObjectId
-        let! groups = AAD.getUserGroups graphServiceClient (UserId userId)
+        let! groups = getUserGroups graphServiceClient (UserId userId)
         let groups =
             groups
             |> List.choose (function
@@ -104,7 +105,7 @@ let handlePostAutoContacts : HttpHandler =
         do! acquireToken ctx.Request [ "Contacts.ReadWrite" ]
         let userId = ctx.User.ToGraphUserAccount().ObjectId
         let! contacts = ctx.BindModelAsync()
-        AAD.updateAutoContacts graphServiceClient (UserId userId) contacts |> Async.Start
+        updateAutoContacts graphServiceClient (UserId userId) contacts |> Async.Start
         return! Successful.ACCEPTED () next ctx
     }
 
@@ -115,7 +116,7 @@ let authTest : HttpHandler =
             try
                 do! acquireToken ctx.Request [ "Directory.Read.All" ]
                 let graphUser = ctx.User.ToGraphUserAccount()
-                let! groups = AAD.getUserGroups graphServiceClient (UserId graphUser.ObjectId)
+                let! groups = getUserGroups graphServiceClient (UserId graphUser.ObjectId)
                 return
                     groups
                     |> Seq.map (function

@@ -6,11 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\AAD\DataTransferTypes.fs" />
+    <Compile Include="..\FinalTheses\DataTransferTypes.fs" />
+    <Compile Include="..\Sokrates\DataTransferTypes.fs" />
+    <Compile Include="..\Untis\DataTransferTypes.fs" />
     <Compile Include="Shared.fs" />
-    <Compile Include="AADDomain.fs" />
-    <Compile Include="SokratesDomain.fs" />
-    <Compile Include="UntisDomain.fs" />
-    <Compile Include="FinalThesesDomain.fs" />
+    <Compile Include="AADTypeMapping.fs" />
     <Compile Include="AADGroupUpdates.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-module App
+module PhotoLibrary.Server
 
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
@@ -9,6 +9,7 @@ open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.DependencyInjection
+open PhotoLibrary.DataTransferTypes
 open SixLabors.ImageSharp
 open SixLabors.ImageSharp.Processing
 open SixLabors.Primitives
@@ -17,21 +18,7 @@ open System.IO
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
-type Base64EncodedImage = Base64EncodedImage of string
-
-type TeacherPhoto = {
-    FirstName: string
-    LastName: string
-    Data: Base64EncodedImage
-}
 module TeacherPhoto =
-    let encode v =
-        let (Base64EncodedImage data) = v.Data
-        Encode.object [
-            "firstName", Encode.string v.FirstName
-            "lastName", Encode.string v.LastName
-            "data", Encode.string data
-        ]
     let tryParse readFn (file: string) =
         let fileName = Path.GetFileNameWithoutExtension file
         match fileName.IndexOf '_' with

@@ -30,7 +30,7 @@ let handleGetClasses : HttpHandler =
 let handleGetClassStudents schoolClass : HttpHandler =
     fun next ctx -> task {
         let decoder =
-            Sokrates.Student.decoder |> Decode.map (fun s -> sprintf "%s %s" (s.LastName.ToUpper()) s.FirstName)
+            Sokrates.DataTransferTypes.Student.decoder |> Decode.map (fun s -> sprintf "%s %s" (s.LastName.ToUpper()) s.FirstName1)
             |> Decode.list
             |> Decode.map List.sort
         let! result = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" schoolClass) decoder
@@ -52,9 +52,9 @@ let handlePostWakeUp macAddress : HttpHandler =
 
 let handleAddTeachersAsContacts : HttpHandler =
     fun next ctx -> task {
-        let! aadUsers = Http.get ctx "http://aad/api/users" (Decode.list AAD.User.decoder) |> Async.StartChild
-        let! sokratesTeachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.Teacher.decoder) |> Async.StartChild
-        let! teacherPhotos = Http.get ctx "http://photo-library/api/teachers/photos?width=200&height=200" (Decode.list PhotoLibrary.TeacherPhoto.decoder) |> Async.StartChild
+        let! aadUsers = Http.get ctx "http://aad/api/users" (Decode.list AAD.DataTransferTypes.User.decoder) |> Async.StartChild
+        let! sokratesTeachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
+        let! teacherPhotos = Http.get ctx "http://photo-library/api/teachers/photos?width=200&height=200" (Decode.list PhotoLibrary.DataTransferTypes.TeacherPhoto.decoder) |> Async.StartChild
 
         let! aadUsers = aadUsers
         let! sokratesTeachers = sokratesTeachers
@@ -63,37 +63,42 @@ let handleAddTeachersAsContacts : HttpHandler =
         let getContacts aadUsers sokratesTeachers teacherPhotos =
             let aadUserMap =
                 aadUsers
-                |> List.map (fun (user: AAD.User) -> CIString user.UserName, user)
+                |> List.map (fun (user: AAD.DataTransferTypes.User) -> CIString user.UserName, user)
                 |> Map.ofList
             let photoLibraryTeacherMap =
                 teacherPhotos
-                |> List.map (fun (photo: PhotoLibrary.TeacherPhoto) -> (CIString photo.LastName, CIString photo.FirstName), photo.Data)
+                |> List.map (fun (photo: PhotoLibrary.DataTransferTypes.TeacherPhoto) -> (CIString photo.LastName, CIString photo.FirstName), photo.Data)
                 |> Map.ofList
             sokratesTeachers
-            |> List.choose (fun (sokratesTeacher: Sokrates.Teacher) ->
+            |> List.choose (fun (sokratesTeacher: Sokrates.DataTransferTypes.Teacher) ->
                 let aadUser = Map.tryFind (CIString sokratesTeacher.ShortName) aadUserMap
                 let photo = Map.tryFind (CIString sokratesTeacher.LastName, CIString sokratesTeacher.FirstName) photoLibraryTeacherMap
                 match aadUser with
                 | Some aadUser ->
                     Some {
-                        AAD.Contact.FirstName = sokratesTeacher.FirstName
-                        AAD.Contact.LastName = sokratesTeacher.LastName
-                        AAD.Contact.DisplayName = sprintf "%s %s (%s)" sokratesTeacher.LastName sokratesTeacher.FirstName sokratesTeacher.ShortName
-                        AAD.Contact.Birthday = Some sokratesTeacher.DateOfBirth
-                        AAD.Contact.HomePhones =
+                        AAD.DataTransferTypes.Contact.FirstName = sokratesTeacher.FirstName
+                        AAD.DataTransferTypes.Contact.LastName = sokratesTeacher.LastName
+                        AAD.DataTransferTypes.Contact.DisplayName =
+                            sprintf "%s %s (%s)" sokratesTeacher.LastName sokratesTeacher.FirstName sokratesTeacher.ShortName
+                        AAD.DataTransferTypes.Contact.Birthday = Some sokratesTeacher.DateOfBirth
+                        AAD.DataTransferTypes.Contact.HomePhones =
                             sokratesTeacher.Phones
                             |> List.choose (function
-                                | Sokrates.Home number -> Some number
-                                | Sokrates.Mobile _ -> None
+                                | Sokrates.DataTransferTypes.Home number -> Some number
+                                | Sokrates.DataTransferTypes.Mobile _ -> None
                             )
-                        AAD.Contact.MobilePhone =
+                        AAD.DataTransferTypes.Contact.MobilePhone =
                             sokratesTeacher.Phones
                             |> List.tryPick (function
-                                | Sokrates.Home _ -> None
-                                | Sokrates.Mobile number -> Some number
+                                | Sokrates.DataTransferTypes.Home _ -> None
+                                | Sokrates.DataTransferTypes.Mobile number -> Some number
                             )
-                        AAD.Contact.MailAddresses = List.take 1 aadUser.MailAddresses
-                        AAD.Contact.Photo = photo
+                        AAD.DataTransferTypes.Contact.MailAddresses = List.take 1 aadUser.MailAddresses
+                        AAD.DataTransferTypes.Contact.Photo =
+                            photo
+                            |> Option.map (fun (PhotoLibrary.DataTransferTypes.Base64EncodedImage data) ->
+                                AAD.DataTransferTypes.Base64EncodedImage data
+                            )
                     }
                 | None -> None
             )
@@ -106,7 +111,7 @@ let handleAddTeachersAsContacts : HttpHandler =
 
         match contacts with
         | Ok contacts ->
-            match! Http.post ctx "http://aad/api/auto-contacts" ((List.map AAD.Contact.encode >> Encode.list) contacts) (Decode.succeed ()) with
+            match! Http.post ctx "http://aad/api/auto-contacts" ((List.map AAD.DataTransferTypes.Contact.encode >> Encode.list) contacts) (Decode.succeed ()) with
             | Ok () ->
                 return! Successful.OK () next ctx
             | Error e ->
@@ -128,17 +133,17 @@ let handleGetChildDirectories : HttpHandler =
 let handlePostStudentDirectories : HttpHandler =
     fun next ctx -> task {
         let! body = ctx.BindJsonAsync<Shared.CreateStudentDirectories.CreateDirectoriesData>()
-        let! students = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" body.ClassName) (Decode.list Sokrates.Student.decoder)
+        let! students = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" body.ClassName) (Decode.list Sokrates.DataTransferTypes.Student.decoder)
         let! result =
             students
             |> Result.bindAsync (fun students ->
                 let data = {
-                    FileStorage.Path = body.Path
-                    FileStorage.Names =
+                    FileStorage.DataTransferTypes.CreateDirectoriesData.Path = body.Path
+                    FileStorage.DataTransferTypes.CreateDirectoriesData.Names =
                         students
-                        |> List.map (fun student -> sprintf "%s_%s" student.LastName student.FirstName)
+                        |> List.map (fun student -> sprintf "%s_%s" student.LastName student.FirstName1)
                 }
-                Http.post ctx "http://file-storage/api/exercise-directories" (FileStorage.CreateDirectoriesData.encode data) (Decode.succeed ())
+                Http.post ctx "http://file-storage/api/exercise-directories" (FileStorage.DataTransferTypes.CreateDirectoriesData.encode data) (Decode.succeed ())
             )
         return!
             match result with
@@ -151,8 +156,8 @@ let handleGetDirectoryInfo : HttpHandler =
         let! body = ctx.BindJsonAsync<string>()
         let decoder =
             let path = body.Split('\\', '/') |> Seq.rev |> Seq.skip 1 |> Seq.rev |> Seq.toList
-            FileStorage.DirectoryInfo.decoder
-            |> Decode.map (FileStorage.DirectoryInfo.toDto path)
+            FileStorage.DataTransferTypes.DirectoryInfo.decoder
+            |> Decode.map (FileStorageTypeMapping.DirectoryInfo.toDto path)
         let! result = Http.post ctx "http://file-storage/api/directory-info" (Encode.string body) decoder
         return!
             match result with

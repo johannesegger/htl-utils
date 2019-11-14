@@ -1,6 +1,6 @@
 module AADGroupUpdates
 
-open AAD
+open AAD.DataTransferTypes
 
 let calculateMemberUpdates teacherIds aadGroupMemberIds =
     [

@@ -1,4 +1,4 @@
-module App
+module Untis.Server
 
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open FSharp.Data
@@ -14,6 +14,7 @@ open System
 open System.IO
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
+open Untis.DataTransferTypes
 
 [<Literal>]
 let TeachingDataPath = __SOURCE_DIRECTORY__ + "/data/GPU002.TXT"
@@ -23,45 +24,6 @@ let teachingData =
     Environment.getEnvVarOrFail "GPU002_FILE_PATH"
     |> File.ReadAllText
     |> TeachingData.ParseRows
-
-type SchoolClass = SchoolClass of string
-module SchoolClass =
-    let encode (SchoolClass v) = Encode.string v
-
-type TeacherShortName = TeacherShortName of string
-module TeacherShortName =
-    let encode (TeacherShortName v) = Encode.string v
-
-type Subject = Subject of string
-module Subject =
-    let encode (Subject v) = Encode.string v
-
-type TeacherTask =
-    | NormalTeacher of SchoolClass * TeacherShortName * Subject
-    | FormTeacher of SchoolClass * TeacherShortName
-    | Custodian of TeacherShortName * Subject
-
-module TeacherTask =
-    let encode = function
-        | NormalTeacher (schoolClass, teacher, subject) ->
-            let fields = [
-                "schoolClass", SchoolClass.encode schoolClass
-                "teacher", TeacherShortName.encode teacher
-                "subject", Subject.encode subject
-            ]
-            Encode.object [ "normalTeacher", Encode.object fields ]
-        | FormTeacher (schoolClass, teacher) ->
-            let fields = [
-                "schoolClass", SchoolClass.encode schoolClass
-                "teacher", TeacherShortName.encode teacher
-            ]
-            Encode.object [ "formTeacher", Encode.object fields ]
-        | Custodian (teacher, subject) ->
-            let fields = [
-                "teacher", TeacherShortName.encode teacher
-                "subject", Subject.encode subject
-            ]
-            Encode.object [ "custodian", Encode.object fields ]
 
 // ---------------------------------
 // Web app

@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="DataTransferTypes.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

@@ -10,6 +10,10 @@ RUN dotnet restore Teaching.Server
 # Copy everything else and build
 COPY Common ./Common
 COPY Common.Server ./Common.Server
+COPY AAD/DataTransferTypes.fs ./AAD/
+COPY FileStorage/DataTransferTypes.fs ./FileStorage/
+COPY PhotoLibrary/DataTransferTypes.fs ./PhotoLibrary/
+COPY Sokrates/DataTransferTypes.fs ./Sokrates/
 COPY Teaching.Server ./Teaching.Server
 RUN dotnet publish Teaching.Server -c Release -o out
 

@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Domain.fs" />
-    <Compile Include="AAD.fs" />
+    <Compile Include="DataTransferTypes.fs" />
+    <Compile Include="BusinessLogic.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

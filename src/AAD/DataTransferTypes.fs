@@ -1,4 +1,4 @@
-module Domain
+module AAD.DataTransferTypes
 
 open System
 open Thoth.Json.Net
@@ -29,6 +29,16 @@ module User =
             "lastName", Encode.string u.LastName
             "mailAddresses", (List.map Encode.string >> Encode.list) u.MailAddresses
         ]
+    let decoder : Decoder<_> =
+        Decode.object (fun get ->
+            {
+                Id = get.Required.Field "id" UserId.decoder
+                UserName = get.Required.Field "userName" Decode.string
+                FirstName = get.Required.Field "firstName" Decode.string
+                LastName = get.Required.Field "lastName" Decode.string
+                MailAddresses = get.Required.Field "mailAddresses" (Decode.list Decode.string)
+            }
+        )
 
 type Group = {
     Id: GroupId
@@ -44,6 +54,15 @@ module Group =
             "mail", Encode.string u.Mail
             "members", (List.map UserId.encode >> Encode.list) u.Members
         ]
+    let decoder : Decoder<_> =
+        Decode.object (fun get ->
+            {
+                Id = get.Required.Field "id" GroupId.decoder
+                Name = get.Required.Field "name" Decode.string
+                Mail = get.Required.Field "mail" Decode.string
+                Members = get.Required.Field "members" (Decode.list UserId.decoder)
+            }
+        )
 
 type MemberModification =
     | AddMember of UserId
@@ -103,6 +122,7 @@ module GroupModification =
 
 type Base64EncodedImage = Base64EncodedImage of string
 module Base64EncodedImage =
+    let encode (Base64EncodedImage v) = Encode.string v
     let decoder : Decoder<_> = Decode.string |> Decode.map Base64EncodedImage
 
 type Contact = {
@@ -116,6 +136,17 @@ type Contact = {
     Photo: Base64EncodedImage option
 }
 module Contact =
+    let encode v =
+        Encode.object [
+            "firstName", Encode.string v.FirstName
+            "lastName", Encode.string v.LastName
+            "displayName", Encode.string v.DisplayName
+            "birthday", Encode.option Encode.datetime v.Birthday
+            "homePhones", (List.map Encode.string >> Encode.list) v.HomePhones
+            "mobilePhone", Encode.option Encode.string v.MobilePhone
+            "mailAddresses", (List.map Encode.string >> Encode.list) v.MailAddresses
+            "photo", Encode.option Base64EncodedImage.encode v.Photo
+        ]
     let decoder : Decoder<_> =
         Decode.object (fun get -> {
             FirstName = get.Required.Field "firstName" Decode.string

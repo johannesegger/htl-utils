@@ -1,5 +1,6 @@
-module App
+module FinalTheses.Server
 
+open FinalTheses.DataTransferTypes
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open FSharp.Data
 open Giraffe
@@ -23,19 +24,6 @@ let mentors =
     Environment.getEnvVarOrFail "MENTORS_FILE_PATH"
     |> File.ReadAllText
     |> Mentors.ParseRows
-
-type Mentor = {
-    FirstName: string
-    LastName: string
-    MailAddress: string
-}
-module Mentor =
-    let encode mentor =
-        Encode.object [
-            "firstName", Encode.string mentor.FirstName
-            "lastName", Encode.string mentor.LastName
-            "mailAddress", Encode.string mentor.MailAddress
-        ]
 
 // ---------------------------------
 // Web app

@@ -1,6 +1,6 @@
-module AAD
+module AAD.BusinessLogic
 
-open Domain
+open AAD.DataTransferTypes
 open Microsoft.Graph
 open Polly
 open System

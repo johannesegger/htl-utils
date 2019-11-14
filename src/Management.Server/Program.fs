@@ -21,13 +21,13 @@ let handleGetAutoGroups : HttpHandler =
 
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
-        let! untisTeachingData = Http.get ctx "http://untis/api/teaching-data" (Decode.list Untis.TeacherInClass.decoder) |> Async.StartChild
-        let! sokratesTeachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.Teacher.decoder) |> Async.StartChild
-        let! finalThesesMentors = Http.get ctx "http://final-theses/api/mentors" (Decode.list FinalTheses.Mentor.decoder) |> Async.StartChild
-        let! aadAutoGroups = Http.get ctx "http://aad/api/auto-groups" (Decode.list AAD.Group.decoder) |> Async.StartChild
-        let! aadUsers = Http.get ctx "http://aad/api/users" (Decode.list AAD.User.decoder)
+        let! untisTeachingData = Http.get ctx "http://untis/api/teaching-data" (Decode.list Untis.DataTransferTypes.TeacherTask.decoder) |> Async.StartChild
+        let! sokratesTeachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
+        let! finalThesesMentors = Http.get ctx "http://final-theses/api/mentors" (Decode.list FinalTheses.DataTransferTypes.Mentor.decoder) |> Async.StartChild
+        let! aadAutoGroups = Http.get ctx "http://aad/api/auto-groups" (Decode.list AAD.DataTransferTypes.Group.decoder) |> Async.StartChild
+        let! aadUsers = Http.get ctx "http://aad/api/users" (Decode.list AAD.DataTransferTypes.User.decoder)
 
-        let! untisTeachingData = untisTeachingData |> Async.map (Result.map (List.choose id))
+        let! untisTeachingData = untisTeachingData
         let! sokratesTeachers = sokratesTeachers
         let! finalThesesMentors = finalThesesMentors
         let! aadAutoGroups = aadAutoGroups
@@ -35,24 +35,25 @@ let getAADGroupUpdates : HttpHandler =
         let getUpdates aadUsers aadAutoGroups sokratesTeachers teachingData finalThesesMentors =
             let aadUserLookupByUserName =
                 aadUsers
-                |> List.map (fun (user: AAD.User) -> user.UserName, user.Id)
+                |> List.map (fun (user: AAD.DataTransferTypes.User) -> user.UserName, user.Id)
                 |> Map.ofList
 
             let teacherIds =
                 sokratesTeachers
-                |> List.choose (fun (t: Sokrates.Teacher) -> Map.tryFind t.ShortName aadUserLookupByUserName)
+                |> List.choose (fun (t: Sokrates.DataTransferTypes.Teacher) -> Map.tryFind t.ShortName aadUserLookupByUserName)
 
             let classGroupsWithTeacherIds =
                 teachingData
-                |> List.map (function
-                    | Untis.NormalTeacher (schoolClass, teacherShortName, _)
-                    | Untis.FormTeacher (schoolClass, teacherShortName) -> (schoolClass, teacherShortName)
+                |> List.choose (function
+                    | Untis.DataTransferTypes.NormalTeacher (schoolClass, teacherShortName, _)
+                    | Untis.DataTransferTypes.FormTeacher (schoolClass, teacherShortName) -> Some (schoolClass, teacherShortName)
+                    | Untis.DataTransferTypes.Custodian _ -> None
                 )
                 |> List.groupBy fst
-                |> List.map (fun (Untis.SchoolClass schoolClass, teachers) ->
+                |> List.map (fun (Untis.DataTransferTypes.SchoolClass schoolClass, teachers) ->
                     let teacherIds =
                         teachers
-                        |> List.choose (snd >> fun (Untis.TeacherShortName v) -> Map.tryFind v aadUserLookupByUserName)
+                        |> List.choose (snd >> fun (Untis.DataTransferTypes.TeacherShortName v) -> Map.tryFind v aadUserLookupByUserName)
                         |> List.distinct
                     (sprintf "GrpLehrer%s" schoolClass, teacherIds)
                 )
@@ -60,15 +61,16 @@ let getAADGroupUpdates : HttpHandler =
             let formTeacherIds =
                 teachingData
                 |> List.choose (function
-                    | Untis.NormalTeacher _ -> None
-                    | Untis.FormTeacher (schoolClass, Untis.TeacherShortName teacherShortName) -> Some teacherShortName
+                    | Untis.DataTransferTypes.FormTeacher (_, Untis.DataTransferTypes.TeacherShortName teacherShortName) -> Some teacherShortName
+                    | Untis.DataTransferTypes.NormalTeacher _
+                    | Untis.DataTransferTypes.Custodian _ -> None
                 )
                 |> List.choose (flip Map.tryFind aadUserLookupByUserName)
                 |> List.distinct
 
             let aadUserLookupByMailAddress =
                 aadUsers
-                |> List.collect (fun (user: AAD.User) ->
+                |> List.collect (fun (user: AAD.DataTransferTypes.User) ->
                     user.MailAddresses
                     |> List.map (fun mailAddress -> CIString mailAddress, user.Id)
                 )
@@ -76,7 +78,7 @@ let getAADGroupUpdates : HttpHandler =
 
             let finalThesesMentorIds =
                 finalThesesMentors
-                |> List.choose (fun (m: FinalTheses.Mentor) -> Map.tryFind (CIString m.MailAddress) aadUserLookupByMailAddress)
+                |> List.choose (fun (m: FinalTheses.DataTransferTypes.Mentor) -> Map.tryFind (CIString m.MailAddress) aadUserLookupByMailAddress)
 
             let professionalGroupsWithTeacherIds =
                 [
@@ -90,9 +92,10 @@ let getAADGroupUpdates : HttpHandler =
                     let teacherIds =
                         teachingData
                         |> List.choose (function
-                            | Untis.NormalTeacher (_, Untis.TeacherShortName teacherShortName, Untis.Subject subject) ->
+                            | Untis.DataTransferTypes.NormalTeacher (_, Untis.DataTransferTypes.TeacherShortName teacherShortName, Untis.DataTransferTypes.Subject subject) ->
                                 Some (teacherShortName, subject)
-                            | Untis.FormTeacher _ -> None
+                            | Untis.DataTransferTypes.FormTeacher _
+                            | Untis.DataTransferTypes.Custodian _ -> None
                         )
                         |> List.filter (snd >> fun subject ->
                             subjects |> List.contains (CIString subject)
@@ -112,16 +115,16 @@ let getAADGroupUpdates : HttpHandler =
 
             let aadUserLookupById =
                 aadUsers
-                |> List.map (fun (user: AAD.User) -> user.Id, AAD.User.toDto user)
+                |> List.map (fun (user: AAD.DataTransferTypes.User) -> user.Id, AADTypeMapping.User.toDto user)
                 |> Map.ofList
 
             let aadAutoGroupsLookupById =
                 aadAutoGroups
-                |> List.map (fun (group: AAD.Group) -> group.Id, AAD.Group.toDto group)
+                |> List.map (fun (group: AAD.DataTransferTypes.Group) -> group.Id, AADTypeMapping.Group.toDto group)
                 |> Map.ofList
 
             AADGroupUpdates.calculateAll aadAutoGroups desiredGroups
-            |> List.map (AAD.GroupModification.toDto aadUserLookupById aadAutoGroupsLookupById)
+            |> List.map (AADTypeMapping.GroupModification.toDto aadUserLookupById aadAutoGroupsLookupById)
 
         return!
             Ok getUpdates
@@ -140,7 +143,7 @@ let applyAADGroupUpdates : HttpHandler =
         let! input = ctx.BindJsonAsync<Shared.AADGroupUpdates.GroupUpdate list>()
         let body =
             input
-            |> List.map (AAD.GroupModification.fromDto >> AAD.GroupModification.encode)
+            |> List.map (AADTypeMapping.GroupModification.fromDto >> AAD.DataTransferTypes.GroupModification.encode)
             |> Encode.list
         let! result = Http.post ctx "http://aad/api/auto-groups/modify" body (Decode.nil ())
         match result with

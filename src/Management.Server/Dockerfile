@@ -10,6 +10,10 @@ RUN dotnet restore Management.Server
 # Copy everything else and build
 COPY Common ./Common
 COPY Common.Server ./Common.Server
+COPY AAD/DataTransferTypes.fs ./AAD/
+COPY FinalTheses/DataTransferTypes.fs ./FinalTheses/
+COPY Sokrates/DataTransferTypes.fs ./Sokrates/
+COPY Untis/DataTransferTypes.fs ./Untis/
 COPY Management.Server ./Management.Server
 RUN dotnet publish Management.Server -c Release -o out
 

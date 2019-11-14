@@ -1,43 +1,17 @@
-module AAD
+module AADTypeMapping
 
-open Thoth.Json.Net
-
-type UserId = UserId of string
+open AAD.DataTransferTypes
 
 module UserId =
-    let encode (UserId userId) = Encode.string userId
-    let decoder : Decoder<_> = Decode.string |> Decode.map UserId
     let fromDto (Shared.AADGroupUpdates.UserId userId) = UserId userId
     let toDto (UserId groupId) = Shared.AADGroupUpdates.UserId groupId
 
-type GroupId = GroupId of string
-
 module GroupId =
-    let encode (GroupId groupId) = Encode.string groupId
-    let decoder : Decoder<_> = Decode.string |> Decode.map GroupId
     let fromDto (Shared.AADGroupUpdates.GroupId groupId) = GroupId groupId
     let toDto (GroupId groupId) = Shared.AADGroupUpdates.GroupId groupId
 
-type User = {
-    Id: UserId
-    UserName: string
-    FirstName: string
-    LastName: string
-    MailAddresses: string list
-}
-
 module User =
-    let decoder : Decoder<_> =
-        Decode.object (fun get ->
-            {
-                Id = get.Required.Field "id" UserId.decoder
-                UserName = get.Required.Field "userName" Decode.string
-                FirstName = get.Required.Field "firstName" Decode.string
-                LastName = get.Required.Field "lastName" Decode.string
-                MailAddresses = get.Required.Field "mailAddresses" (Decode.list Decode.string)
-            }
-        )
-    let toDto user =
+    let toDto (user: User) =
         {
             Shared.AADGroupUpdates.User.Id = UserId.toDto user.Id
             Shared.AADGroupUpdates.User.FirstName = user.FirstName
@@ -45,32 +19,12 @@ module User =
             Shared.AADGroupUpdates.User.ShortName = user.UserName
         }
 
-type Group = {
-    Id: GroupId
-    Name: string
-    Mail: string
-    Members: UserId list
-}
-
 module Group =
-    let decoder : Decoder<_> =
-        Decode.object (fun get ->
-            {
-                Id = get.Required.Field "id" GroupId.decoder
-                Name = get.Required.Field "name" Decode.string
-                Mail = get.Required.Field "mail" Decode.string
-                Members = get.Required.Field "members" (Decode.list UserId.decoder)
-            }
-        )
-    let toDto group =
+    let toDto (group: Group) =
         {
             Shared.AADGroupUpdates.Group.Id = GroupId.toDto group.Id
             Shared.AADGroupUpdates.Group.Name = group.Name
         }
-
-type MemberModification =
-    | AddMember of UserId
-    | RemoveMember of UserId
 
 module MemberModification =
     let fromDto (memberUpdates: Shared.AADGroupUpdates.MemberUpdates) =
@@ -101,14 +55,6 @@ module MemberModification =
             Shared.AADGroupUpdates.MemberUpdates.AddMembers = addMembers
             Shared.AADGroupUpdates.MemberUpdates.RemoveMembers = removeMembers
         }
-    let encode = function
-        | AddMember userId -> Encode.object [ "addMember", UserId.encode userId ]
-        | RemoveMember userId -> Encode.object [ "removeMember", UserId.encode userId ]
-
-type GroupModification =
-    | CreateGroup of name: string * memberIds: UserId list
-    | UpdateGroup of GroupId * MemberModification list
-    | DeleteGroup of GroupId
 
 module GroupModification =
     let fromDto = function
@@ -128,20 +74,3 @@ module GroupModification =
         | DeleteGroup groupId ->
             let group = groups |> Map.find groupId
             Shared.AADGroupUpdates.GroupUpdate.DeleteGroup group
-    let encode = function
-        | CreateGroup (name, memberIds) ->
-            Encode.object [
-                "createGroup", Encode.object [
-                    "name", Encode.string name
-                    "memberIds", (List.map UserId.encode >> Encode.list) memberIds
-                ]
-            ]
-        | UpdateGroup (groupId, memberModifications) ->
-            Encode.object [
-                "updateGroup", Encode.object [
-                    "groupId", GroupId.encode groupId
-                    "memberModifications", (List.map MemberModification.encode >> Encode.list) memberModifications
-                ]
-            ]
-        | DeleteGroup groupId ->
-            Encode.object [ "deleteGroup", GroupId.encode groupId ]

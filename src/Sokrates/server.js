@@ -158,8 +158,7 @@ let getStudentsOfClass = async (className, date) =>
     let [result, rawResponse, soapHeader, rawRequest] = await soapClient.getPupilsAsync({ schoolID: schoolId, dateOfInterest: date.format() });
     return result.return.lstPupils.pupilEntry
         .map(sokratesStudentToDto)
-        .filter(student => student.schoolClass == className)
-        .map(student => Object.assign({}, student, { schoolClass: undefined }));
+        .filter(student => student.schoolClass == className);
 };
 
 let getStudentContacts = async (personIds, date) =>
@@ -215,9 +214,13 @@ let getTeachers = async () =>
     return result.return.lstTeacher.teacherEntry
         .filter(teacher => teacher.teacher.token)
         .map(teacher => {
-            let address;
+            let phones, address;
             if (teacher.addressHome)
             {
+                phones = [teacher.addressHome.phone1, teacher.addressHome.phone2]
+                    .filter(v => v)
+                    .map(parsePhoneNumber)
+                    .reduce(addPhoneNumber, {});
                 address = {
                     country: teacher.addressHome.country,
                     zip: teacher.addressHome.plz,
@@ -225,22 +228,23 @@ let getTeachers = async () =>
                     street: teacher.addressHome.streetNumber
                         ? `${teacher.addressHome.street} ${teacher.addressHome.streetNumber}`
                         : teacher.addressHome.street
-                }
+                };
             }
             else
             {
-                address = null;
+                phones = undefined;
+                address = undefined;
             }
             return {
                 id: teacher.teacher.personID,
-                title: teacher.teacher.title || null,
+                title: teacher.teacher.title,
                 lastName: teacher.teacher.lastName,
                 firstName: teacher.teacher.firstName,
                 shortName: teacher.teacher.token,
                 dateOfBirth: teacher.teacher.dateOfBirth.replace(/\+.*$/, ""),
-                degreeFront: teacher.teacher.degree || null,
-                degreeBack: teacher.teacher.degree2 || null,
-                phones: teacher.addressHome ? [teacher.addressHome.phone1, teacher.addressHome.phone2].filter(v => v).map(parsePhoneNumber).reduce(addPhoneNumber, {}) : {},
+                degreeFront: teacher.teacher.degree,
+                degreeBack: teacher.teacher.degree2,
+                phones: phones,
                 address: address
             };
         });
