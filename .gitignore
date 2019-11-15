@@ -2,7 +2,6 @@ obj/
 bin/
 node_modules/
 deploy/
-set-env.ps1
 .ionide/
 /src/Management.Client/src/Client.Shared
 /src/Teaching.Client/src/Client.Shared
