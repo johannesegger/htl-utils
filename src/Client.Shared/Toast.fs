@@ -6,9 +6,16 @@ open Fulma
 open Fable.FontAwesome
 open Thoth.Elmish
 
+let create message =
+    Toast.message message
+    |> Toast.position Toast.BottomRight
+    |> Toast.noTimeout
+    |> Toast.withCloseButton
+    |> Toast.dismissOnClick
+
 // https://github.com/MangelMaxime/Thoth/blob/master/demos/Thoth.Elmish.Demo/src/Toast.fs#L24-L68
 let renderFulma =
-    { new Toast.IRenderer<Fa.IconOption> with
+    { new Toast.IRenderer<ReactElement> with
         member __.Toast children color =
             Notification.notification [ Notification.CustomClass color ]
                 children
@@ -33,11 +40,8 @@ let renderFulma =
             Heading.h5 []
                 [ str txt ]
 
-        member __.Icon (icon : Fa.IconOption) =
-            Icon.icon [ Icon.Size IsMedium ]
-                [ Fa.i [ icon
-                         Fa.Size Fa.Fa2x ]
-                    [ ] ]
+        member __.Icon (icon : ReactElement) =
+            icon
 
         member __.SingleLayout title message =
             div [ ]

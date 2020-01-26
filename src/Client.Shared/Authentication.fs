@@ -141,7 +141,7 @@ let stream states msgs =
             msgs
             |> AsyncRx.choose (function | SignIn -> Some login | _ -> None)
             |> AsyncRx.switchLatest
-            |> AsyncRx.showErrorToast (fun e -> "Login failed", e.Message)
+            |> AsyncRx.showSimpleErrorToast (fun e -> "Login failed", e.Message)
             |> AsyncRx.map SignInResult
 
         let logout =

@@ -5,9 +5,12 @@ type LoadableClassList =
     | FailedToLoadClassList
     | LoadedClassList of string list list
 
+module Class =
+    let level (className: string) = className.Substring(0, 1) |> int
+
 module Classes =
     let groupAndSort (classes: string list) =
         classes
-        |> List.groupBy (fun v -> v.[0])
+        |> List.groupBy Class.level
         |> List.sortBy fst
         |> List.map (snd >> List.sort)

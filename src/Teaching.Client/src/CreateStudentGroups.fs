@@ -40,19 +40,6 @@ type Msg =
     | CreateShuffledGroups
     | RemoveStudent of Guid
 
-let private shuffle =
-    let rand = Random()
-
-    let swap (a: _[]) x y =
-        let tmp = a.[x]
-        a.[x] <- a.[y]
-        a.[y] <- tmp
-
-    fun l ->
-        let a = Array.ofList l
-        Array.iteri (fun i _ -> swap a i (rand.Next(i, Array.length a))) a
-        List.ofArray a
-
 let private group size list =
     Seq.chunkBySize size list
     |> Seq.map Seq.toList
@@ -100,7 +87,7 @@ let rec update msg model =
             Groups =
                 model.Groups
                 |> List.collect id
-                |> shuffle
+                |> List.shuffle
                 |> group model.GroupSize }
     | RemoveStudent studentId ->
         { model with
@@ -228,7 +215,7 @@ let stream (pageActivated: IAsyncObservable<unit>) (states: IAsyncObservable<Msg
             |> AsyncRx.choose (function | LoadClassList -> Some loadClassList | _ -> None)
             |> AsyncRx.startWith [ loadClassList ]
             |> AsyncRx.switchLatest
-            |> AsyncRx.showErrorToast (fun e -> "Loading list of classes failed", e.Message)
+            |> AsyncRx.showSimpleErrorToast (fun e -> "Loading list of classes failed", e.Message)
             |> AsyncRx.map LoadClassListResponse
 
             let rand = Random();
@@ -243,7 +230,7 @@ let stream (pageActivated: IAsyncObservable<unit>) (states: IAsyncObservable<Msg
             msgs
             |> AsyncRx.choose (function | SelectClass className -> Some (loadStudents className) | _ -> None)
             |> AsyncRx.switchLatest
-            |> AsyncRx.showErrorToast (fun e -> "Loading students failed", e.Message)
+            |> AsyncRx.showSimpleErrorToast (fun e -> "Loading students failed", e.Message)
             |> AsyncRx.map LoadClassStudentsResponse
         ]
         |> AsyncRx.mergeSeq

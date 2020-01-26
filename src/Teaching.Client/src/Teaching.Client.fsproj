@@ -5,10 +5,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Common\List.fs" />
+    <Compile Include="Client.Shared\Toast.fs" />
     <Compile Include="Client.Shared\AsyncRx.fs" />
     <Compile Include="Client.Shared\Msal.fs" />
     <Compile Include="Client.Shared\Authentication.fs" />
-    <Compile Include="Client.Shared\Toast.fs" />
     <Compile Include="Client.Shared\Views.fs" />
     <Compile Include="..\..\Teaching.Server\Shared.fs" />
     <Compile Include="Classes.fs" />
@@ -20,6 +20,7 @@
     <Compile Include="CreateStudentDirectories.fs" />
     <Compile Include="CreateStudentGroups.fs" />
     <Compile Include="InspectDirectory.fs" />
+    <Compile Include="KnowName.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>
   <ItemGroup>

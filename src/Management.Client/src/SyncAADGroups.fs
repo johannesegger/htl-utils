@@ -342,7 +342,7 @@ let stream authHeader states (msgs: IAsyncObservable<_>) =
             states
             |> AsyncRx.choose (fst >> function | Some LoadGroupUpdates -> Some loadGroupUpdates | _ -> None)
             |> AsyncRx.switchLatest
-            |> AsyncRx.showErrorToast (fun e -> "Loading AAD group updates failed", e.Message)
+            |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AAD group updates failed", e.Message)
             |> AsyncRx.map LoadGroupUpdatesResponse
 
             AsyncRx.single LoadGroupUpdates
@@ -366,8 +366,8 @@ let stream authHeader states (msgs: IAsyncObservable<_>) =
                     Some (applyGroupUpdates (List.choose GroupUpdate.toDto groupUpdates))
                 | _ -> None)
             |> AsyncRx.switchLatest
-            |> AsyncRx.showErrorToast (fun e -> "Applying AAD group updates failed", e.Message)
-            |> AsyncRx.showSuccessToast (fun () -> "Applying AAD group updates", "Successfully applied AAD group updates")
+            |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AAD group updates failed", e.Message)
+            |> AsyncRx.showSimpleSuccessToast (fun () -> "Applying AAD group updates", "Successfully applied AAD group updates")
             |> AsyncRx.map ApplyGroupUpdatesResponse
         ]
         |> AsyncRx.mergeSeq

@@ -101,3 +101,37 @@ module InspectDirectory =
                     Files = get.Required.Field "files" (Decode.list FileInfo.decoder)
                 }
             )
+
+module KnowName =
+    type Group =
+        | Teachers
+        | Students of string
+    module Group =
+        let encode = function
+            | Teachers -> Encode.object [ "teachers", Encode.nil ]
+            | Students className -> Encode.object [ "students", Encode.string className ]
+        let decoder : Decoder<_> =
+            Decode.oneOf [
+                Decode.field "teachers" (Decode.nil Teachers)
+                Decode.field "students" (Decode.string |> Decode.map Students)
+            ]
+    type Base64EncodedImage = Base64EncodedImage of string
+    module Base64EncodedImage =
+        let encode (Base64EncodedImage v) = Encode.string v
+        let decoder : Decoder<_> = Decode.string |> Decode.map Base64EncodedImage
+
+    type Person = {
+        DisplayName: string
+        ImageUrl: string option
+    }
+    module Person =
+        let encode v =
+            Encode.object [
+                "displayName", Encode.string v.DisplayName
+                "imageUrl", v.ImageUrl |> Encode.option Encode.string
+            ]
+        let decoder : Decoder<_> =
+            Decode.object (fun get -> {
+                DisplayName = get.Required.Field "displayName" Decode.string
+                ImageUrl = get.Required.Field "imageUrl" (Decode.option Decode.string)
+            })

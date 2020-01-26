@@ -25,6 +25,7 @@ type Msg =
     | CreateStudentDirectoriesMsg of CreateStudentDirectories.Msg
     | CreateStudentGroupsMsg of CreateStudentGroups.Msg
     | InspectDirectoryMsg of InspectDirectory.Msg
+    | KnowNameMsg of KnowName.Msg
 
 type Model =
     {
@@ -35,6 +36,7 @@ type Model =
         CreateStudentDirectories: CreateStudentDirectories.Model
         CreateStudentGroups: CreateStudentGroups.Model
         InspectDirectory: InspectDirectory.Model
+        KnowName: KnowName.Model
     }
 
 let urlUpdate (result : Page option) model =
@@ -54,6 +56,7 @@ let init page =
         CreateStudentDirectories = CreateStudentDirectories.init
         CreateStudentGroups = CreateStudentGroups.init
         InspectDirectory = InspectDirectory.init
+        KnowName = KnowName.init
     }
 
 let update msg model =
@@ -70,6 +73,8 @@ let update msg model =
         { model with CreateStudentGroups = CreateStudentGroups.update msg model.CreateStudentGroups }
     | InspectDirectoryMsg msg ->
         { model with InspectDirectory = InspectDirectory.update msg model.InspectDirectory }
+    | KnowNameMsg msg ->
+        { model with KnowName = KnowName.update msg model.KnowName }
 
 let root model dispatch =
     let pageHtml = function
@@ -79,6 +84,7 @@ let root model dispatch =
         | CreateStudentDirectories -> CreateStudentDirectories.view model.CreateStudentDirectories (CreateStudentDirectoriesMsg >> dispatch)
         | CreateStudentGroups -> CreateStudentGroups.view model.CreateStudentGroups (CreateStudentGroupsMsg >> dispatch)
         | InspectDirectory -> InspectDirectory.view model.InspectDirectory (InspectDirectoryMsg >> dispatch)
+        | KnowName -> KnowName.view model.KnowName (KnowNameMsg >> dispatch)
 
     div []
         [ yield Navbar.navbar [ Navbar.Color IsWarning ]
@@ -163,6 +169,14 @@ let stream states msgs =
         )
         |||> InspectDirectory.stream
         |> AsyncRx.map InspectDirectoryMsg
+
+        (
+            authHeaderAndPageActivated (function KnowName -> true | _ -> false),
+            subStates (function KnowNameMsg msg -> Some msg | _ -> None) (fun m -> m.KnowName),
+            msgs |> AsyncRx.choose (function UserMsg (KnowNameMsg msg) -> Some msg | _ -> None)
+        )
+        |||> KnowName.stream
+        |> AsyncRx.map KnowNameMsg
     ]
     |> AsyncRx.mergeSeq
     |> AsyncRx.map UserMsg

@@ -8,20 +8,38 @@ module Base64EncodedImage =
     let decoder : Decoder<_> = Decode.string |> Decode.map Base64EncodedImage
 
 type TeacherPhoto = {
-    FirstName: string
-    LastName: string
+    ShortName: string
     Data: Base64EncodedImage
 }
 module TeacherPhoto =
     let encode v =
         Encode.object [
-            "firstName", Encode.string v.FirstName
-            "lastName", Encode.string v.LastName
+            "shortName", Encode.string v.ShortName
             "data", Base64EncodedImage.encode v.Data
         ]
     let decoder : Decoder<_> =
         Decode.object(fun get -> {
-            FirstName = get.Required.Field "firstName" Decode.string
-            LastName = get.Required.Field "lastName" Decode.string
-            Data = get.Required.Field "data" (Decode.string |> Decode.map Base64EncodedImage)
+            ShortName = get.Required.Field "shortName" Decode.string
+            Data = get.Required.Field "data" Base64EncodedImage.decoder
+        })
+
+type SokratesId = SokratesId of string
+module SokratesIdModule =
+    let encode (SokratesId v) = Encode.string v
+    let decoder : Decoder<_> = Decode.string |> Decode.map SokratesId
+
+type StudentPhoto = {
+    StudentId: SokratesId
+    Data: Base64EncodedImage
+}
+module StudentPhoto =
+    let encode v =
+        Encode.object [
+            "studentId", SokratesIdModule.encode v.StudentId
+            "data", Base64EncodedImage.encode v.Data
+        ]
+    let decoder : Decoder<_> =
+        Decode.object(fun get -> {
+            StudentId = get.Required.Field "studentId" SokratesIdModule.decoder
+            Data = get.Required.Field "data" Base64EncodedImage.decoder
         })

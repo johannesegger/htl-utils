@@ -35,8 +35,10 @@ services:
             dockerfile: PhotoLibrary/Dockerfile
         volumes:
             - ${PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY}:/data/teacher-photos
+            - ${PHOTO_LIBRARY_STUDENT_PHOTOS_DIRECTORY}:/data/student-photos
         environment:
             TEACHER_PHOTOS_DIRECTORY: "/data/teacher-photos"
+            STUDENT_PHOTOS_DIRECTORY: "/data/student-photos"
     file-storage:
         build:
             context: src

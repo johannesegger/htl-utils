@@ -67,12 +67,12 @@ let handleAddTeachersAsContacts : HttpHandler =
                 |> Map.ofList
             let photoLibraryTeacherMap =
                 teacherPhotos
-                |> List.map (fun (photo: PhotoLibrary.DataTransferTypes.TeacherPhoto) -> (CIString photo.LastName, CIString photo.FirstName), photo.Data)
+                |> List.map (fun (photo: PhotoLibrary.DataTransferTypes.TeacherPhoto) -> CIString photo.ShortName, photo.Data)
                 |> Map.ofList
             sokratesTeachers
             |> List.choose (fun (sokratesTeacher: Sokrates.DataTransferTypes.Teacher) ->
                 let aadUser = Map.tryFind (CIString sokratesTeacher.ShortName) aadUserMap
-                let photo = Map.tryFind (CIString sokratesTeacher.LastName, CIString sokratesTeacher.FirstName) photoLibraryTeacherMap
+                let photo = Map.tryFind (CIString sokratesTeacher.ShortName) photoLibraryTeacherMap
                 match aadUser with
                 | Some aadUser ->
                     Some {
@@ -165,13 +165,110 @@ let handleGetDirectoryInfo : HttpHandler =
             | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
+let handleGetKnowNameGroups : HttpHandler =
+    fun next ctx -> task {
+        let! result = Http.get ctx "http://sokrates/api/classes" (Decode.list Decode.string)
+        return!
+            match result with
+            | Ok classNames ->
+                let groups = [
+                    Shared.KnowName.Teachers
+                    yield! classNames |> List.map Shared.KnowName.Students
+                ]
+                Successful.OK groups next ctx
+            | Error e ->
+                ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
+    }
+
+let handleGetKnowNameTeachers : HttpHandler =
+    fun next ctx -> task {
+        let! teachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
+        let! teachersWithPhotos = Http.get ctx "http://photo-library/api/teachers" (Decode.list Decode.string) |> Async.StartChild
+
+        let! teachers = teachers
+        let! teachersWithPhotos = teachersWithPhotos
+
+        let teachersWithPhoto teachers teachersWithPhotos =
+            let teachersWithPhotos =
+                teachersWithPhotos
+                |> List.map CIString
+                |> Set.ofList
+            teachers
+            |> List.map (fun (teacher: Sokrates.DataTransferTypes.Teacher) ->
+                {
+                    Shared.KnowName.Person.DisplayName = sprintf "%s - %s %s" teacher.ShortName (teacher.LastName.ToUpper()) teacher.FirstName
+                    Shared.KnowName.Person.ImageUrl =
+                        if Set.contains (CIString teacher.ShortName) teachersWithPhotos
+                        then Some (sprintf "/api/know-name/teachers/%s/photo" teacher.ShortName)
+                        else None
+                }
+            )
+
+        let result =
+            Ok teachersWithPhoto
+            |> Result.apply (teachers |> Result.mapError List.singleton)
+            |> Result.apply (teachersWithPhotos |> Result.mapError List.singleton)
+        return!
+            match result with
+            | Ok result -> Successful.OK result next ctx
+            | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
+    }
+
+let handleGetKnowNameTeacherPhoto shortName : HttpHandler =
+    Http.proxy (sprintf "http://photo-library/api/teachers/%s/photo" shortName)
+
+let handleGetKnowNameStudentsFromClass className : HttpHandler =
+    fun next ctx -> task {
+        let! students = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" className) (Decode.list Sokrates.DataTransferTypes.Student.decoder) |> Async.StartChild
+        let! studentsWithPhotos = Http.get ctx "http://photo-library/api/students" (Decode.list PhotoLibrary.DataTransferTypes.SokratesIdModule.decoder) |> Async.StartChild
+
+        let! students = students
+        let! studentsWithPhotos = studentsWithPhotos
+
+        let studentsWithPhoto students studentsWithPhotos =
+            let studentsWithPhotos =
+                studentsWithPhotos
+                |> List.map (fun (PhotoLibrary.DataTransferTypes.SokratesId studentId) -> Sokrates.DataTransferTypes.SokratesId studentId)
+                |> Set.ofList
+            students
+            |> List.map (fun (student: Sokrates.DataTransferTypes.Student) ->
+                {
+                    Shared.KnowName.Person.DisplayName = sprintf "%s %s" (student.LastName.ToUpper()) student.FirstName1
+                    Shared.KnowName.Person.ImageUrl =
+                        if Set.contains student.Id studentsWithPhotos
+                        then
+                            let (Sokrates.DataTransferTypes.SokratesId studentId) = student.Id
+                            Some (sprintf "/api/know-name/students/%s/photo" studentId)
+                        else None
+                }
+            )
+
+        let result =
+            Ok studentsWithPhoto
+            |> Result.apply (students |> Result.mapError List.singleton)
+            |> Result.apply (studentsWithPhotos |> Result.mapError List.singleton)
+
+        return!
+            match result with
+            | Ok result -> Successful.OK result next ctx
+            | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
+    }
+
+let handleGetKnowNameStudentPhoto studentId : HttpHandler =
+    Http.proxy (sprintf "http://photo-library/api/students/%s/photo" studentId)
+
 let webApp =
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
                     route "/classes" >=> handleGetClasses
-                    routef "/classes/%s/students" handleGetClassStudents
+                    routef "/classes/%s/students" (fun className -> Auth.requiresTeacher >=> handleGetClassStudents className)
+                    route "/know-name/groups" >=> handleGetKnowNameGroups
+                    route "/know-name/teachers" >=> Auth.requiresTeacher >=> handleGetKnowNameTeachers
+                    routef "/know-name/teachers/%s/photo" handleGetKnowNameTeacherPhoto // Can't check authorization if image is loaded from HTML img tag
+                    routef "/know-name/students/%s" (fun className -> Auth.requiresTeacher >=> handleGetKnowNameStudentsFromClass className)
+                    routef "/know-name/students/%s/photo" handleGetKnowNameStudentPhoto // Can't check authorization if image is loaded from HTML img tag
                 ]
                 POST >=> choose [
                     routef "/wake-up/%s" (fun macAddress -> Auth.requiresTeacher >=> handlePostWakeUp macAddress)
@@ -200,7 +297,11 @@ let configureApp (app : IApplicationBuilder) =
     match env.IsDevelopment() with
     | true -> app.UseDeveloperExceptionPage() |> ignore
     | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
-    app.UseGiraffe(webApp)
+    app
+        .UseHttpsRedirection()
+        .UseDefaultFiles()
+        .UseStaticFiles()
+        .UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
     services.AddHttpClient() |> ignore
@@ -209,6 +310,8 @@ let configureServices (services : IServiceCollection) =
         Extra.empty
         |> Extra.withCustom (fun _ -> failwith "Not implemented") Shared.CreateStudentDirectories.CreateDirectoriesData.decoder
         |> Extra.withCustom Shared.InspectDirectory.DirectoryInfo.encode (Decode.fail "Not implemented")
+        |> Extra.withCustom Shared.KnowName.Group.encode (Decode.fail "Not implemented")
+        |> Extra.withCustom Shared.KnowName.Person.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
@@ -222,6 +325,7 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
 let main _ =
     WebHostBuilder()
         .UseKestrel()
+        .UseWebRoot("../Teaching.Client")
         .Configure(Action<IApplicationBuilder> configureApp)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)

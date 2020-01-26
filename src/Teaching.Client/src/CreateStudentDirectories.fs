@@ -197,7 +197,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 |> AsyncRx.choose (function | LoadClassList -> Some loadClassList | _ -> None)
                 |> AsyncRx.startWith [ loadClassList ]
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showErrorToast (fun e -> "Loading list of classes failed", e.Message)
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Loading list of classes failed", e.Message)
                 |> AsyncRx.map LoadClassListResponse
 
                 AsyncRx.defer (fun () ->
@@ -210,7 +210,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                     |> AsyncRx.map (fun children -> Ok (StoragePath.empty, children))
                     |> AsyncRx.catch ((fun e -> StoragePath.empty, e) >> Error >> AsyncRx.single)
                 )
-                |> AsyncRx.showErrorToast (fun (_, e) -> "Loading root directories failed", e.Message)
+                |> AsyncRx.showSimpleErrorToast (fun (_, e) -> "Loading root directories failed", e.Message)
                 |> AsyncRx.map LoadChildDirectoriesResponse
 
                 let loadChildDirectories path =
@@ -230,7 +230,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                     | AddChildDirectory (name, path) -> loadChildDirectories (StoragePath.combine path [ name ])
                     | _ -> AsyncRx.empty ()
                 )
-                |> AsyncRx.showErrorToast (fun (path, e) -> "Loading child directories failed", e.Message)
+                |> AsyncRx.showSimpleErrorToast (fun (path, e) -> "Loading child directories failed", e.Message)
                 |> AsyncRx.map LoadChildDirectoriesResponse
 
                 msgs
@@ -253,8 +253,8 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 msgs
                 |> AsyncRx.choose (function CreateDirectories data -> Some (createDirectories data) | _ -> None)
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showSuccessToast (fun () -> "Creating student directories", "Successfully created student directories")
-                |> AsyncRx.showErrorToast (fun e -> "Creating student directories failed", e.Message)
+                |> AsyncRx.showSimpleSuccessToast (fun () -> "Creating student directories", "Successfully created student directories")
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Creating student directories failed", e.Message)
                 |> AsyncRx.map CreateDirectoriesResponse
             ]
             |> AsyncRx.mergeSeq

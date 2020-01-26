@@ -112,8 +112,8 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
             states
             |> AsyncRx.choose (function | (Some SendWakeUp, { MacAddress = (_, Some macAddress) }) -> Some (sendWakeUp macAddress) | _ -> None)
             |> AsyncRx.switchLatest
-            |> AsyncRx.showSuccessToast (fun macAddress -> "Wake up", sprintf "Successfully sent wake up signal to \"%s\"" macAddress)
-            |> AsyncRx.showErrorToast (fun e -> "Wake up failed", e.Message)
+            |> AsyncRx.showSimpleSuccessToast (fun macAddress -> "Wake up", sprintf "Successfully sent wake up signal to \"%s\"" macAddress)
+            |> AsyncRx.showSimpleErrorToast (fun e -> "Wake up failed", e.Message)
             |> AsyncRx.tapOnNext (function
                 | Ok macAddress ->
                     Browser.WebStorage.localStorage.setItem(macAddressStorageKey, macAddress)

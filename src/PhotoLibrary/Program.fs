@@ -15,26 +15,41 @@ open SixLabors.ImageSharp.Processing
 open SixLabors.Primitives
 open System
 open System.IO
+open System.Text.RegularExpressions
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
 module TeacherPhoto =
-    let tryParse readFn (file: string) =
-        let fileName = Path.GetFileNameWithoutExtension file
-        match fileName.IndexOf '_' with
-        | -1 -> None
-        | separatorIndex ->
-            let lastName = fileName.Substring(0, separatorIndex)
-            let firstName = fileName.Substring(separatorIndex + 1)
-            Some {
-                LastName = lastName
-                FirstName = firstName
+    let tryGetShortName (path: string) =
+        let fileName = Path.GetFileNameWithoutExtension path
+        if Regex.IsMatch(fileName, @"^[A-Z]{4}$")
+        then Some fileName
+        else None
+
+    let tryParse readFn file =
+        tryGetShortName file
+        |> Option.map (fun shortName ->
+            {
+                ShortName = shortName
                 Data = readFn file |> Convert.ToBase64String |> Base64EncodedImage
             }
+        )
 
-// ---------------------------------
-// Web app
-// ---------------------------------
+module StudentPhoto =
+    let tryGetStudentId (path: string) =
+        let fileName = Path.GetFileNameWithoutExtension path
+        if Regex.IsMatch(fileName, @"^\d+$")
+        then Some (SokratesId fileName)
+        else None
+
+    let tryParse readFn file =
+        tryGetStudentId file
+        |> Option.map (fun studentId ->
+            {
+                StudentId = studentId
+                Data = readFn file |> Convert.ToBase64String |> Base64EncodedImage
+            }
+        )
 
 let resizePhoto size (path: string) =
     use image = Image.Load path
@@ -52,36 +67,86 @@ let resizePhoto size (path: string) =
     target.Seek(0L, SeekOrigin.Begin) |> ignore
     target.ToArray()
 
-let handleGetTeacherPhotos : HttpHandler =
-    fun (next : HttpFunc) (ctx : HttpContext) -> task {
-        let baseDir = Environment.getEnvVarOrFail "TEACHER_PHOTOS_DIRECTORY"
-        let width =
-            tryDo ctx.Request.Query.TryGetValue "width"
-            |> Option.bind Seq.tryHead
-            |> Option.bind (tryDo Int32.TryParse)
-        let height =
-            tryDo ctx.Request.Query.TryGetValue "height"
-            |> Option.bind Seq.tryHead
-            |> Option.bind (tryDo Int32.TryParse)
-        let resize =
-            match width, height with
-            | Some width, Some height -> resizePhoto (Size (width, height))
-            | Some width, None -> resizePhoto (Size (width, 0))
-            | None, Some height -> resizePhoto (Size (0, height))
-            | None, None -> File.ReadAllBytes
-        let photos =
+let resize (ctx: HttpContext) =
+    let width =
+        tryDo ctx.Request.Query.TryGetValue "width"
+        |> Option.bind Seq.tryHead
+        |> Option.bind (tryDo Int32.TryParse)
+    let height =
+        tryDo ctx.Request.Query.TryGetValue "height"
+        |> Option.bind Seq.tryHead
+        |> Option.bind (tryDo Int32.TryParse)
+    match width, height with
+    | Some width, Some height -> resizePhoto (Size (width, height))
+    | Some width, None -> resizePhoto (Size (width, 0))
+    | None, Some height -> resizePhoto (Size (0, height))
+    | None, None -> File.ReadAllBytes
+
+// ---------------------------------
+// Web app
+// ---------------------------------
+
+let handleGetTeachersWithPhotos : HttpHandler =
+    let baseDir = Environment.getEnvVarOrFail "TEACHER_PHOTOS_DIRECTORY"
+    fun next ctx ->
+        let result =
             Directory.GetFiles baseDir
-            |> Seq.choose (TeacherPhoto.tryParse resize)
+            |> Seq.choose TeacherPhoto.tryGetShortName
             |> Seq.toList
-        return! Successful.OK photos next ctx
-    }
+        Successful.OK result next ctx
+
+let handleGetStudentsWithPhotos : HttpHandler =
+    let baseDir = Environment.getEnvVarOrFail "STUDENT_PHOTOS_DIRECTORY"
+    fun next ctx ->
+        let result =
+            Directory.GetFiles baseDir
+            |> Seq.choose StudentPhoto.tryGetStudentId
+            |> Seq.toList
+        Successful.OK result next ctx
+
+let private tryGetFile baseDir fileName =
+    Directory.GetFiles(baseDir, sprintf "%s.*" fileName, EnumerationOptions(MatchCasing = MatchCasing.CaseInsensitive))
+    |> Array.tryHead
+
+let handleGetTeacherPhotos : HttpHandler =
+    let baseDir = Environment.getEnvVarOrFail "TEACHER_PHOTOS_DIRECTORY"
+    fun next ctx ->
+        let result =
+            Directory.GetFiles baseDir
+            |> Seq.choose (TeacherPhoto.tryGetShortName >> Option.bind (tryGetFile baseDir) >> Option.bind (TeacherPhoto.tryParse (resize ctx)))
+            |> Seq.toList
+        Successful.OK result next ctx
+
+let handleGetTeacherPhoto shortName : HttpHandler =
+    let baseDir = Environment.getEnvVarOrFail "TEACHER_PHOTOS_DIRECTORY"
+    fun next ctx ->
+        match tryGetFile baseDir shortName |> Option.bind (TeacherPhoto.tryParse (resize ctx)) with
+        | Some result ->
+            let (Base64EncodedImage data) = result.Data
+            let bytes = Convert.FromBase64String data
+            Successful.ok (setBody bytes) next ctx
+        | None -> RequestErrors.notFound (setBody [||]) next ctx
+
+let handleGetStudentPhoto studentId : HttpHandler =
+    let baseDir = Environment.getEnvVarOrFail "STUDENT_PHOTOS_DIRECTORY"
+    fun next ctx ->
+        match tryGetFile baseDir studentId |> Option.bind (StudentPhoto.tryParse (resize ctx)) with
+        | Some result ->
+            let (Base64EncodedImage data) = result.Data
+            let bytes = Convert.FromBase64String data
+            Successful.ok (setBody bytes) next ctx
+        | None -> RequestErrors.notFound (setBody [||]) next ctx
 
 let webApp =
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
+                    route "/teachers" >=> handleGetTeachersWithPhotos
                     route "/teachers/photos" >=> handleGetTeacherPhotos
+                    routef "/teachers/%s/photo" handleGetTeacherPhoto
+                    route "/students" >=> handleGetStudentsWithPhotos
+                    routef "/students/%s/photo" handleGetStudentPhoto
                 ]
             ])
         setStatusCode 404 >=> text "Not Found"
@@ -110,7 +175,9 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
+        |> Extra.withCustom SokratesIdModule.encode (Decode.fail "Not implemented")
         |> Extra.withCustom TeacherPhoto.encode (Decode.fail "Not implemented")
+        |> Extra.withCustom StudentPhoto.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
 let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =

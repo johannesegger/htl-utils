@@ -75,8 +75,8 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 states
                 |> AsyncRx.choose (fst >> function | Some Import -> Some import | _ -> None)
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showSuccessToast (fun () -> "Add teacher contacts", sprintf "Successfully started adding teacher contacts. This might take some minutes to finish.")
-                |> AsyncRx.showErrorToast (fun e -> "Adding teacher contacts failed", e.Message)
+                |> AsyncRx.showSimpleSuccessToast (fun () -> "Add teacher contacts", sprintf "Successfully started adding teacher contacts. This might take some minutes to finish.")
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Adding teacher contacts failed", e.Message)
                 |> AsyncRx.map ImportResponse
             ]
             |> AsyncRx.mergeSeq

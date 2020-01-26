@@ -413,7 +413,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                     |> AsyncRx.map (fun children -> Ok (StoragePath.empty, children))
                     |> AsyncRx.catch ((fun e -> StoragePath.empty, e) >> Error >> AsyncRx.single)
                 )
-                |> AsyncRx.showErrorToast (snd >> fun e -> "Loading root directories failed", e.Message)
+                |> AsyncRx.showSimpleErrorToast (snd >> fun e -> "Loading root directories failed", e.Message)
                 |> AsyncRx.map LoadChildDirectoriesResponse
 
                 let loadChildDirectories path =
@@ -433,7 +433,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                     | _ -> None
                 )
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showErrorToast (snd >> fun e -> "Loading child directories failed", e.Message)
+                |> AsyncRx.showSimpleErrorToast (snd >> fun e -> "Loading child directories failed", e.Message)
                 |> AsyncRx.map LoadChildDirectoriesResponse
 
                 let loadDirectoryInfo path =
@@ -468,7 +468,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                     | _ -> None
                 )
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showErrorToast (fun e -> "Loading directory info failed", e.Message)
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Loading directory info failed", e.Message)
                 |> AsyncRx.map LoadDirectoryInfoResponse
             ]
             |> AsyncRx.mergeSeq

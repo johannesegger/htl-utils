@@ -9,28 +9,32 @@ let private showToast (toast: 'a -> Cmd<_>) =
         toast e |> List.iter (fun sub -> sub ignore)
     )
 
-let private toast title message =
-    Toast.message message
-    |> Toast.title title
-    |> Toast.position Toast.BottomRight
-    |> Toast.noTimeout
-    |> Toast.withCloseButton
-    |> Toast.dismissOnClick
-
-let showErrorToast (errorFn: 'a -> string * string) =
+let showErrorToast (errorFn: 'a -> Toast.Builder<'b, 'c>) =
     let fn = function
         | Ok _ -> Cmd.none
         | Error e ->
-            let (title, message) = errorFn e
-            toast title message
+            errorFn e
             |> Toast.error
     showToast fn
 
-let showSuccessToast (successFn: 'a -> string * string) =
+let showSuccessToast (successFn: 'a -> Toast.Builder<'b, 'c>) =
     let fn = function
         | Ok v ->
-            let (title, message) = successFn v
-            toast title message
+            successFn v
             |> Toast.success
         | Error _ -> Cmd.none
     showToast fn
+
+let showSimpleErrorToast (errorFn: 'a -> string * string) =
+    showErrorToast (fun e ->
+        let (title, message) = errorFn e
+        Toast.create message
+        |> Toast.title title
+    )
+
+let showSimpleSuccessToast (successFn: 'a -> string * string) =
+    showSuccessToast (fun e ->
+        let (title, message) = successFn e
+        Toast.create message
+        |> Toast.title title
+    )
