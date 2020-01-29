@@ -332,6 +332,6 @@ let turnOffBirthdayReminders (graphServiceClient: GraphServiceClient) = async {
 let updateAutoContacts graphServiceClient userId contacts = async {
     do! removeAutoContacts graphServiceClient userId
     do! addAutoContacts graphServiceClient userId contacts
-    do! Async.Sleep 30000 // Wait a bit and hope the birthday calendar synchronized itself
-    do! turnOffBirthdayReminders graphServiceClient
+    // do! Async.Sleep 30000 // Wait a bit and hope the birthday calendar synchronized itself
+    // do! turnOffBirthdayReminders graphServiceClient
 }
