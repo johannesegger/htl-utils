@@ -330,11 +330,12 @@ let view model dispatch =
                 div [ Style [ Padding "0.75rem" ] ] [
                     Level.level [ Level.Level.Option.Props [ Style [ Width "100%" ] ] ] [
                         Level.item [] [
-                            Level.heading [] [ str " " ]
-                            Level.title [ Props [ Style [ Display DisplayOptions.Flex ] ] ] [
-                                Image.image [ Image.Is32x32 ] [ img [ Src "img/know-name-logo.svg" ] ]
-                                Heading.h3 [ Heading.Props [ Style [ MarginLeft "10px" ] ] ] [
-                                    str "Know name"
+                            div [] [
+                                Level.title [] [
+                                    img [ Src "img/know-name-logo.svg"; HTMLAttr.Width "32px"; HTMLAttr.Height "32px" ]
+                                    span [ Style [ MarginLeft "10px" ] ] [
+                                        str "Know name"
+                                    ]
                                 ]
                             ]
                         ]
