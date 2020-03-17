@@ -2,6 +2,7 @@ module CreateStudentGroups
 
 open System
 open Elmish
+open Fable.Core
 open Fable.React
 open Fable.React.Props
 open Fable.Reaction
@@ -19,7 +20,7 @@ type Student =
     }
 
 type ClassStudents =
-    | NotLoadedClassStudents
+    | LoadingClassStudents
     | FailedToLoadClassStudents
     | LoadedClassStudents of Student list
 
@@ -54,7 +55,7 @@ let rec update msg model =
     | LoadClassListResponse (Error e) ->
         { model with ClassList = FailedToLoadClassList }
     | SelectClass name ->
-        { model with SelectedClass = Some (name, NotLoadedClassStudents) }
+        { model with SelectedClass = Some (name, LoadingClassStudents) }
     | LoadClassStudentsResponse (Ok students) ->
         match model.SelectedClass with
         | Some (className, _) ->
@@ -154,7 +155,7 @@ let view model dispatch =
         Divider.divider []
 
         match model.SelectedClass with
-        | Some (_, NotLoadedClassStudents) ->
+        | Some (_, LoadingClassStudents) ->
             Progress.progress [ Progress.Color IsInfo ] []
         | Some (className, FailedToLoadClassStudents) ->
             Views.errorWithRetryButton "Error while loading students" (fun () -> dispatch (SelectClass className))
@@ -197,12 +198,10 @@ let view model dispatch =
         | None -> ()
     ]
 
-let stream (pageActivated: IAsyncObservable<unit>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
-    pageActivated
-    |> AsyncRx.flatMapLatest (fun () ->
-        [
-            msgs
-
+let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+    pageActive
+    |> AsyncRx.flatMapLatest (function
+        | true ->
             let loadClassList =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
@@ -211,27 +210,33 @@ let stream (pageActivated: IAsyncObservable<unit>) (states: IAsyncObservable<Msg
                     |> AsyncRx.map Ok
                     |> AsyncRx.catch (Error >> AsyncRx.single)
                 )
-            msgs
-            |> AsyncRx.choose (function | LoadClassList -> Some loadClassList | _ -> None)
-            |> AsyncRx.startWith [ loadClassList ]
-            |> AsyncRx.switchLatest
-            |> AsyncRx.showSimpleErrorToast (fun e -> "Loading list of classes failed", e.Message)
-            |> AsyncRx.map LoadClassListResponse
+            [
+                msgs
 
-            let rand = Random();
-            let loadStudents className =
-                AsyncRx.defer (fun () ->
-                    AsyncRx.ofPromise (promise {
-                        return! Fetch.``get``(sprintf "/api/classes/%s/students" className, Decode.list Decode.string)
-                    })
-                    |> AsyncRx.map Ok
-                    |> AsyncRx.catch (Error >> AsyncRx.single)
-                )
-            msgs
-            |> AsyncRx.choose (function | SelectClass className -> Some (loadStudents className) | _ -> None)
-            |> AsyncRx.switchLatest
-            |> AsyncRx.showSimpleErrorToast (fun e -> "Loading students failed", e.Message)
-            |> AsyncRx.map LoadClassStudentsResponse
-        ]
-        |> AsyncRx.mergeSeq
+                msgs
+                |> AsyncRx.choose (function | LoadClassList -> Some loadClassList | _ -> None)
+                |> AsyncRx.startWith [ loadClassList ]
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Loading list of classes failed", e.Message)
+                |> AsyncRx.map LoadClassListResponse
+
+                let loadStudents className =
+                    AsyncRx.defer (fun () ->
+                        AsyncRx.ofAsync' (async {
+                            let! authHeader = getAuthRequestHeader ()
+                            let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                            return! Fetch.``get``(sprintf "/api/classes/%s/students" className, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
+                        })
+                        |> AsyncRx.map Ok
+                        |> AsyncRx.catch (Error >> AsyncRx.single)
+                    )
+                msgs
+                |> AsyncRx.choose (function | SelectClass className -> Some (loadStudents className) | _ -> None)
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Loading students failed", e.Message)
+                |> AsyncRx.map LoadClassStudentsResponse
+            ]
+            |> AsyncRx.mergeSeq
+        | false ->
+            AsyncRx.empty ()
     )

@@ -3,6 +3,7 @@ module Views
 open Fulma
 open Fable.FontAwesome
 open Fable.React
+open Fable.React.Props
 
 let errorWithRetryButton text onRetryClick =
     Notification.notification [ Notification.Color IsDanger ] [
@@ -30,3 +31,10 @@ let errorWithRetryButton text onRetryClick =
                     ]
             ]
     ]
+
+let signInNotification text =
+    Notification.notification [ Notification.Color IsWarning ]
+        [
+            Icon.icon [ Icon.Props [ Style [ MarginRight "10px" ] ] ] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
+            span [] [ str text ]
+        ]

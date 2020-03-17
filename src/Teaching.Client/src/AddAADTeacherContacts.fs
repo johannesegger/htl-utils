@@ -1,35 +1,28 @@
 module AddAADTeacherContacts
 
+open Fable.Core
 open Fable.FontAwesome
 open Fable.React
-open Fable.React.Props
 open Fable.Reaction
-open Fetch.Types
 open FSharp.Control
 open Fulma
 open Thoth.Fetch
 open Thoth.Json
 
 type Model = {
-    IsEnabled: bool
     IsImporting: bool
 }
 
 type Msg =
-    | Enable
-    | Disable
     | Import
     | ImportResponse of Result<unit, exn>
 
 let init = {
-    IsEnabled = false
     IsImporting = false
 }
 
 let update msg model =
     match msg with
-    | Enable -> { model with IsEnabled = true }
-    | Disable -> { model with IsEnabled = false }
     | Import -> { model with IsImporting = true }
     | ImportResponse (Ok ()) -> { model with IsImporting = false }
     | ImportResponse (Error _e) -> { model with IsImporting = false }
@@ -40,7 +33,6 @@ let view model dispatch =
             Button.button
                 [
                     Button.Size IsLarge
-                    Button.Disabled (not model.IsEnabled)
                     Button.IsLoading model.IsImporting
                     Button.Color IsSuccess
                     Button.OnClick (fun _ev -> dispatch Import)
@@ -52,32 +44,26 @@ let view model dispatch =
         ]
     ]
 
-let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
-    authHeader
-    |> AsyncRx.flatMapLatest (function
-        | None ->
-            AsyncRx.single Disable
-        | Some authHeader ->
-            [
-                msgs
-                |> AsyncRx.startWith [ Enable ]
+let stream getAuthRequestHeader (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+    [
+        msgs
 
-                let import =
-                    AsyncRx.defer (fun () ->
-                        AsyncRx.ofPromise (promise {
-                            let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post("/api/teachers/add-as-contacts", Encode.nil, Decode.succeed (), requestProperties)
-                        })
-                        |> AsyncRx.map Ok
-                        |> AsyncRx.catch (Error >> AsyncRx.single)
-                    )
+        let import =
+            AsyncRx.defer (fun () ->
+                AsyncRx.ofAsync' (async {
+                    let! authHeader = getAuthRequestHeader ()
+                    let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                    return! Fetch.post("/api/teachers/add-as-contacts", Encode.nil, Decode.succeed (), requestProperties) |> Async.AwaitPromise
+                })
+                |> AsyncRx.map Ok
+                |> AsyncRx.catch (Error >> AsyncRx.single)
+            )
 
-                states
-                |> AsyncRx.choose (fst >> function | Some Import -> Some import | _ -> None)
-                |> AsyncRx.switchLatest
-                |> AsyncRx.showSimpleSuccessToast (fun () -> "Add teacher contacts", sprintf "Successfully started adding teacher contacts. This might take some minutes to finish.")
-                |> AsyncRx.showSimpleErrorToast (fun e -> "Adding teacher contacts failed", e.Message)
-                |> AsyncRx.map ImportResponse
-            ]
-            |> AsyncRx.mergeSeq
-    )
+        states
+        |> AsyncRx.choose (fst >> function | Some Import -> Some import | _ -> None)
+        |> AsyncRx.switchLatest
+        |> AsyncRx.showSimpleSuccessToast (fun () -> "Add teacher contacts", sprintf "Successfully started adding teacher contacts. This might take some minutes to finish.")
+        |> AsyncRx.showSimpleErrorToast (fun e -> "Adding teacher contacts failed", e.Message)
+        |> AsyncRx.map ImportResponse
+    ]
+    |> AsyncRx.mergeSeq

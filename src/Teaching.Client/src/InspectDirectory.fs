@@ -1,5 +1,6 @@
 module InspectDirectory
 
+open Fable.Core
 open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
@@ -65,11 +66,16 @@ let private directoryFilters =
         HasEmptyFiles, "Directories with empty files"
     ]
 
+type DirectoryInfoState =
+    | DirectoryInfoNotAvailable
+    | DirectoryInfoLoading
+    | DirectoryInfoLoaded of DirectoryInfo
+    | DirectoryInfoLoadError of exn
+
 type Model =
     {
-        IsEnabled: bool
         Directory: Directory
-        DirectoryInfo: DirectoryInfo option
+        DirectoryInfo: DirectoryInfoState
         DirectoriesWithVisibleDetails: Set<StoragePath>
         ActiveDirectoryFilter: FilterId
         AutoRefreshEnabled: bool
@@ -77,8 +83,6 @@ type Model =
     }
 
 type Msg =
-    | Enable
-    | Disable
     | SelectDirectory of StoragePath
     | LoadChildDirectoriesResponse of Result<StoragePath * string list, StoragePath * exn>
     | LoadDirectoryInfoResponse of Result<DirectoryInfo, exn>
@@ -89,22 +93,19 @@ type Msg =
 
 let rec update msg model =
     match msg with
-    | Enable ->
-        { model with IsEnabled = true }
-    | Disable ->
-        { model with IsEnabled = false }
     | SelectDirectory path ->
         { model with
-            Directory = Directory.select path model.Directory
+            Directory = Directory.select path model.Directory |> Directory.setLoading path true
+            DirectoryInfo = DirectoryInfoLoading
             DirectoriesWithVisibleDetails = Set.empty }
     | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
         { model with Directory = Directory.setChildDirectories path childDirectories model.Directory }
     | LoadChildDirectoriesResponse (Error (path, e)) ->
         { model with Directory = Directory.setChildDirectoriesFailedToLoad path model.Directory }
     | LoadDirectoryInfoResponse (Ok directoryInfo) ->
-        { model with DirectoryInfo = Some directoryInfo }
+        { model with DirectoryInfo = DirectoryInfoLoaded directoryInfo }
     | LoadDirectoryInfoResponse (Error e) ->
-        model // TODO set to error
+        { model with DirectoryInfo = DirectoryInfoLoadError e }
     | ApplyFilter filterId ->
         { model with ActiveDirectoryFilter = filterId }
     | ToggleAutoRefresh ->
@@ -121,9 +122,8 @@ let rec update msg model =
 
 let init =
     {
-        IsEnabled = false
         Directory = Directory.root
-        DirectoryInfo = None
+        DirectoryInfo = DirectoryInfoNotAvailable
         DirectoriesWithVisibleDetails = Set.empty
         ActiveDirectoryFilter = directoryFilters |> List.head |> fst
         AutoRefreshEnabled = false
@@ -146,6 +146,7 @@ let view model dispatch =
             [
                 Button.Color (if directory.IsSelected then IsLink else NoColor)
                 Button.OnClick (fun _ev -> directory.Path |> SelectDirectory |> dispatch)
+                Button.IsLoading directory.IsLoading
             ]
             [ str (StoragePath.getName directory.Path) ]
 
@@ -245,16 +246,15 @@ let view model dispatch =
                     |> List.intersperse (Divider.divider [])
             | NotLoadedDirectoryChildren ->
                 yield Progress.progress [ Progress.Color IsInfo ] []
-                // yield Notification.notification [ Notification.Color IsWarning ]
-                //     [
-                //         Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
-                //         span [] [ str "Sign in to view directories" ]
-                //     ]
             | FailedToLoadDirectoryChildren ->
                 yield Views.errorWithRetryButton "Error while loading directory children" (fun () -> dispatch (SelectDirectory model.Directory.Path))
 
-            match Option.map applyFilter model.DirectoryInfo with
-            | Some directoryInfo ->
+            match model.DirectoryInfo with
+            | DirectoryInfoNotAvailable -> ()
+            | DirectoryInfoLoading ->
+                yield Section.section [] [ Progress.progress [ Progress.Color IsInfo ] [] ]
+            | DirectoryInfoLoaded directoryInfo ->
+                let directoryInfo = applyFilter directoryInfo
                 yield Divider.divider [ Divider.Label (sprintf "Directory info for %s" (StoragePath.toString directoryInfo.Path)) ]
 
                 yield
@@ -391,24 +391,24 @@ let view model dispatch =
                                         fileStatistics file
                                     ]
                         ]
-            | None -> ()
+            | DirectoryInfoLoadError e ->
+                yield Views.errorWithRetryButton "Error while loading directory info" (fun () -> dispatch (SelectDirectory model.Directory.Path))
         ]
 
-let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
-    authHeader
+let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+    pageActive
     |> AsyncRx.flatMapLatest (function
-        | Some authHeader ->
+        | true ->
             [
-                AsyncRx.single Enable
-
                 msgs
 
                 AsyncRx.defer (fun () ->
-                    AsyncRx.ofPromise (promise {
+                    AsyncRx.ofAsync' (async {
                         let url = "/api/child-directories"
                         let data = StoragePath.toString StoragePath.empty
+                        let! authHeader = getAuthRequestHeader ()
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
+                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
                     })
                     |> AsyncRx.map (fun children -> Ok (StoragePath.empty, children))
                     |> AsyncRx.catch ((fun e -> StoragePath.empty, e) >> Error >> AsyncRx.single)
@@ -418,11 +418,12 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
 
                 let loadChildDirectories path =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofPromise (promise {
+                        AsyncRx.ofAsync' (async {
                             let url = "/api/child-directories"
                             let data = StoragePath.toString path
+                            let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
+                            return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map (fun children -> Ok (path, children))
                         |> AsyncRx.catch ((fun e -> path, e) >> Error >> AsyncRx.single)
@@ -438,11 +439,12 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
 
                 let loadDirectoryInfo path =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofPromise (promise {
+                        AsyncRx.ofAsync' (async {
                             let url = "/api/directory-info"
                             let data = StoragePath.toString path
+                            let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, DirectoryInfo.decoder, requestProperties)
+                            return! Fetch.post(url, data, DirectoryInfo.decoder, requestProperties) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map (DirectoryInfo.fromDto >> Ok)
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -472,6 +474,6 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 |> AsyncRx.map LoadDirectoryInfoResponse
             ]
             |> AsyncRx.mergeSeq
-        | None ->
-            AsyncRx.single Disable
+        | false ->
+            AsyncRx.empty ()
     )

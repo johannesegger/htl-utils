@@ -1,5 +1,6 @@
 module KnowName
 
+open Fable.Core
 open Fable.Core.JsInterop
 open Fable.FontAwesome
 open Fable.React
@@ -161,14 +162,9 @@ type GroupsLoadState =
     | GroupsLoadError
     | GroupsLoaded of GroupsLoadedModel
 
-type Model = {
-    IsEnabled: bool
-    GroupsLoadState: GroupsLoadState
-}
+type Model = GroupsLoadState
 
 type Msg =
-    | Enable
-    | Disable
     | LoadGroups
     | LoadGroupsResult of Result<Group list, exn>
     | ShowGroupSelection
@@ -188,45 +184,35 @@ type GuessResult =
     | Incorrect of Person list
     | Skipped
 
-let init = {
-    IsEnabled = false
-    GroupsLoadState = GroupsLoading
-}
+let init = GroupsLoading
 
 let update msg model =
     let mapLoadedGroups fn =
-        match model.GroupsLoadState with
-        | GroupsLoaded groups -> { model with GroupsLoadState = fn groups |> GroupsLoaded }
+        match model with
+        | GroupsLoaded groups -> fn groups |> GroupsLoaded
         | GroupsLoading
         | GroupsLoadError -> model
     match msg with
-    | Enable ->
-        { model with IsEnabled = true }
-    | Disable ->
-        { model with IsEnabled = false }
     | LoadGroups ->
-        { model with GroupsLoadState = GroupsLoading }
+        GroupsLoading
     | LoadGroupsResult (Ok groups) ->
-        { model with
-            GroupsLoadState =
-                GroupsLoaded {
-                    Groups = [ for group in groups -> { Group = group; LoadStatus = GroupLoadStatusNotLoaded } ]
-                    SelectedGroups = []
-                    GroupSelectionVisible = false
-                    PlayState = {
-                        AllPersons = []
-                        RemainingPersons = []
-                        CurrentGuess = ""
-                        Suggestions = {
-                            Items = []
-                            Highlighted = None
-                        }
-                    }
-                    Score = 0
+        GroupsLoaded {
+            Groups = [ for group in groups -> { Group = group; LoadStatus = GroupLoadStatusNotLoaded } ]
+            SelectedGroups = []
+            GroupSelectionVisible = false
+            PlayState = {
+                AllPersons = []
+                RemainingPersons = []
+                CurrentGuess = ""
+                Suggestions = {
+                    Items = []
+                    Highlighted = None
                 }
+            }
+            Score = 0
         }
     | LoadGroupsResult (Error e) ->
-        { model with GroupsLoadState = GroupsLoadError }
+        GroupsLoadError
     | ShowGroupSelection ->
         mapLoadedGroups (fun model -> { model with GroupSelectionVisible = true })
     | SelectGroup loadableGroup ->
@@ -285,7 +271,7 @@ let update msg model =
 
 let view model dispatch =
     Container.container [] [
-        match model.GroupsLoadState with
+        match model with
         | GroupsLoading ->
             Progress.progress [ Progress.Color IsInfo ] []
         | GroupsLoaded data ->
@@ -355,7 +341,7 @@ let view model dispatch =
                                             )
                                             |> List.map Group.toString
                                             |> function
-                                            | [] -> "None"
+                                            | [] -> "Click to select"
                                             | x -> String.concat ", " x
                                             |> str
                                         ]
@@ -393,7 +379,7 @@ let view model dispatch =
                                     ClassName "is-unselectable"
                                 ]
                                 [
-                                    Level.heading [] [ str "Punkte" ]
+                                    Level.heading [] [ str "Score" ]
                                     let color = if data.Score >= 0 then "lightgreen" else "red"
                                     Level.title [ Props [ Style [ Color color ] ] ] [
                                         str (string data.Score)
@@ -430,7 +416,7 @@ let view model dispatch =
                                         [
                                             Tile.child [ Tile.Props [ Style [ Height "100%" ] ] ]
                                                 [
-                                                    Box.box' [ Props [ Id "suggestions"; Style [ Height "100%"; OverflowY "auto" ] ] ]
+                                                    Box.box' [ Props [ Id "suggestions"; Style [ Height "100%"; OverflowY OverflowOptions.Auto ] ] ]
                                                         [
                                                             for suggestion in suggestions.Items do
                                                                 let (group, person) = suggestion
@@ -463,20 +449,19 @@ let view model dispatch =
         | GroupsLoadError -> Views.errorWithRetryButton "Fehler beim Laden der Daten." (fun () -> dispatch LoadGroups)
     ]
 
-let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
-    authHeader
+let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+    pageActive
     |> AsyncRx.flatMapLatest (function
-        | Some authHeader ->
+        | true ->
             [
-                AsyncRx.single Enable
-
                 msgs
 
                 let loadGroups =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofPromise (promise {
+                        AsyncRx.ofAsync' (async {
+                            let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.``get``("/api/know-name/groups", Decode.list Group.decoder, requestProperties)
+                            return! Fetch.``get``("/api/know-name/groups", Decode.list Group.decoder, requestProperties) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -493,13 +478,14 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
 
                 let loadGroup group =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofPromise (promise {
+                        AsyncRx.ofAsync' (async {
                             let url =
                                 match group with
                                 | Teachers -> "/api/know-name/teachers"
                                 | Students className -> sprintf "/api/know-name/students/%s" className
+                            let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.``get``(url, Decode.list Person.decoder, requestProperties)
+                            return! Fetch.``get``(url, Decode.list Person.decoder, requestProperties) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map (fun v -> Ok (group, v))
                         |> AsyncRx.catch (fun v -> Error (group, v) |> AsyncRx.single)
@@ -535,9 +521,9 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
 
                 states
                 |> AsyncRx.tapOnNext (function
-                    | Some (UpdateGuess _), { GroupsLoadState = GroupsLoaded model }
-                    | Some HighlightPreviousSuggestion, { GroupsLoadState = GroupsLoaded model }
-                    | Some HighlightNextSuggestion, { GroupsLoadState = GroupsLoaded model } ->
+                    | Some (UpdateGuess _), GroupsLoaded model
+                    | Some HighlightPreviousSuggestion, GroupsLoaded model
+                    | Some HighlightNextSuggestion, GroupsLoaded model ->
                         match Suggestions.tryIndexOfHighlighted model.PlayState.Suggestions with
                         | Some idx ->
                             updateView (fun () ->
@@ -559,7 +545,7 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 |> AsyncRx.choose (function | SubmitGuess guess -> Some guess | _ -> None)
                 |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
                 |> AsyncRx.choose (fun (guess, model) ->
-                    match model.GroupsLoadState with
+                    match model with
                     | GroupsLoaded model ->
                         match PlayModel.currentPerson model.PlayState with
                         | None -> None
@@ -581,6 +567,6 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 |> AsyncRx.map SubmittedGuess
             ]
             |> AsyncRx.mergeSeq
-        | None ->
-            AsyncRx.single Disable
+        | false ->
+            AsyncRx.empty ()
     )

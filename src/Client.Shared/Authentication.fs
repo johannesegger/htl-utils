@@ -8,11 +8,7 @@ open Fable.Reaction
 open FSharp.Control
 open Fulma
 
-type User =
-    {
-        Name: string
-        Token: string
-    }
+type User = { Name: string }
 
 type Model =
     | Loading
@@ -25,8 +21,8 @@ type Msg =
     | SignOut
     | SignOutResult of Result<unit, exn>
 
-let appId = "9fb9b79b-6e66-4007-a94f-571d7e3b68c5"
-let userAgentApplication =
+let private appId = "9fb9b79b-6e66-4007-a94f-571d7e3b68c5"
+let private userAgentApplication =
     let options =
         let cacheOptions = createEmpty<Msal.CacheOptions>
         cacheOptions.cacheLocation <- Some Msal.CacheLocation.LocalStorage
@@ -41,35 +37,47 @@ let userAgentApplication =
         o
     Msal.UserAgentApplication.Create(options)
 
-userAgentApplication.handleRedirectCallback(fun error response ->
-    Browser.Dom.console.log("handleRedirectCallback", error, response)
-)
+let private getAuthenticatedUser () = promise {
+    match userAgentApplication.getAccount() |> Option.ofObj with
+    | Some account ->
+        return { Name = account.name }
+    | None ->
+        let authParams = createEmpty<Msal.AuthenticationParameters>
+        // authParams.scopes <- Some (ResizeArray [| "contacts.readwrite" |])
+        let! authResponse = userAgentApplication.loginPopup authParams
+        return { Name = authResponse.account.name }
+}
 
 [<Emit("$0.name === \"InteractionRequiredAuthError\"")>]
-let isInteractionRequiredAuthError (_ : exn) : bool = jsNative
+let private isInteractionRequiredAuthError (_ : exn) : bool = jsNative
 
-let getToken() = promise {
+let tryGetToken() = async {
     let authParams = createEmpty<Msal.AuthenticationParameters>
     authParams.scopes <- Some !![| appId |]
     try
-        let! authResponse = userAgentApplication.acquireTokenSilent authParams
-        return authResponse.accessToken
-    with error ->
-        try
-            if isInteractionRequiredAuthError error then
-                let! authResponse = userAgentApplication.acquireTokenPopup authParams
-                return authResponse.accessToken
-            else
-                return raise error
-        with _error ->
-            return failwith "Please sign in using your Microsoft account."
+        let! authResponse = userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise
+        return Some authResponse.accessToken
+    with
+        | error when isInteractionRequiredAuthError error ->
+            let! authResponse = userAgentApplication.acquireTokenPopup authParams |> Async.AwaitPromise
+            return Some authResponse.accessToken
+        | error ->
+            Browser.Dom.console.log("Auth error", error)
+            return None
 }
 
-let tryGetAuthHeader model =
+let tryGetRequestHeader () = async {
+    let! token = tryGetToken ()
+    return
+        token
+        |> Option.map (sprintf "Bearer %s" >> Fetch.Types.Authorization)
+}
+
+let tryGetLoggedInUser model =
     match model with
     | Loading
     | NotAuthenticated -> None
-    | Authenticated user -> Some (Fetch.Types.Authorization ("Bearer " + user.Token))
+    | Authenticated user -> Some user
 
 let rec update msg model =
     match msg with
@@ -111,9 +119,11 @@ let stream states msgs =
                 | Loading ->
                     match userAgentApplication.getAccount() |> Option.ofObj with
                     | Some user ->
-                        AsyncRx.ofPromise (promise {
-                            let! token = getToken()
-                            return { Name = user.name; Token = token }
+                        AsyncRx.ofAsync' (async {
+                            let! token = tryGetToken ()
+                            match token with
+                            | Some _ -> return { Name = user.name }
+                            | None -> return failwith "Please sign in using your Microsoft account."
                         })
                         |> AsyncRx.map (Ok >> SignInResult)
                         |> AsyncRx.catch (Error >> SignInResult >> AsyncRx.single)
@@ -126,15 +136,7 @@ let stream states msgs =
             |> AsyncRx.switchLatest
 
         let login =
-            AsyncRx.defer (fun () ->
-                AsyncRx.ofPromise (promise {
-                    let authParams = createEmpty<Msal.AuthenticationParameters>
-                    authParams.scopes <- Some (ResizeArray [| "contacts.readwrite" |])
-                    let! authResponse = userAgentApplication.loginPopup authParams
-                    let! token = getToken()
-                    return { Name = userAgentApplication.getAccount().name; Token = token }
-                })
-            )
+            AsyncRx.defer (getAuthenticatedUser >> AsyncRx.ofPromise)
             |> AsyncRx.map Ok
             |> AsyncRx.catch (Error >> AsyncRx.single)
         yield

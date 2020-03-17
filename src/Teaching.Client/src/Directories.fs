@@ -84,13 +84,13 @@ module Directory =
                     IsLoading = false
                     Children = NotLoadedDirectoryChildren
                 })
-            { dir with Children = LoadedDirectoryChildren childDirectories' }
+            { dir with Children = LoadedDirectoryChildren childDirectories'; IsLoading = false }
 
         update path fn directory
 
     let setChildDirectoriesFailedToLoad path directory =
         let fn dir =
-            { dir with Children = FailedToLoadDirectoryChildren }
+            { dir with Children = FailedToLoadDirectoryChildren; IsLoading = false }
 
         update path fn directory
 

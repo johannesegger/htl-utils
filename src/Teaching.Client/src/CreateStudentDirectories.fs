@@ -1,5 +1,6 @@
 module CreateStudentDirectories
 
+open Fable.Core
 open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
@@ -14,7 +15,6 @@ open Thoth.Json
 
 type Model =
     {
-        IsEnabled: bool
         ClassList: LoadableClassList
         SelectedClass: string option
         Directory: Directory
@@ -22,8 +22,6 @@ type Model =
     }
 
 type Msg =
-    | Enable
-    | Disable
     | LoadClassList
     | LoadClassListResponse of Result<string list, exn>
     | SelectClass of string
@@ -36,10 +34,6 @@ type Msg =
 
 let rec update msg model =
     match msg with
-    | Enable ->
-        { model with IsEnabled = true }
-    | Disable ->
-        { model with IsEnabled = false }
     | LoadClassList ->
         { model with ClassList = NotLoadedClassList }
     | LoadClassListResponse (Ok classList) ->
@@ -51,9 +45,9 @@ let rec update msg model =
     | SelectDirectory path ->
         { model with Directory = Directory.select path model.Directory |> Directory.setLoading path true }
     | LoadChildDirectoriesResponse (Ok (path, childDirectories)) ->
-        { model with Directory = Directory.setChildDirectories path childDirectories model.Directory |> Directory.setLoading path false }
+        { model with Directory = Directory.setChildDirectories path childDirectories model.Directory }
     | LoadChildDirectoriesResponse (Error (path, e)) ->
-        { model with Directory = Directory.setChildDirectoriesFailedToLoad path model.Directory |> Directory.setLoading path false }
+        { model with Directory = Directory.setChildDirectoriesFailedToLoad path model.Directory }
     | UpdateNewDirectoryValue (path, value) ->
         { model with NewDirectoryNames = Map.add path value model.NewDirectoryNames }
     | AddChildDirectory (name, path) ->
@@ -66,7 +60,6 @@ let rec update msg model =
 
 let init =
     {
-        IsEnabled = false
         ClassList = NotLoadedClassList
         SelectedClass = None
         Directory = Directory.root
@@ -141,48 +134,39 @@ let view model dispatch =
     Container.container [] [
         h2 [ Class "title" ] [ str "Create student directories" ]
 
-        if model.IsEnabled then
-            classListView
+        classListView
 
-            Divider.divider []
+        Divider.divider []
 
-            match model.Directory.Children with
-            | LoadedDirectoryChildren _ ->
-                yield!
-                    Directory.mapSelected directoryView model.Directory
-                    |> List.intersperse (Divider.divider [])
-            | NotLoadedDirectoryChildren ->
-                Progress.progress [ Progress.Color IsInfo ] []
-            | FailedToLoadDirectoryChildren ->
-                Views.errorWithRetryButton "Error while loading directory children" (fun () -> dispatch (SelectDirectory model.Directory.Path))
+        match model.Directory.Children with
+        | LoadedDirectoryChildren _ ->
+            yield!
+                Directory.mapSelected directoryView model.Directory
+                |> List.intersperse (Divider.divider [])
+        | NotLoadedDirectoryChildren ->
+            Progress.progress [ Progress.Color IsInfo ] []
+        | FailedToLoadDirectoryChildren ->
+            Views.errorWithRetryButton "Error while loading directory children" (fun () -> dispatch (SelectDirectory model.Directory.Path))
 
-            Divider.divider []
+        Divider.divider []
 
-            Button.button
-                [
-                    Button.Color IsSuccess
-                    match Directory.getSelectedDirectory model.Directory, model.SelectedClass with
-                    | Some selectedDirectory, Some className when not <| StoragePath.isRoot selectedDirectory.Path ->
-                        let data = { ClassName = className; Path = StoragePath.toString selectedDirectory.Path }
-                        Button.OnClick (fun _ev -> dispatch (CreateDirectories data))
-                    | _ -> Button.Disabled true
-                ]
-                [ str "Create" ]
-        else
-            Notification.notification [ Notification.Color IsWarning ]
-                [
-                    Icon.icon [] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
-                    span [] [ str "Sign in to view directories" ]
-                ]
+        Button.button
+            [
+                Button.Color IsSuccess
+                match Directory.getSelectedDirectory model.Directory, model.SelectedClass with
+                | Some selectedDirectory, Some className when not <| StoragePath.isRoot selectedDirectory.Path ->
+                    let data = { ClassName = className; Path = StoragePath.toString selectedDirectory.Path }
+                    Button.OnClick (fun _ev -> dispatch (CreateDirectories data))
+                | _ -> Button.Disabled true
+            ]
+            [ str "Create" ]
     ]
 
-let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
-    authHeader
+let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+    pageActive
     |> AsyncRx.flatMapLatest (function
-        | Some authHeader ->
+        | true ->
             [
-                AsyncRx.single Enable
-
                 msgs
 
                 let loadClassList =
@@ -201,11 +185,12 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 |> AsyncRx.map LoadClassListResponse
 
                 AsyncRx.defer (fun () ->
-                    AsyncRx.ofPromise (promise {
+                    AsyncRx.ofAsync' (async {
                         let url = "/api/child-directories"
                         let data = StoragePath.toString StoragePath.empty |> Encode.string
+                        let! authHeader = getAuthRequestHeader ()
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
+                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
                     })
                     |> AsyncRx.map (fun children -> Ok (StoragePath.empty, children))
                     |> AsyncRx.catch ((fun e -> StoragePath.empty, e) >> Error >> AsyncRx.single)
@@ -215,11 +200,12 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
 
                 let loadChildDirectories path =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofPromise (promise {
+                        AsyncRx.ofAsync' (async {
                             let url = "/api/child-directories"
                             let data = StoragePath.toString path |> Encode.string
+                            let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.list Decode.string, requestProperties)
+                            return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map (fun children -> Ok (path, children))
                         |> AsyncRx.catch ((fun e -> path, e) >> Error >> AsyncRx.single)
@@ -241,11 +227,12 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
 
                 let createDirectories data =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofPromise (promise {
+                        AsyncRx.ofAsync' (async {
                             let url = "/api/create-student-directories"
                             let data = CreateDirectoriesData.encode data
+                            let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, requestProperties)
+                            return! Fetch.post(url, data, requestProperties) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map (ignore >> Ok)
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -258,6 +245,6 @@ let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IA
                 |> AsyncRx.map CreateDirectoriesResponse
             ]
             |> AsyncRx.mergeSeq
-        | None ->
-            AsyncRx.single Disable
+        | false ->
+            AsyncRx.empty ()
     )

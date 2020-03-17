@@ -1,5 +1,6 @@
 module WakeUp
 
+open Fable.Core
 open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
@@ -10,9 +11,11 @@ open Fulma
 open Thoth.Fetch
 open Thoth.Json
 
+type State = Normal | Editing | Sending
+
 type Model = {
     MacAddress: string * string option
-    IsEditing: bool
+    State: State
 }
 
 type Msg =
@@ -24,7 +27,7 @@ type Msg =
 
 let init = {
     MacAddress = "", None
-    IsEditing = false
+    State = Normal
 }
 
 let validateMacAddress (value: string) =
@@ -34,12 +37,12 @@ let validateMacAddress (value: string) =
 
 let update msg model =
     match msg with
-    | BeginEdit -> { model with IsEditing = true }
+    | BeginEdit -> { model with State = Editing }
     | UpdateMacAddress value -> { model with MacAddress = (value, validateMacAddress value) }
-    | EndEdit -> { model with IsEditing = false }
-    | SendWakeUp -> model
-    | SendWakeUpResponse (Ok ()) -> model
-    | SendWakeUpResponse (Error _e) -> model
+    | EndEdit -> { model with State = Normal }
+    | SendWakeUp -> { model with State = Sending }
+    | SendWakeUpResponse (Ok ()) -> { model with State = Normal }
+    | SendWakeUpResponse (Error _e) -> { model with State = Normal }
 
 let view model dispatch =
     let tagButton cssClass props children =
@@ -54,8 +57,8 @@ let view model dispatch =
         Section.section [] [
             Tag.list [ Tag.List.HasAddons; Tag.List.IsCentered ] [
                 Tag.tag [ Tag.Color IsInfo; Tag.Size IsLarge ] [ str "Wake up" ]
-                if model.IsEditing
-                then
+                match model.State with
+                | Editing ->
                     Tag.tag [ Tag.Size IsLarge ] [
                         Input.text [
                             Input.Value (fst model.MacAddress)
@@ -67,15 +70,22 @@ let view model dispatch =
                         [
                             Icon.icon [] [ Fa.i [ Fa.Solid.Check ] [] ]
                         ]
-                else
+                | Normal
+                | Sending ->
                     Tag.tag [ Tag.Size IsLarge ] [ str (model.MacAddress |> snd |> Option.defaultValue "<No MAC address specified>") ]
-                    tagButton "is-warning" [ Button.OnClick (fun _ev -> dispatch BeginEdit) ] [
-                        Icon.icon [] [ Fa.i [ Fa.Solid.PencilAlt ] [] ]
-                    ]
+                    tagButton "is-warning"
+                        [
+                            Button.OnClick (fun _ev -> dispatch BeginEdit)
+                            Button.Disabled (model.State = Sending)
+                        ]
+                        [
+                            Icon.icon [] [ Fa.i [ Fa.Solid.PencilAlt ] [] ]
+                        ]
                 tagButton "is-success"
                     [
-                        Button.Disabled (snd model.MacAddress |> Option.isNone || model.IsEditing)
+                        Button.Disabled (snd model.MacAddress |> Option.isNone || model.State = Editing)
                         Button.OnClick (fun _ev -> dispatch SendWakeUp)
+                        Button.IsLoading (model.State = Sending)
                     ]
                     [
                         Icon.icon [] [ Fa.i [ Fa.Solid.PaperPlane ] [] ]
@@ -84,42 +94,38 @@ let view model dispatch =
         ]
     ]
 
-let stream (authHeader: IAsyncObservable<HttpRequestHeaders option>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
-    authHeader
-    |> AsyncRx.choose id
-    |> AsyncRx.flatMapLatest (fun authHeader ->
-        [
-            let macAddressStorageKey = "wake-up-address"
+let stream getAuthRequestHeader (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+    [
+        let macAddressStorageKey = "wake-up-address"
 
-            msgs
+        msgs
 
-            let initialMacAddress = Browser.WebStorage.localStorage.getItem macAddressStorageKey
-            AsyncRx.single (UpdateMacAddress initialMacAddress)
+        let initialMacAddress = Browser.WebStorage.localStorage.getItem macAddressStorageKey
+        AsyncRx.single (UpdateMacAddress initialMacAddress)
 
-            let sendWakeUp macAddress =
-                AsyncRx.defer (fun () ->
-                    AsyncRx.ofPromise (promise {
-                        let url = sprintf "/api/wake-up/%s" macAddress
-                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return!
-                            Fetch.post(url, Encode.nil, Decode.succeed (), requestProperties)
-                            |> Promise.map (fun () -> macAddress)
-                    })
-                    |> AsyncRx.map Ok
-                    |> AsyncRx.catch (Error >> AsyncRx.single)
-                )
-
-            states
-            |> AsyncRx.choose (function | (Some SendWakeUp, { MacAddress = (_, Some macAddress) }) -> Some (sendWakeUp macAddress) | _ -> None)
-            |> AsyncRx.switchLatest
-            |> AsyncRx.showSimpleSuccessToast (fun macAddress -> "Wake up", sprintf "Successfully sent wake up signal to \"%s\"" macAddress)
-            |> AsyncRx.showSimpleErrorToast (fun e -> "Wake up failed", e.Message)
-            |> AsyncRx.tapOnNext (function
-                | Ok macAddress ->
-                    Browser.WebStorage.localStorage.setItem(macAddressStorageKey, macAddress)
-                | Error _e -> ()
+        let sendWakeUp macAddress =
+            AsyncRx.defer (fun () ->
+                AsyncRx.ofAsync' (async {
+                    let url = sprintf "/api/wake-up/%s" macAddress
+                    let! authHeader = getAuthRequestHeader ()
+                    let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                    let! response = Fetch.post(url, Encode.nil, Decode.succeed (), requestProperties) |> Async.AwaitPromise
+                    return macAddress
+                })
+                |> AsyncRx.map Ok
+                |> AsyncRx.catch (Error >> AsyncRx.single)
             )
-            |> AsyncRx.map (Result.map ignore >> SendWakeUpResponse)
-        ]
-        |> AsyncRx.mergeSeq
-    )
+
+        states
+        |> AsyncRx.choose (function | (Some SendWakeUp, { MacAddress = (_, Some macAddress) }) -> Some (sendWakeUp macAddress) | _ -> None)
+        |> AsyncRx.switchLatest
+        |> AsyncRx.showSimpleSuccessToast (fun macAddress -> "Wake up", sprintf "Successfully sent wake up signal to \"%s\"" macAddress)
+        |> AsyncRx.showSimpleErrorToast (fun e -> "Wake up failed", e.Message)
+        |> AsyncRx.tapOnNext (function
+            | Ok macAddress ->
+                Browser.WebStorage.localStorage.setItem(macAddressStorageKey, macAddress)
+            | Error _e -> ()
+        )
+        |> AsyncRx.map (Result.map ignore >> SendWakeUpResponse)
+    ]
+    |> AsyncRx.mergeSeq

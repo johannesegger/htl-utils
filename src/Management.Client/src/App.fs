@@ -69,7 +69,7 @@ let root model dispatch =
 let stream states msgs =
     let authHeader =
         states
-        |> AsyncRx.map (snd >> (fun model -> model.Authentication) >> Authentication.tryGetAuthHeader)
+        |> AsyncRx.map (snd >> (fun model -> model.Authentication) >> Authentication.tryGetLoggedInUser)
         |> AsyncRx.distinctUntilChanged
     let pageActivated pageFn =
         states

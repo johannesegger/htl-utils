@@ -7,6 +7,7 @@ open Elmish.Navigation
 open Elmish.React
 open Elmish.UrlParser
 open Elmish.HMR // Must be last Elmish.* open declaration (see https://elmish.github.io/hmr/#Usage)
+open Fable.Core
 open Fable.Core.JsInterop
 open Fable.Elmish.Nile
 open Fable.React
@@ -96,7 +97,7 @@ let root model dispatch =
                     [ Authentication.view model.Authentication (AuthenticationMsg >> dispatch) ] ] ]
           yield div [ Style [ MarginTop "1em" ] ] [ pageHtml model.CurrentPage ] ]
 
-let stream states msgs =
+let stream (states: IAsyncObservable<Navigable<Msg> option * Model>) (msgs: IAsyncObservable<Navigable<Msg>>) =
     let subStates chooseMsgFn subStateFn =
         states
         |> AsyncRx.choose (fun (msg, model) ->
@@ -108,30 +109,40 @@ let stream states msgs =
                 | None -> None
             | Some _ -> None
         )
-    let authHeader =
-        states
-        |> AsyncRx.map (snd >> (fun model -> model.Authentication) >> Authentication.tryGetAuthHeader)
-        |> AsyncRx.distinctUntilChanged
-    let pageActivated filterPage =
+
+    let pageActivated (filterPage : Page -> bool) =
         states
         |> AsyncRx.map (fun (msg, model) -> filterPage model.CurrentPage)
         |> AsyncRx.distinctUntilChanged
-        |> AsyncRx.filter ((=) true)
-        |> AsyncRx.map ignore
-    let authHeaderAndPageActivated filterPage =
-        authHeader
-        |> AsyncRx.combineLatest (pageActivated filterPage)
-        |> AsyncRx.map fst
+
+    let loginObserver, loginObservable = AsyncRx.subject ()
+    let login () = async {
+        do! loginObserver.OnNextAsync ()
+        return!
+            states
+            |> AsyncRx.flatMap (snd >> fun state ->
+                Authentication.tryGetLoggedInUser state.Authentication
+                |> Option.map (ignore >> Authentication.tryGetRequestHeader >> AsyncRx.ofAsync')
+                |> Option.defaultValue (AsyncRx.single None)
+            )
+            |> AsyncRx.flatMap (function
+                | Some v -> AsyncRx.single v
+                | None -> AsyncRx.fail (exn "Please sign in using your Microsoft account.")
+            )
+            |> AsyncRx.take' 1
+            |> AsyncRx.awaitLast
+    }
+
     [
         (
             subStates (function AuthenticationMsg msg -> Some msg | _ -> None) (fun m -> m.Authentication),
-            msgs |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None)
+            msgs |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None) |> AsyncRx.merge (loginObservable |> AsyncRx.map (fun () -> Authentication.SignIn))
         )
         ||> Authentication.stream
         |> AsyncRx.map AuthenticationMsg
 
         (
-            authHeaderAndPageActivated (function WakeUp -> true | _ -> false),
+            login,
             subStates (function WakeUpMsg msg -> Some msg | _ -> None) (fun m -> m.WakeUp),
             msgs |> AsyncRx.choose (function UserMsg (WakeUpMsg msg) -> Some msg | _ -> None)
         )
@@ -139,7 +150,7 @@ let stream states msgs =
         |> AsyncRx.map WakeUpMsg
 
         (
-            authHeaderAndPageActivated (function AddAADTeacherContacts -> true | _ -> false),
+            login,
             subStates (function AddAADTeacherContactsMsg msg -> Some msg | _ -> None) (fun m -> m.AddAADTeacherContacts),
             msgs |> AsyncRx.choose (function UserMsg (AddAADTeacherContactsMsg msg) -> Some msg | _ -> None)
         )
@@ -147,7 +158,7 @@ let stream states msgs =
         |> AsyncRx.map AddAADTeacherContactsMsg
 
         (
-            authHeaderAndPageActivated (function CreateStudentDirectories -> true | _ -> false),
+            (login, pageActivated ((=) CreateStudentDirectories)),
             subStates (function CreateStudentDirectoriesMsg msg -> Some msg | _ -> None) (fun m -> m.CreateStudentDirectories),
             msgs |> AsyncRx.choose (function UserMsg (CreateStudentDirectoriesMsg msg) -> Some msg | _ -> None)
         )
@@ -155,7 +166,7 @@ let stream states msgs =
         |> AsyncRx.map CreateStudentDirectoriesMsg
 
         (
-            pageActivated (function CreateStudentGroups -> true | _ -> false),
+            (login, pageActivated ((=) CreateStudentGroups)),
             subStates (function CreateStudentGroupsMsg msg -> Some msg | _ -> None) (fun m -> m.CreateStudentGroups),
             msgs |> AsyncRx.choose (function UserMsg (CreateStudentGroupsMsg msg) -> Some msg | _ -> None)
         )
@@ -163,7 +174,7 @@ let stream states msgs =
         |> AsyncRx.map CreateStudentGroupsMsg
 
         (
-            authHeaderAndPageActivated (function InspectDirectory -> true | _ -> false),
+            (login, pageActivated ((=) InspectDirectory)),
             subStates (function InspectDirectoryMsg msg -> Some msg | _ -> None) (fun m -> m.InspectDirectory),
             msgs |> AsyncRx.choose (function UserMsg (InspectDirectoryMsg msg) -> Some msg | _ -> None)
         )
@@ -171,7 +182,7 @@ let stream states msgs =
         |> AsyncRx.map InspectDirectoryMsg
 
         (
-            authHeaderAndPageActivated (function KnowName -> true | _ -> false),
+            (login, pageActivated ((=) KnowName)),
             subStates (function KnowNameMsg msg -> Some msg | _ -> None) (fun m -> m.KnowName),
             msgs |> AsyncRx.choose (function UserMsg (KnowNameMsg msg) -> Some msg | _ -> None)
         )
