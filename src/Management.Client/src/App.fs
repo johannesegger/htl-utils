@@ -59,7 +59,7 @@ let root model dispatch =
     div []
         [ yield Navbar.navbar [ Navbar.Color IsDanger ]
             [ Navbar.Item.div []
-                [ Heading.h2 [ Heading.Props [ Style [ FontVariant "small-caps" ] ] ]
+                [ Heading.h2 []
                     [ str "Htl Mgmt" ] ]
               Navbar.End.div []
                 [ Navbar.Item.div []
