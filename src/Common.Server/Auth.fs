@@ -6,7 +6,7 @@ open Thoth.Json.Net
 
 let requiresRole roleName : HttpHandler =
     fun next ctx -> task {
-        let! userRoles = Http.get ctx "http://aad/api/signed-in-user/roles" (Decode.list Decode.string)
+        let! userRoles = Http.``get`` ctx (ServiceUrl.aad "signed-in-user/roles") (Decode.list Decode.string)
         match userRoles with
         | Ok userRoles ->
             if List.contains roleName userRoles

@@ -21,8 +21,8 @@ open Thoth.Json.Net
 
 let private clientApp =
     ConfidentialClientApplicationBuilder
-        .Create(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_CLIENT_ID")
-        .WithClientSecret(Environment.getEnvVarOrFail "MICROSOFT_GRAPH_APP_KEY")
+        .Create(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID")
+        .WithClientSecret(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_APP_KEY")
         .WithRedirectUri("https://localhost:8080")
         .Build()
 
@@ -92,8 +92,8 @@ let handleGetSignedInUserRoles : HttpHandler =
         let groups =
             groups
             |> List.choose (function
-                | :? DirectoryRole as role when CIString role.Id = CIString (Environment.getEnvVarOrFail "GLOBAL_ADMIN_ROLE_ID") -> Some Admin
-                | :? Group as group when CIString group.Id = CIString (Environment.getEnvVarOrFail "TEACHER_GROUP_ID") -> Some Teacher
+                | :? DirectoryRole as role when CIString role.Id = CIString (Environment.getEnvVarOrFail "AAD_GLOBAL_ADMIN_ROLE_ID") -> Some Admin
+                | :? Group as group when CIString group.Id = CIString (Environment.getEnvVarOrFail "AAD_TEACHER_GROUP_ID") -> Some Teacher
                 | other -> None
             )
             |> List.distinct
@@ -205,13 +205,13 @@ let configureServices (services : IServiceCollection) =
             config.DefaultScheme <- JwtBearerDefaults.AuthenticationScheme
             config.DefaultChallengeScheme <- JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(fun config ->
-            config.Audience <- Environment.getEnvVarOrFail "MICROSOFT_GRAPH_CLIENT_ID"
-            config.Authority <- Environment.getEnvVarOrFail "MICROSOFT_GRAPH_AUTHORITY"
+            config.Audience <- Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID"
+            config.Authority <- Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_AUTHORITY"
             config.TokenValidationParameters.ValidateIssuer <- false
             config.TokenValidationParameters.SaveSigninToken <- true
         ) |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -219,10 +219,9 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

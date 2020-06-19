@@ -21,11 +21,11 @@ let handleGetAutoGroups : HttpHandler =
 
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
-        let! untisTeachingData = Http.get ctx "http://untis/api/teaching-data" (Decode.list Untis.DataTransferTypes.TeacherTask.decoder) |> Async.StartChild
-        let! sokratesTeachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
-        let! finalThesesMentors = Http.get ctx "http://final-theses/api/mentors" (Decode.list FinalTheses.DataTransferTypes.Mentor.decoder) |> Async.StartChild
-        let! aadAutoGroups = Http.get ctx "http://aad/api/auto-groups" (Decode.list AAD.DataTransferTypes.Group.decoder) |> Async.StartChild
-        let! aadUsers = Http.get ctx "http://aad/api/users" (Decode.list AAD.DataTransferTypes.User.decoder)
+        let! untisTeachingData = Http.get ctx (ServiceUrl.untis "teaching-data") (Decode.list Untis.DataTransferTypes.TeacherTask.decoder) |> Async.StartChild
+        let! sokratesTeachers = Http.get ctx (ServiceUrl.sokrates "teachers") (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
+        let! finalThesesMentors = Http.get ctx (ServiceUrl.finalTheses "mentors") (Decode.list FinalTheses.DataTransferTypes.Mentor.decoder) |> Async.StartChild
+        let! aadAutoGroups = Http.get ctx (ServiceUrl.aad "auto-groups") (Decode.list AAD.DataTransferTypes.Group.decoder) |> Async.StartChild
+        let! aadUsers = Http.get ctx (ServiceUrl.aad "users") (Decode.list AAD.DataTransferTypes.User.decoder)
 
         let! untisTeachingData = untisTeachingData
         let! sokratesTeachers = sokratesTeachers
@@ -145,7 +145,7 @@ let applyAADGroupUpdates : HttpHandler =
             input
             |> List.map (AADTypeMapping.GroupModification.fromDto >> AAD.DataTransferTypes.GroupModification.encode)
             |> Encode.list
-        let! result = Http.post ctx "http://aad/api/auto-groups/modify" body (Decode.nil ())
+        let! result = Http.post ctx (ServiceUrl.aad "auto-groups/modify") body (Decode.nil ())
         match result with
         | Ok v -> return! Successful.OK () next ctx
         | Error e -> return! ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
@@ -191,7 +191,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom Shared.AADGroupUpdates.GroupUpdate.encode Shared.AADGroupUpdates.GroupUpdate.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -199,10 +199,9 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

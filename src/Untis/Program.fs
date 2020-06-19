@@ -21,7 +21,7 @@ let TeachingDataPath = __SOURCE_DIRECTORY__ + "/data/GPU002.TXT"
 type TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject", Separators="\t">
 
 let teachingData =
-    Environment.getEnvVarOrFail "GPU002_FILE_PATH"
+    Environment.getEnvVarOrFail "UNTIS_GPU002_FILE_PATH"
     |> File.ReadAllText
     |> TeachingData.ParseRows
 
@@ -87,7 +87,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom TeacherTask.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -95,10 +95,9 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

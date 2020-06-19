@@ -67,7 +67,7 @@ let configureApp (app : IApplicationBuilder) =
 let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -75,10 +75,9 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

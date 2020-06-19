@@ -21,7 +21,7 @@ let MentorsDataPath = __SOURCE_DIRECTORY__ + "/data/mentors.csv"
 type Mentors = CsvProvider<MentorsDataPath, Separators = ";">
 
 let mentors =
-    Environment.getEnvVarOrFail "MENTORS_FILE_PATH"
+    Environment.getEnvVarOrFail "FINAL_THESES_MENTORS_FILE_PATH"
     |> File.ReadAllText
     |> Mentors.ParseRows
 
@@ -75,7 +75,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom Mentor.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -83,10 +83,9 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

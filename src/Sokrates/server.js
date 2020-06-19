@@ -3,10 +3,13 @@ var fs = require("fs");
 var http = require("http");
 var moment = require("moment");
 
-let clientCertFile = fs.readFileSync(process.env.CLIENT_CERTIFICATE_PATH);
-let clientCertPassphrase = process.env.CLIENT_CERTIFICATE_PASSPHRASE;
+let clientCertFile = fs.readFileSync(process.env.SOKRATES_CLIENT_CERTIFICATE_PATH);
+let clientCertPassphrase = process.env.SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE;
 
-let port = 80;
+let port = process.argv[2];
+if (!port) {
+    throw "ERROR: undefined port"
+}
 
 http
     .createServer(async (req, res) => {

@@ -15,7 +15,7 @@ open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
 let private baseDirectories =
-    Environment.getEnvVarOrFail "BASE_DIRECTORIES"
+    Environment.getEnvVarOrFail "FILE_STORAGE_BASE_DIRECTORIES"
     |> String.split ";"
     |> Seq.chunkBySize 2
     |> Seq.map (fun s -> s.[0], s.[1])
@@ -188,7 +188,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom DirectoryInfo.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -196,10 +196,9 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

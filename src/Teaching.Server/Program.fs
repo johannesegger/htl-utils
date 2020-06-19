@@ -19,7 +19,7 @@ open Thoth.Json.Net
 
 let handleGetClasses : HttpHandler =
     fun next ctx -> task {
-        let! result = Http.get ctx "http://sokrates/api/classes" (Decode.list Decode.string)
+        let! result = Http.get ctx (ServiceUrl.sokrates "classes") (Decode.list Decode.string)
         return!
             match result with
             | Ok list -> Successful.OK list next ctx
@@ -33,7 +33,7 @@ let handleGetClassStudents schoolClass : HttpHandler =
             Sokrates.DataTransferTypes.Student.decoder |> Decode.map (fun s -> sprintf "%s %s" (s.LastName.ToUpper()) s.FirstName1)
             |> Decode.list
             |> Decode.map List.sort
-        let! result = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" schoolClass) decoder
+        let! result = Http.get ctx (ServiceUrl.sokrates (sprintf "classes/%s/students" schoolClass)) decoder
         return!
             match result with
             | Ok list -> Successful.OK list next ctx
@@ -43,7 +43,7 @@ let handleGetClassStudents schoolClass : HttpHandler =
 
 let handlePostWakeUp macAddress : HttpHandler =
     fun next ctx -> task {
-        let! result = Http.post ctx (sprintf "http://wake-up-computer/api/wake-up/%s" macAddress) Encode.nil (Decode.succeed ())
+        let! result = Http.post ctx (ServiceUrl.wakeUpComputer (sprintf "wake-up/%s" macAddress)) Encode.nil (Decode.succeed ())
         match result with
         | Ok () -> return! Successful.OK () next ctx
         | Error (Http.HttpError (_, HttpStatusCode.BadRequest, content)) -> return! RequestErrors.BAD_REQUEST content next ctx
@@ -52,9 +52,9 @@ let handlePostWakeUp macAddress : HttpHandler =
 
 let handleAddTeachersAsContacts : HttpHandler =
     fun next ctx -> task {
-        let! aadUsers = Http.get ctx "http://aad/api/users" (Decode.list AAD.DataTransferTypes.User.decoder) |> Async.StartChild
-        let! sokratesTeachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
-        let! teacherPhotos = Http.get ctx "http://photo-library/api/teachers/photos?width=200&height=200" (Decode.list PhotoLibrary.DataTransferTypes.TeacherPhoto.decoder) |> Async.StartChild
+        let! aadUsers = Http.get ctx (ServiceUrl.aad "users") (Decode.list AAD.DataTransferTypes.User.decoder) |> Async.StartChild
+        let! sokratesTeachers = Http.get ctx (ServiceUrl.sokrates "teachers") (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
+        let! teacherPhotos = Http.get ctx (ServiceUrl.photoLibrary "teachers/photos?width=200&height=200") (Decode.list PhotoLibrary.DataTransferTypes.TeacherPhoto.decoder) |> Async.StartChild
 
         let! aadUsers = aadUsers
         let! sokratesTeachers = sokratesTeachers
@@ -111,7 +111,7 @@ let handleAddTeachersAsContacts : HttpHandler =
 
         match contacts with
         | Ok contacts ->
-            match! Http.post ctx "http://aad/api/auto-contacts" ((List.map AAD.DataTransferTypes.Contact.encode >> Encode.list) contacts) (Decode.succeed ()) with
+            match! Http.post ctx (ServiceUrl.aad "auto-contacts") ((List.map AAD.DataTransferTypes.Contact.encode >> Encode.list) contacts) (Decode.succeed ()) with
             | Ok () ->
                 return! Successful.OK () next ctx
             | Error e ->
@@ -123,7 +123,7 @@ let handleAddTeachersAsContacts : HttpHandler =
 let handleGetChildDirectories : HttpHandler =
     fun next ctx -> task {
         let! body = ctx.BindJsonAsync<string>()
-        let! result = Http.post ctx "http://file-storage/api/child-directories" (Encode.string body) (Decode.list Decode.string)
+        let! result = Http.post ctx (ServiceUrl.fileStorage "child-directories") (Encode.string body) (Decode.list Decode.string)
         return!
             match result with
             | Ok v -> Successful.OK v next ctx
@@ -133,7 +133,7 @@ let handleGetChildDirectories : HttpHandler =
 let handlePostStudentDirectories : HttpHandler =
     fun next ctx -> task {
         let! body = ctx.BindJsonAsync<Shared.CreateStudentDirectories.CreateDirectoriesData>()
-        let! students = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" body.ClassName) (Decode.list Sokrates.DataTransferTypes.Student.decoder)
+        let! students = Http.get ctx (ServiceUrl.sokrates (sprintf "classes/%s/students" body.ClassName)) (Decode.list Sokrates.DataTransferTypes.Student.decoder)
         let! result =
             students
             |> Result.bindAsync (fun students ->
@@ -143,7 +143,7 @@ let handlePostStudentDirectories : HttpHandler =
                         students
                         |> List.map (fun student -> sprintf "%s_%s" student.LastName student.FirstName1)
                 }
-                Http.post ctx "http://file-storage/api/exercise-directories" (FileStorage.DataTransferTypes.CreateDirectoriesData.encode data) (Decode.succeed ())
+                Http.post ctx (ServiceUrl.fileStorage "exercise-directories") (FileStorage.DataTransferTypes.CreateDirectoriesData.encode data) (Decode.succeed ())
             )
         return!
             match result with
@@ -158,7 +158,7 @@ let handleGetDirectoryInfo : HttpHandler =
             let path = body.Split('\\', '/') |> Seq.rev |> Seq.skip 1 |> Seq.rev |> Seq.toList
             FileStorage.DataTransferTypes.DirectoryInfo.decoder
             |> Decode.map (FileStorageTypeMapping.DirectoryInfo.toDto path)
-        let! result = Http.post ctx "http://file-storage/api/directory-info" (Encode.string body) decoder
+        let! result = Http.post ctx (ServiceUrl.fileStorage "directory-info") (Encode.string body) decoder
         return!
             match result with
             | Ok v -> Successful.OK v next ctx
@@ -167,7 +167,7 @@ let handleGetDirectoryInfo : HttpHandler =
 
 let handleGetKnowNameGroups : HttpHandler =
     fun next ctx -> task {
-        let! result = Http.get ctx "http://sokrates/api/classes" (Decode.list Decode.string)
+        let! result = Http.get ctx (ServiceUrl.sokrates "classes") (Decode.list Decode.string)
         return!
             match result with
             | Ok classNames ->
@@ -182,8 +182,8 @@ let handleGetKnowNameGroups : HttpHandler =
 
 let handleGetKnowNameTeachers : HttpHandler =
     fun next ctx -> task {
-        let! teachers = Http.get ctx "http://sokrates/api/teachers" (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
-        let! teachersWithPhotos = Http.get ctx "http://photo-library/api/teachers" (Decode.list Decode.string) |> Async.StartChild
+        let! teachers = Http.get ctx (ServiceUrl.sokrates "teachers") (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
+        let! teachersWithPhotos = Http.get ctx (ServiceUrl.photoLibrary "teachers") (Decode.list Decode.string) |> Async.StartChild
 
         let! teachers = teachers
         let! teachersWithPhotos = teachersWithPhotos
@@ -215,12 +215,12 @@ let handleGetKnowNameTeachers : HttpHandler =
     }
 
 let handleGetKnowNameTeacherPhoto shortName : HttpHandler =
-    Http.proxy (sprintf "http://photo-library/api/teachers/%s/photo" shortName)
+    Http.proxy (ServiceUrl.photoLibrary (sprintf "teachers/%s/photo" shortName))
 
 let handleGetKnowNameStudentsFromClass className : HttpHandler =
     fun next ctx -> task {
-        let! students = Http.get ctx (sprintf "http://sokrates/api/classes/%s/students" className) (Decode.list Sokrates.DataTransferTypes.Student.decoder) |> Async.StartChild
-        let! studentsWithPhotos = Http.get ctx "http://photo-library/api/students" (Decode.list PhotoLibrary.DataTransferTypes.SokratesIdModule.decoder) |> Async.StartChild
+        let! students = Http.get ctx (ServiceUrl.sokrates (sprintf "classes/%s/students" className)) (Decode.list Sokrates.DataTransferTypes.Student.decoder) |> Async.StartChild
+        let! studentsWithPhotos = Http.get ctx (ServiceUrl.photoLibrary "students") (Decode.list PhotoLibrary.DataTransferTypes.SokratesIdModule.decoder) |> Async.StartChild
 
         let! students = students
         let! studentsWithPhotos = studentsWithPhotos
@@ -255,7 +255,7 @@ let handleGetKnowNameStudentsFromClass className : HttpHandler =
     }
 
 let handleGetKnowNameStudentPhoto studentId : HttpHandler =
-    Http.proxy (sprintf "http://photo-library/api/students/%s/photo" studentId)
+    Http.proxy (ServiceUrl.photoLibrary (sprintf "students/%s/photo" studentId))
 
 let webApp =
     choose [
@@ -314,7 +314,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom Shared.KnowName.Person.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -322,11 +322,14 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .UseWebRoot("../Teaching.Client")
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder ->
+            webHostBuilder
+                .Configure(configureApp)
+                .UseWebRoot("../Teaching.Client")
+            |> ignore
+        )
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

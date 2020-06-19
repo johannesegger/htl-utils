@@ -1,3 +1,0 @@
-services:
-    wake-up-computer:
-        network_mode: "host"

@@ -87,7 +87,7 @@ let resize (ctx: HttpContext) =
 // ---------------------------------
 
 let handleGetTeachersWithPhotos : HttpHandler =
-    let baseDir = Environment.getEnvVarOrFail "TEACHER_PHOTOS_DIRECTORY"
+    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY"
     fun next ctx ->
         let result =
             Directory.GetFiles baseDir
@@ -96,7 +96,7 @@ let handleGetTeachersWithPhotos : HttpHandler =
         Successful.OK result next ctx
 
 let handleGetStudentsWithPhotos : HttpHandler =
-    let baseDir = Environment.getEnvVarOrFail "STUDENT_PHOTOS_DIRECTORY"
+    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_STUDENT_PHOTOS_DIRECTORY"
     fun next ctx ->
         let result =
             Directory.GetFiles baseDir
@@ -109,7 +109,7 @@ let private tryGetFile baseDir fileName =
     |> Array.tryHead
 
 let handleGetTeacherPhotos : HttpHandler =
-    let baseDir = Environment.getEnvVarOrFail "TEACHER_PHOTOS_DIRECTORY"
+    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY"
     fun next ctx ->
         let result =
             Directory.GetFiles baseDir
@@ -118,7 +118,7 @@ let handleGetTeacherPhotos : HttpHandler =
         Successful.OK result next ctx
 
 let handleGetTeacherPhoto shortName : HttpHandler =
-    let baseDir = Environment.getEnvVarOrFail "TEACHER_PHOTOS_DIRECTORY"
+    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY"
     fun next ctx ->
         match tryGetFile baseDir shortName |> Option.bind (TeacherPhoto.tryParse (resize ctx)) with
         | Some result ->
@@ -128,7 +128,7 @@ let handleGetTeacherPhoto shortName : HttpHandler =
         | None -> RequestErrors.notFound (setBody [||]) next ctx
 
 let handleGetStudentPhoto studentId : HttpHandler =
-    let baseDir = Environment.getEnvVarOrFail "STUDENT_PHOTOS_DIRECTORY"
+    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_STUDENT_PHOTOS_DIRECTORY"
     fun next ctx ->
         match tryGetFile baseDir studentId |> Option.bind (StudentPhoto.tryParse (resize ctx)) with
         | Some result ->
@@ -180,7 +180,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom StudentPhoto.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
+let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
         .AddFilter(fun l -> ctx.HostingEnvironment.IsDevelopment() || l.Equals LogLevel.Error)
         .AddConsole()
@@ -188,10 +188,9 @@ let configureLogging (ctx: WebHostBuilderContext) (builder : ILoggingBuilder) =
     |> ignore
 
 [<EntryPoint>]
-let main _ =
-    WebHostBuilder()
-        .UseKestrel()
-        .Configure(Action<IApplicationBuilder> configureApp)
+let main args =
+    Host.CreateDefaultBuilder(args)
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()
