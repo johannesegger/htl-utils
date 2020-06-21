@@ -211,7 +211,7 @@ let removeAutoContacts (graphServiceClient: GraphServiceClient) userId = async {
     do!
         existingContactIds
         |> Seq.map (removeContact graphServiceClient userId)
-        |> Async.Parallel
+        |> Async.Sequential
         |> Async.Ignore
 }
 
@@ -262,7 +262,7 @@ let addAutoContact (graphServiceClient: GraphServiceClient) userId contact = asy
 let addAutoContacts (graphServiceClient: GraphServiceClient) userId contacts =
     contacts
     |> List.map (addAutoContact graphServiceClient userId)
-    |> Async.Parallel
+    |> Async.Sequential
     |> Async.Ignore
 
 type Calendar = {
@@ -325,7 +325,7 @@ let turnOffBirthdayReminders (graphServiceClient: GraphServiceClient) = async {
             let event' = Event(IsReminderOn = Nullable<_> false)
             return! updateCalendarEvent graphServiceClient birthdayCalendarId eventId event'
         })
-        |> Async.Parallel
+        |> Async.Sequential
         |> Async.Ignore
 }
 
