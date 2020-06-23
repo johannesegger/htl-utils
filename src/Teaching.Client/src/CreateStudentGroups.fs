@@ -222,7 +222,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
 
                 let loadStudents className =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofAsync' (async {
+                        AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             return! Fetch.``get``(sprintf "/api/classes/%s/students" className, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise

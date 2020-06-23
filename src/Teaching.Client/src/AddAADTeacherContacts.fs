@@ -50,7 +50,7 @@ let stream getAuthRequestHeader (states: IAsyncObservable<Msg option * Model>) (
 
         let import =
             AsyncRx.defer (fun () ->
-                AsyncRx.ofAsync' (async {
+                AsyncRx.ofAsync (async {
                     let! authHeader = getAuthRequestHeader ()
                     let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                     return! Fetch.post("/api/teachers/add-as-contacts", Encode.nil, Decode.succeed (), requestProperties) |> Async.AwaitPromise

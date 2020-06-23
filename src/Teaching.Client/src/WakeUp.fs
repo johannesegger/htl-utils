@@ -105,7 +105,7 @@ let stream getAuthRequestHeader (states: IAsyncObservable<Msg option * Model>) (
 
         let sendWakeUp macAddress =
             AsyncRx.defer (fun () ->
-                AsyncRx.ofAsync' (async {
+                AsyncRx.ofAsync (async {
                     let url = sprintf "/api/wake-up/%s" macAddress
                     let! authHeader = getAuthRequestHeader ()
                     let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]

@@ -185,7 +185,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                 |> AsyncRx.map LoadClassListResponse
 
                 AsyncRx.defer (fun () ->
-                    AsyncRx.ofAsync' (async {
+                    AsyncRx.ofAsync (async {
                         let url = "/api/child-directories"
                         let data = StoragePath.toString StoragePath.empty |> Encode.string
                         let! authHeader = getAuthRequestHeader ()
@@ -200,7 +200,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
 
                 let loadChildDirectories path =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofAsync' (async {
+                        AsyncRx.ofAsync (async {
                             let url = "/api/child-directories"
                             let data = StoragePath.toString path |> Encode.string
                             let! authHeader = getAuthRequestHeader ()
@@ -227,7 +227,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
 
                 let createDirectories data =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofAsync' (async {
+                        AsyncRx.ofAsync (async {
                             let url = "/api/create-student-directories"
                             let data = CreateDirectoriesData.encode data
                             let! authHeader = getAuthRequestHeader ()

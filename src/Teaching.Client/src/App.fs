@@ -129,7 +129,7 @@ let stream (states: IAsyncObservable<Navigable<Msg> option * Model>) (msgs: IAsy
                 | Some v -> AsyncRx.single v
                 | None -> AsyncRx.fail (exn "Please sign in using your Microsoft account.")
             )
-            |> AsyncRx.take' 1
+            |> AsyncRx.take 1
             |> AsyncRx.awaitLast
     }
 

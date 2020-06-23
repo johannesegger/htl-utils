@@ -458,7 +458,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
 
                 let loadGroups =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofAsync' (async {
+                        AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             return! Fetch.``get``("/api/know-name/groups", Decode.list Group.decoder, requestProperties) |> Async.AwaitPromise
@@ -478,7 +478,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
 
                 let loadGroup group =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofAsync' (async {
+                        AsyncRx.ofAsync (async {
                             let url =
                                 match group with
                                 | Teachers -> "/api/know-name/teachers"

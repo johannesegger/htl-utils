@@ -403,7 +403,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                 msgs
 
                 AsyncRx.defer (fun () ->
-                    AsyncRx.ofAsync' (async {
+                    AsyncRx.ofAsync (async {
                         let url = "/api/child-directories"
                         let data = StoragePath.toString StoragePath.empty
                         let! authHeader = getAuthRequestHeader ()
@@ -418,7 +418,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
 
                 let loadChildDirectories path =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofAsync' (async {
+                        AsyncRx.ofAsync (async {
                             let url = "/api/child-directories"
                             let data = StoragePath.toString path
                             let! authHeader = getAuthRequestHeader ()
@@ -439,7 +439,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
 
                 let loadDirectoryInfo path =
                     AsyncRx.defer (fun () ->
-                        AsyncRx.ofAsync' (async {
+                        AsyncRx.ofAsync (async {
                             let url = "/api/directory-info"
                             let data = StoragePath.toString path
                             let! authHeader = getAuthRequestHeader ()
