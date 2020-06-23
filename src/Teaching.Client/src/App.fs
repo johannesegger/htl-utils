@@ -120,14 +120,11 @@ let stream (states: IAsyncObservable<Navigable<Msg> option * Model>) (msgs: IAsy
         do! loginObserver.OnNextAsync ()
         return!
             states
+            |> AsyncRx.filter (fst >> function | Some (UserMsg (AuthenticationMsg (Authentication.SignInResult _))) -> true | _ -> false)
             |> AsyncRx.flatMap (snd >> fun state ->
                 Authentication.tryGetLoggedInUser state.Authentication
-                |> Option.map (ignore >> Authentication.tryGetRequestHeader >> AsyncRx.ofAsync')
-                |> Option.defaultValue (AsyncRx.single None)
-            )
-            |> AsyncRx.flatMap (function
-                | Some v -> AsyncRx.single v
-                | None -> AsyncRx.fail (exn "Please sign in using your Microsoft account.")
+                |> Option.map (Authentication.getRequestHeader >> AsyncRx.ofAsync)
+                |> Option.defaultValue (AsyncRx.fail (exn "Please sign in using your Microsoft account."))
             )
             |> AsyncRx.take 1
             |> AsyncRx.awaitLast

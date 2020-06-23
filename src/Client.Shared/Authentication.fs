@@ -8,14 +8,21 @@ open Fable.Reaction
 open FSharp.Control
 open Fulma
 
-type User = { Name: string }
+type User = {
+    Name: string
+    AccessToken: string
+}
 
-type Model =
-    | Loading
+type AuthState =
     | NotAuthenticated
     | Authenticated of User
 
+type Model =
+    | Loading
+    | Loaded of AuthState
+
 type Msg =
+    | InitialState of AuthState
     | SignIn
     | SignInResult of Result<User, exn>
     | SignOut
@@ -37,56 +44,50 @@ let private userAgentApplication =
         o
     Msal.UserAgentApplication.Create(options)
 
-let private getAuthenticatedUser () = promise {
-    match userAgentApplication.getAccount() |> Option.ofObj with
-    | Some account ->
-        return { Name = account.name }
-    | None ->
-        let authParams = createEmpty<Msal.AuthenticationParameters>
-        // authParams.scopes <- Some (ResizeArray [| "contacts.readwrite" |])
-        let! authResponse = userAgentApplication.loginPopup authParams
-        return { Name = authResponse.account.name }
-}
-
 [<Emit("$0.name === \"InteractionRequiredAuthError\"")>]
 let private isInteractionRequiredAuthError (_ : exn) : bool = jsNative
 
-let tryGetToken() = async {
+let private getToken () = async {
     let authParams = createEmpty<Msal.AuthenticationParameters>
     authParams.scopes <- Some !![| appId |]
-    try
-        let! authResponse = userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise
-        return Some authResponse.accessToken
-    with
-        | error when isInteractionRequiredAuthError error ->
-            let! authResponse = userAgentApplication.acquireTokenPopup authParams |> Async.AwaitPromise
-            return Some authResponse.accessToken
-        | error ->
-            Browser.Dom.console.log("Auth error", error)
-            return None
+    let! authResponse = userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise
+    return authResponse.accessToken
 }
 
-let tryGetRequestHeader () = async {
-    let! token = tryGetToken ()
-    return
-        token
-        |> Option.map (sprintf "Bearer %s" >> Fetch.Types.Authorization)
+let private authenticateUser = async {
+    let! username = async {
+        match userAgentApplication.getAccount() |> Option.ofObj with
+        | Some account ->
+            return account.name
+        | None ->
+            let authParams = createEmpty<Msal.AuthenticationParameters>
+            // authParams.scopes <- Some (ResizeArray [| "contacts.readwrite" |])
+            let! authResponse = userAgentApplication.loginPopup authParams |> Async.AwaitPromise
+            return authResponse.account.name
+    }
+    let! accessToken = getToken ()
+    return { Name = username; AccessToken = accessToken }
 }
 
 let tryGetLoggedInUser model =
     match model with
     | Loading
-    | NotAuthenticated -> None
-    | Authenticated user -> Some user
+    | Loaded NotAuthenticated -> None
+    | Loaded (Authenticated user) -> Some user
+
+let getRequestHeader user = async {
+    return sprintf "Bearer %s" user.AccessToken |> Fetch.Types.Authorization
+}
 
 let rec update msg model =
     match msg with
+    | InitialState model -> Loaded model
     | SignIn -> model
-    | SignInResult (Ok user) -> Authenticated user
-    | SignInResult (Error _e) -> NotAuthenticated
+    | SignInResult (Ok user) -> Loaded (Authenticated user)
+    | SignInResult (Error _e) -> Loaded NotAuthenticated
     | SignOut -> model
-    | SignOutResult  (Ok ()) -> NotAuthenticated
-    | SignOutResult  (Error _e) -> NotAuthenticated
+    | SignOutResult  (Ok ()) -> Loaded NotAuthenticated
+    | SignOutResult  (Error _e) -> Loaded NotAuthenticated
 
 let init = Loading
 
@@ -94,14 +95,14 @@ let view model dispatch =
     match model with
     | Loading ->
         Button.button [ Button.IsLoading true ] []
-    | NotAuthenticated ->
+    | Loaded NotAuthenticated ->
         Button.button
             [ Button.OnClick (fun _e -> dispatch SignIn) ]
             [
                 Icon.icon [] [ Fa.i [ Fa.Brand.Windows ] [] ]
                 span [] [ str "Sign in" ]
             ]
-    | Authenticated user ->
+    | Loaded (Authenticated user) ->
         Button.button
             [ Button.OnClick (fun _e -> dispatch SignOut) ]
             [
@@ -119,24 +120,15 @@ let stream states msgs =
                 | Loading ->
                     match userAgentApplication.getAccount() |> Option.ofObj with
                     | Some user ->
-                        AsyncRx.ofAsync' (async {
-                            let! token = tryGetToken ()
-                            match token with
-                            | Some _ -> return { Name = user.name }
-                            | None -> return failwith "Please sign in using your Microsoft account."
-                        })
-                        |> AsyncRx.map (Ok >> SignInResult)
-                        |> AsyncRx.catch (Error >> SignInResult >> AsyncRx.single)
-                        |> Some
+                        Authenticated { Name = user.name; AccessToken = "" } |> Some
                     | None ->
-                        AsyncRx.single (SignInResult (Error (exn "Not signed in")))
-                        |> Some
+                        Some NotAuthenticated
                 | _ -> None
             )
-            |> AsyncRx.switchLatest
+            |> AsyncRx.map InitialState
 
         let login =
-            AsyncRx.defer (getAuthenticatedUser >> AsyncRx.ofPromise)
+            AsyncRx.defer (fun () -> AsyncRx.ofAsync authenticateUser)
             |> AsyncRx.map Ok
             |> AsyncRx.catch (Error >> AsyncRx.single)
         yield
