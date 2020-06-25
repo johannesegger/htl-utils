@@ -1,5 +1,6 @@
 module SyncAADGroups
 
+open Fable.Core
 open Fable.FontAwesome
 open Fable.React
 open Fable.React.Props
@@ -314,61 +315,64 @@ let view model dispatch =
         yield! Option.toList buttons
     ]
 
-let stream authHeader states (msgs: IAsyncObservable<_>) =
-    authHeader
-    |> AsyncRx.choose id
-    |> AsyncRx.flatMapLatest (fun authHeader ->
-        [
-            msgs
+let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+    pageActive
+    |> AsyncRx.flatMapLatest (function
+        | true ->
+            [
+                msgs
 
-            let loadGroupUpdates =
-                AsyncRx.defer (fun () ->
-                    AsyncRx.ofPromise (promise {
-                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        let! updates = Fetch.tryGet("/api/aad/group-updates", Decode.list AADGroupUpdates.GroupUpdate.decoder, requestProperties)
-                        match updates with
-                        | Ok v -> return v
-                        | Error e ->
-                            let msg =
-                                if e.Length > 200
-                                then sprintf "%s ..." <| e.Substring(0, 197)
-                                else e
-                            return failwith msg
-                    })
-                    |> AsyncRx.map Ok
-                    |> AsyncRx.catch (Error >> AsyncRx.single)
-                )
+                let loadGroupUpdates =
+                    AsyncRx.defer (fun () ->
+                        AsyncRx.ofAsync (async {
+                            let! authHeader = getAuthRequestHeader ()
+                            let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                            let! updates = Fetch.tryGet("/api/aad/group-updates", Decode.list AADGroupUpdates.GroupUpdate.decoder, requestProperties) |> Async.AwaitPromise
+                            match updates with
+                            | Ok v -> return v
+                            | Error e ->
+                                let msg =
+                                    if e.Length > 200
+                                    then sprintf "%s ..." <| e.Substring(0, 197)
+                                    else e
+                                return failwith msg
+                        })
+                        |> AsyncRx.map Ok
+                        |> AsyncRx.catch (Error >> AsyncRx.single)
+                    )
 
-            states
-            |> AsyncRx.choose (fst >> function | Some LoadGroupUpdates -> Some loadGroupUpdates | _ -> None)
-            |> AsyncRx.switchLatest
-            |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AAD group updates failed", e.Message)
-            |> AsyncRx.map LoadGroupUpdatesResponse
+                states
+                |> AsyncRx.choose (fst >> function | Some LoadGroupUpdates -> Some loadGroupUpdates | _ -> None)
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AAD group updates failed", e.Message)
+                |> AsyncRx.map LoadGroupUpdatesResponse
 
-            AsyncRx.single LoadGroupUpdates
+                AsyncRx.single LoadGroupUpdates
 
-            let applyGroupUpdates groupUpdates =
-                AsyncRx.defer (fun () ->
-                    AsyncRx.ofPromise (promise {
-                        let url = sprintf "/api/aad/group-updates/apply"
-                        let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        let data = (List.map AADGroupUpdates.GroupUpdate.encode >> Encode.list) groupUpdates
-                        return! Fetch.post(url, data, Decode.nil (), requestProperties)
-                    })
-                    |> AsyncRx.map Ok
-                    |> AsyncRx.catch (Error >> AsyncRx.single)
-                )
+                let applyGroupUpdates groupUpdates =
+                    AsyncRx.defer (fun () ->
+                        AsyncRx.ofAsync (async {
+                            let url = sprintf "/api/aad/group-updates/apply"
+                            let data = (List.map AADGroupUpdates.GroupUpdate.encode >> Encode.list) groupUpdates
+                            let! authHeader = getAuthRequestHeader ()
+                            let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                            return! Fetch.post(url, data, Decode.nil (), requestProperties) |> Async.AwaitPromise
+                        })
+                        |> AsyncRx.map Ok
+                        |> AsyncRx.catch (Error >> AsyncRx.single)
+                    )
 
-            msgs
-            |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
-            |> AsyncRx.choose (function
-                | (ApplyGroupUpdates, { GroupUpdates = LoadedGroupUpdates (_, groupUpdates) }) ->
-                    Some (applyGroupUpdates (List.choose GroupUpdate.toDto groupUpdates))
-                | _ -> None)
-            |> AsyncRx.switchLatest
-            |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AAD group updates failed", e.Message)
-            |> AsyncRx.showSimpleSuccessToast (fun () -> "Applying AAD group updates", "Successfully applied AAD group updates")
-            |> AsyncRx.map ApplyGroupUpdatesResponse
-        ]
-        |> AsyncRx.mergeSeq
+                msgs
+                |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
+                |> AsyncRx.choose (function
+                    | (ApplyGroupUpdates, { GroupUpdates = LoadedGroupUpdates (_, groupUpdates) }) ->
+                        Some (applyGroupUpdates (List.choose GroupUpdate.toDto groupUpdates))
+                    | _ -> None)
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AAD group updates failed", e.Message)
+                |> AsyncRx.showSimpleSuccessToast (fun () -> "Applying AAD group updates", "Successfully applied AAD group updates")
+                |> AsyncRx.map ApplyGroupUpdatesResponse
+            ]
+            |> AsyncRx.mergeSeq
+        | false -> AsyncRx.empty ()
     )

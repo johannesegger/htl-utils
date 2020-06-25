@@ -67,43 +67,49 @@ let root model dispatch =
           yield pageHtml model.CurrentPage ]
 
 let stream states msgs =
-    let authHeader =
+    let subStates chooseMsgFn subStateFn =
         states
-        |> AsyncRx.map (snd >> (fun model -> model.Authentication) >> Authentication.tryGetLoggedInUser)
-        |> AsyncRx.distinctUntilChanged
-    let pageActivated pageFn =
-        states
-        |> AsyncRx.map (fun (msg, model) ->
-            pageFn model.CurrentPage
+        |> AsyncRx.choose (fun (msg, model) ->
+            match msg with
+            | None -> Some (None, subStateFn model)
+            | Some (UserMsg msg) ->
+                match chooseMsgFn msg with
+                | Some msg -> Some (Some msg, subStateFn model)
+                | None -> None
+            | Some _ -> None
         )
+
+    let pageActivated (filterPage : Page -> bool) =
+        states
+        |> AsyncRx.map (fun (msg, model) -> filterPage model.CurrentPage)
         |> AsyncRx.distinctUntilChanged
-        |> AsyncRx.filter ((=) true)
-        |> AsyncRx.map ignore
+
+    let loginObserver, loginObservable = AsyncRx.subject ()
+    let login () = async {
+        do! loginObserver.OnNextAsync ()
+        return!
+            states
+            |> AsyncRx.filter (fst >> function | Some (UserMsg (AuthenticationMsg (Authentication.SignInResult _))) -> true | _ -> false)
+            |> AsyncRx.flatMap (snd >> fun state ->
+                Authentication.tryGetLoggedInUser state.Authentication
+                |> Option.map (Authentication.getRequestHeader >> AsyncRx.ofAsync)
+                |> Option.defaultValue (AsyncRx.fail (exn "Please sign in using your Microsoft account."))
+            )
+            |> AsyncRx.take 1
+            |> AsyncRx.awaitLast
+    }
+
     [
         (
-            states
-            |> AsyncRx.choose (fun (msg, model) ->
-                match msg with
-                | None
-                | Some (UserMsg (AuthenticationMsg _)) as msg -> Some (msg, model.Authentication)
-                | Some _ -> None
-            ),
-            msgs |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None)
+            subStates (function AuthenticationMsg msg -> Some msg | _ -> None) (fun m -> m.Authentication),
+            msgs |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None) |> AsyncRx.merge (loginObservable |> AsyncRx.map (fun () -> Authentication.SignIn))
         )
         ||> Authentication.stream
         |> AsyncRx.map AuthenticationMsg
 
         (
-            authHeader
-            |> AsyncRx.combineLatest (pageActivated ((=) SyncAADGroups))
-            |> AsyncRx.map fst,
-            states
-            |> AsyncRx.choose (fun (msg, model) ->
-                match msg with
-                | None -> Some (None, model.SyncAADGroups)
-                | Some (UserMsg (SyncAADGroupsMsg msg)) -> Some (Some msg, model.SyncAADGroups)
-                | Some _ -> None
-            ),
+            (login, pageActivated ((=) SyncAADGroups)),
+            subStates (function SyncAADGroupsMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAADGroups),
             msgs |> AsyncRx.choose (function UserMsg (SyncAADGroupsMsg msg) -> Some msg | _ -> None)
         )
         |||> SyncAADGroups.stream

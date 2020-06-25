@@ -4,10 +4,10 @@
     <DefineConstants>FABLE_COMPILER;$(DefineConstants)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Client.Shared\Toast.fs" />
     <Compile Include="Client.Shared\AsyncRx.fs" />
     <Compile Include="Client.Shared\Msal.fs" />
     <Compile Include="Client.Shared\Authentication.fs" />
-    <Compile Include="Client.Shared\Toast.fs" />
     <Compile Include="Client.Shared\Views.fs" />
     <Compile Include="..\..\Common\List.fs" />
     <Compile Include="..\..\Management.Server\Shared.fs" />
@@ -21,10 +21,10 @@
     <PackageReference Include="Fable.Elmish.Browser" Version="3.0.2" />
     <PackageReference Include="Fable.Elmish.Debugger" Version="3.0.3" />
     <PackageReference Include="Fable.Elmish.HMR" Version="4.0.1" />
-    <PackageReference Include="Fable.Elmish.Nile" Version="0.0.4" />
+    <PackageReference Include="Fable.Elmish.Nile" Version="0.0.6" />
     <PackageReference Include="Fable.Elmish.React" Version="3.0.1" />
     <PackageReference Include="Fable.FontAwesome.Free" Version="2.0.0" />
-    <PackageReference Include="Fable.Reaction" Version="3.2.1" />
+    <PackageReference Include="FSharp.Control.AsyncRx" Version="1.4.1" />
     <PackageReference Include="Fulma" Version="2.2.1" />
     <PackageReference Include="Fulma.Extensions.Wikiki.Divider" Version="2.0.1" />
     <PackageReference Include="Thoth.Elmish.Toast" Version="2.1.0" />
