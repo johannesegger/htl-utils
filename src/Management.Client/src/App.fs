@@ -21,12 +21,14 @@ importAll "../sass/main.sass"
 type Msg =
     | AuthenticationMsg of Authentication.Msg
     | SyncAADGroupsMsg of SyncAADGroups.Msg
+    | ConsultationHoursMsg of ConsultationHours.Msg
 
 type Model =
     {
         CurrentPage: Page
         Authentication: Authentication.Model
         SyncAADGroups: SyncAADGroups.Model
+        ConsultationHours: ConsultationHours.Model
     }
 
 let urlUpdate (result : Page option) model =
@@ -42,6 +44,7 @@ let init page =
         CurrentPage = Option.defaultValue Home page
         Authentication = Authentication.init
         SyncAADGroups = SyncAADGroups.init
+        ConsultationHours = ConsultationHours.init
     }
 
 let update msg model =
@@ -50,11 +53,14 @@ let update msg model =
         { model with Authentication = Authentication.update msg model.Authentication }
     | SyncAADGroupsMsg msg ->
         { model with SyncAADGroups = SyncAADGroups.update msg model.SyncAADGroups }
+    | ConsultationHoursMsg msg ->
+        { model with ConsultationHours = ConsultationHours.update msg model.ConsultationHours }
 
 let root model dispatch =
     let pageHtml = function
         | Home -> Home.view
         | SyncAADGroups -> SyncAADGroups.view model.SyncAADGroups (SyncAADGroupsMsg >> dispatch)
+        | ConsultationHours -> ConsultationHours.view model.ConsultationHours (ConsultationHoursMsg >> dispatch)
 
     div []
         [ yield Navbar.navbar [ Navbar.Color IsDanger ]
@@ -114,6 +120,14 @@ let stream states msgs =
         )
         |||> SyncAADGroups.stream
         |> AsyncRx.map SyncAADGroupsMsg
+
+        (
+            pageActivated ((=) ConsultationHours),
+            subStates (function ConsultationHoursMsg msg -> Some msg | _ -> None) (fun m -> m.ConsultationHours),
+            msgs |> AsyncRx.choose (function UserMsg (ConsultationHoursMsg msg) -> Some msg | _ -> None)
+        )
+        |||> ConsultationHours.stream
+        |> AsyncRx.map ConsultationHoursMsg
     ]
     |> AsyncRx.mergeSeq
     |> AsyncRx.map UserMsg

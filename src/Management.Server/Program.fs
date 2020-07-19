@@ -47,7 +47,8 @@ let getAADGroupUpdates : HttpHandler =
                 |> List.choose (function
                     | Untis.DataTransferTypes.NormalTeacher (schoolClass, teacherShortName, _)
                     | Untis.DataTransferTypes.FormTeacher (schoolClass, teacherShortName) -> Some (schoolClass, teacherShortName)
-                    | Untis.DataTransferTypes.Custodian _ -> None
+                    | Untis.DataTransferTypes.Custodian
+                    | Untis.DataTransferTypes.Informant -> None
                 )
                 |> List.groupBy fst
                 |> List.map (fun (Untis.DataTransferTypes.SchoolClass schoolClass, teachers) ->
@@ -62,8 +63,9 @@ let getAADGroupUpdates : HttpHandler =
                 teachingData
                 |> List.choose (function
                     | Untis.DataTransferTypes.FormTeacher (_, Untis.DataTransferTypes.TeacherShortName teacherShortName) -> Some teacherShortName
-                    | Untis.DataTransferTypes.NormalTeacher _
-                    | Untis.DataTransferTypes.Custodian _ -> None
+                    | Untis.DataTransferTypes.NormalTeacher
+                    | Untis.DataTransferTypes.Custodian
+                    | Untis.DataTransferTypes.Informant -> None
                 )
                 |> List.choose (flip Map.tryFind aadUserLookupByUserName)
                 |> List.distinct
@@ -92,13 +94,14 @@ let getAADGroupUpdates : HttpHandler =
                     let teacherIds =
                         teachingData
                         |> List.choose (function
-                            | Untis.DataTransferTypes.NormalTeacher (_, Untis.DataTransferTypes.TeacherShortName teacherShortName, Untis.DataTransferTypes.Subject subject) ->
+                            | Untis.DataTransferTypes.NormalTeacher (_, Untis.DataTransferTypes.TeacherShortName teacherShortName, subject) ->
                                 Some (teacherShortName, subject)
-                            | Untis.DataTransferTypes.FormTeacher _
-                            | Untis.DataTransferTypes.Custodian _ -> None
+                            | Untis.DataTransferTypes.FormTeacher
+                            | Untis.DataTransferTypes.Custodian
+                            | Untis.DataTransferTypes.Informant -> None
                         )
                         |> List.filter (snd >> fun subject ->
-                            subjects |> List.contains (CIString subject)
+                            subjects |> List.contains (CIString subject.ShortName)
                         )
                         |> List.choose (fst >> flip Map.tryFind aadUserLookupByUserName)
                         |> List.distinct
@@ -147,8 +150,86 @@ let applyAADGroupUpdates : HttpHandler =
             |> Encode.list
         let! result = Http.post ctx (ServiceUrl.aad "auto-groups/modify") body (Decode.nil ())
         match result with
-        | Ok v -> return! Successful.OK () next ctx
+        | Ok () -> return! Successful.OK () next ctx
         | Error e -> return! ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
+    }
+
+let getConsultationHours : HttpHandler =
+    fun next ctx -> task {
+        let! untisTeachingData = Http.get ctx (ServiceUrl.untis "teaching-data") (Decode.list Untis.DataTransferTypes.TeacherTask.decoder) |> Async.StartChild
+        let! sokratesTeachers = Http.get ctx (ServiceUrl.sokrates "teachers") (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
+
+        let! untisTeachingData = untisTeachingData
+        let! sokratesTeachers = sokratesTeachers
+
+        let fn untisTeachingData sokratesTeachers =
+            untisTeachingData
+            |> List.choose (function
+                | Untis.DataTransferTypes.NormalTeacher (_, teacherShortName, _) -> Some teacherShortName
+                | Untis.DataTransferTypes.FormTeacher (_, teacherShortName) -> Some teacherShortName
+                | Untis.DataTransferTypes.Custodian
+                | Untis.DataTransferTypes.Informant -> None
+            )
+            |> List.distinct
+            |> List.map (fun teacherShortName ->
+                let sokratesTeacher =
+                    let (Untis.DataTransferTypes.TeacherShortName shortName) = teacherShortName
+                    sokratesTeachers
+                    |> List.tryFind (fun (t: Sokrates.DataTransferTypes.Teacher) -> CIString t.ShortName = CIString shortName)
+                {
+                    Shared.ConsultationHours.Teacher =
+                        {
+                            ShortName = (let (Untis.DataTransferTypes.TeacherShortName t) = teacherShortName in t)
+                            FirstName = sokratesTeacher |> Option.map (fun t -> t.FirstName) |> Option.defaultValue ""
+                            LastName = sokratesTeacher |> Option.map (fun t -> t.LastName) |> Option.defaultValue ""
+                        }
+                    Shared.ConsultationHours.Subjects =
+                        untisTeachingData
+                        |> List.choose (function
+                            | Untis.DataTransferTypes.NormalTeacher (Untis.DataTransferTypes.SchoolClass schoolClass, teacher, subject) when teacher = teacherShortName ->
+                                Some {
+                                    Shared.ConsultationHours.TeacherSubject.Class = schoolClass
+                                    Shared.ConsultationHours.TeacherSubject.Subject = { ShortName = subject.ShortName; FullName = subject.FullName }
+                                }
+                            | Untis.DataTransferTypes.NormalTeacher
+                            | Untis.DataTransferTypes.FormTeacher
+                            | Untis.DataTransferTypes.Custodian
+                            | Untis.DataTransferTypes.Informant -> None
+                        )
+                        |> List.distinct
+                    Shared.ConsultationHours.FormTeacherOfClasses =
+                        untisTeachingData
+                        |> List.choose (function
+                            | Untis.DataTransferTypes.FormTeacher (Untis.DataTransferTypes.SchoolClass schoolClass, teacher) when teacher = teacherShortName -> Some schoolClass
+                            | Untis.DataTransferTypes.FormTeacher
+                            | Untis.DataTransferTypes.NormalTeacher
+                            | Untis.DataTransferTypes.Custodian
+                            | Untis.DataTransferTypes.Informant -> None
+                        )
+                    Shared.ConsultationHours.Details =
+                        untisTeachingData
+                        |> List.tryPick (function
+                            | Untis.DataTransferTypes.Informant (teacher, room, workingDay, timeFrame) when teacher = teacherShortName ->
+                                Some {
+                                    Shared.ConsultationHours.ConsultationHourDetails.DayOfWeek = Untis.DataTransferTypes.WorkingDay.toGermanString workingDay
+                                    Shared.ConsultationHours.ConsultationHourDetails.BeginTime = timeFrame.BeginTime
+                                    Shared.ConsultationHours.ConsultationHourDetails.EndTime = timeFrame.EndTime
+                                    Shared.ConsultationHours.ConsultationHourDetails.Location = { ShortName = room.ShortName; FullName = room.FullName }
+                                }
+                            | Untis.DataTransferTypes.Informant
+                            | Untis.DataTransferTypes.FormTeacher
+                            | Untis.DataTransferTypes.NormalTeacher
+                            | Untis.DataTransferTypes.Custodian -> None
+                        )
+                }
+            )
+        return!
+            Ok fn
+            |> Result.apply (Result.mapError List.singleton untisTeachingData)
+            |> Result.apply (Result.mapError List.singleton sokratesTeachers)
+            |> function
+            | Ok v -> Successful.OK v next ctx
+            | Error e -> ServerErrors.INTERNAL_ERROR (sprintf "%O" e) next ctx
     }
 
 let webApp =
@@ -157,6 +238,7 @@ let webApp =
             (choose [
                 GET >=> choose [
                     route "/aad/group-updates" >=> Auth.requiresAdmin >=> getAADGroupUpdates
+                    route "/consultation-hours" >=> getConsultationHours
                 ]
                 POST >=> choose [
                     route "/aad/group-updates/apply" >=> Auth.requiresAdmin >=> applyAADGroupUpdates

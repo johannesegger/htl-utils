@@ -17,6 +17,14 @@ let view =
                         ]
                     ]
                 ]
+                Tile.parent [ Tile.Size Tile.Is4 ] [
+                    Tile.child [ Tile.CustomClass "box" ] [
+                        a [ Href (toHash ConsultationHours); Style [ Display DisplayOptions.Block ] ] [
+                            span [ Class "title"; Style [ Display DisplayOptions.Block ] ] [ str "List consultation hours" ]
+                            span [] [ str "Get a list of consultation hours per class for students and parents." ]
+                        ]
+                    ]
+                ]
             ]
         ]
     ]

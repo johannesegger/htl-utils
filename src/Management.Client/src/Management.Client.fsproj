@@ -9,11 +9,13 @@
     <Compile Include="Client.Shared\Msal.fs" />
     <Compile Include="Client.Shared\Authentication.fs" />
     <Compile Include="Client.Shared\Views.fs" />
+    <Compile Include="..\..\Common\String.fs" />
     <Compile Include="..\..\Common\List.fs" />
     <Compile Include="..\..\Management.Server\Shared.fs" />
     <Compile Include="Pages.fs" />
     <Compile Include="Home.fs" />
     <Compile Include="SyncAADGroups.fs" />
+    <Compile Include="ConsultationHours.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>
   <ItemGroup>
