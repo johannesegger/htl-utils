@@ -246,12 +246,7 @@ let view model dispatch =
         | NotLoadedGroupUpdates
         | LoadingGroupUpdates ->
             Section.section [] [
-                Progress.progress
-                    [
-                        Progress.Color IsDanger
-                        Progress.Max 100
-                    ]
-                    [ str "0%" ]
+                Progress.progress [ Progress.Color IsDanger ] []
             ]
         | FailedToLoadGroupUpdates ->
             Section.section [] [ Views.errorWithRetryButton "Error while loading group updates" (fun () -> dispatch LoadGroupUpdates) ]
