@@ -1,0 +1,1 @@
+yarn --cwd "$PSScriptRoot\src\Management.Client" webpack-dev-server
