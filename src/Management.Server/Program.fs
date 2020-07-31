@@ -16,9 +16,6 @@ open Thoth.Json.Net
 // Web app
 // ---------------------------------
 
-let handleGetAutoGroups : HttpHandler =
-    fun next ctx -> Successful.OK () next ctx
-
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
         let! untisTeachingData = Http.get ctx (ServiceUrl.untis "teaching-data") (Decode.list Untis.DataTransferTypes.TeacherTask.decoder) |> Async.StartChild
