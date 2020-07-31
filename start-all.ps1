@@ -1,3 +1,4 @@
+yarn --cwd .\src\Sokrates install --frozen-lockfile
 $commands =
     @(
         [System.Tuple]::Create("WakeUpComputer", "dapr run --app-id wake-up-computer --app-port 3000 --port 3500 -- dotnet watch -p .\src\WakeUpComputer\WakeUpComputer.fsproj run --urls=http://+:3000")
