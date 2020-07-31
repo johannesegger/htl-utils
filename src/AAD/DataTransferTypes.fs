@@ -9,7 +9,7 @@ module UserId =
     let decoder : Decoder<_> = Decode.string |> Decode.map UserId
 
 type GroupId = GroupId of string
-module GroupId =
+module GroupDistinguishedName =
     let encode (GroupId groupId) = Encode.string groupId
     let decoder : Decoder<_> = Decode.string |> Decode.map GroupId
 
@@ -49,7 +49,7 @@ type Group = {
 module Group =
     let encode u =
         Encode.object [
-            "id", GroupId.encode u.Id
+            "id", GroupDistinguishedName.encode u.Id
             "name", Encode.string u.Name
             "mail", Encode.string u.Mail
             "members", (List.map UserId.encode >> Encode.list) u.Members
@@ -57,7 +57,7 @@ module Group =
     let decoder : Decoder<_> =
         Decode.object (fun get ->
             {
-                Id = get.Required.Field "id" GroupId.decoder
+                Id = get.Required.Field "id" GroupDistinguishedName.decoder
                 Name = get.Required.Field "name" Decode.string
                 Mail = get.Required.Field "mail" Decode.string
                 Members = get.Required.Field "members" (Decode.list UserId.decoder)
@@ -93,12 +93,12 @@ module GroupModification =
         | UpdateGroup (groupId, memberModifications) ->
             Encode.object [
                 "updateGroup", Encode.object [
-                    "groupId", GroupId.encode groupId
+                    "groupId", GroupDistinguishedName.encode groupId
                     "memberModifications", (List.map MemberModification.encode >> Encode.list) memberModifications
                 ]
             ]
         | DeleteGroup groupId ->
-            Encode.object [ "deleteGroup", GroupId.encode groupId ]
+            Encode.object [ "deleteGroup", GroupDistinguishedName.encode groupId ]
     let decoder : Decoder<_> =
         let createGroupDecoder : Decoder<_> =
             Decode.object (fun get ->
@@ -108,12 +108,12 @@ module GroupModification =
             )
         let updateGroupDecoder : Decoder<_> =
             Decode.object (fun get ->
-                let groupId = get.Required.Field "groupId" GroupId.decoder
+                let groupId = get.Required.Field "groupId" GroupDistinguishedName.decoder
                 let memberModifications = get.Required.Field "memberModifications" (Decode.list MemberModification.decoder)
                 UpdateGroup (groupId, memberModifications)
             )
         let deleteGroupDecoder : Decoder<_> =
-            GroupId.decoder |> Decode.map DeleteGroup
+            GroupDistinguishedName.decoder |> Decode.map DeleteGroup
         Decode.oneOf [
             Decode.field "createGroup" createGroupDecoder
             Decode.field "updateGroup" updateGroupDecoder

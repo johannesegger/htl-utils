@@ -20,6 +20,7 @@ importAll "../sass/main.sass"
 
 type Msg =
     | AuthenticationMsg of Authentication.Msg
+    | SyncADMsg of SyncAD.Msg
     | SyncAADGroupsMsg of SyncAADGroups.Msg
     | ConsultationHoursMsg of ConsultationHours.Msg
 
@@ -27,6 +28,7 @@ type Model =
     {
         CurrentPage: Page
         Authentication: Authentication.Model
+        SyncAD: SyncAD.Model
         SyncAADGroups: SyncAADGroups.Model
         ConsultationHours: ConsultationHours.Model
     }
@@ -43,6 +45,7 @@ let init page =
     {
         CurrentPage = Option.defaultValue Home page
         Authentication = Authentication.init
+        SyncAD = SyncAD.init
         SyncAADGroups = SyncAADGroups.init
         ConsultationHours = ConsultationHours.init
     }
@@ -51,6 +54,8 @@ let update msg model =
     match msg with
     | AuthenticationMsg msg ->
         { model with Authentication = Authentication.update msg model.Authentication }
+    | SyncADMsg msg ->
+        { model with SyncAD = SyncAD.update msg model.SyncAD }
     | SyncAADGroupsMsg msg ->
         { model with SyncAADGroups = SyncAADGroups.update msg model.SyncAADGroups }
     | ConsultationHoursMsg msg ->
@@ -59,6 +64,7 @@ let update msg model =
 let root model dispatch =
     let pageHtml = function
         | Home -> Home.view
+        | SyncAD -> SyncAD.view model.SyncAD (SyncADMsg >> dispatch)
         | SyncAADGroups -> SyncAADGroups.view model.SyncAADGroups (SyncAADGroupsMsg >> dispatch)
         | ConsultationHours -> ConsultationHours.view model.ConsultationHours (ConsultationHoursMsg >> dispatch)
 
@@ -112,6 +118,14 @@ let stream states msgs =
         )
         ||> Authentication.stream
         |> AsyncRx.map AuthenticationMsg
+
+        (
+            (login, pageActivated ((=) SyncAD)),
+            subStates (function SyncADMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAD),
+            msgs |> AsyncRx.choose (function UserMsg (SyncADMsg msg) -> Some msg | _ -> None)
+        )
+        |||> SyncAD.stream
+        |> AsyncRx.map SyncADMsg
 
         (
             (login, pageActivated ((=) SyncAADGroups)),

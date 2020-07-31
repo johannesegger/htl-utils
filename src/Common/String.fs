@@ -25,3 +25,8 @@ let equalsCaseInsensitive (a: string) (b: string) =
 
 let startsWithCaseInsensitive (value: string) (text: string) =
     text.StartsWith(value, StringComparison.InvariantCultureIgnoreCase)
+
+let ellipsis maxLength (text: string) =
+    if text.Length > maxLength
+    then sprintf "%s ..." <| text.Substring(0, maxLength - 4)
+    else text

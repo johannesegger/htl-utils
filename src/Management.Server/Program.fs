@@ -44,8 +44,8 @@ let getAADGroupUpdates : HttpHandler =
                 |> List.choose (function
                     | Untis.DataTransferTypes.NormalTeacher (schoolClass, teacherShortName, _)
                     | Untis.DataTransferTypes.FormTeacher (schoolClass, teacherShortName) -> Some (schoolClass, teacherShortName)
-                    | Untis.DataTransferTypes.Custodian
-                    | Untis.DataTransferTypes.Informant -> None
+                    | Untis.DataTransferTypes.Custodian _
+                    | Untis.DataTransferTypes.Informant _ -> None
                 )
                 |> List.groupBy fst
                 |> List.map (fun (Untis.DataTransferTypes.SchoolClass schoolClass, teachers) ->
@@ -60,9 +60,9 @@ let getAADGroupUpdates : HttpHandler =
                 teachingData
                 |> List.choose (function
                     | Untis.DataTransferTypes.FormTeacher (_, Untis.DataTransferTypes.TeacherShortName teacherShortName) -> Some teacherShortName
-                    | Untis.DataTransferTypes.NormalTeacher
-                    | Untis.DataTransferTypes.Custodian
-                    | Untis.DataTransferTypes.Informant -> None
+                    | Untis.DataTransferTypes.NormalTeacher _
+                    | Untis.DataTransferTypes.Custodian _
+                    | Untis.DataTransferTypes.Informant _ -> None
                 )
                 |> List.choose (flip Map.tryFind aadUserLookupByUserName)
                 |> List.distinct
@@ -93,9 +93,9 @@ let getAADGroupUpdates : HttpHandler =
                         |> List.choose (function
                             | Untis.DataTransferTypes.NormalTeacher (_, Untis.DataTransferTypes.TeacherShortName teacherShortName, subject) ->
                                 Some (teacherShortName, subject)
-                            | Untis.DataTransferTypes.FormTeacher
-                            | Untis.DataTransferTypes.Custodian
-                            | Untis.DataTransferTypes.Informant -> None
+                            | Untis.DataTransferTypes.FormTeacher _
+                            | Untis.DataTransferTypes.Custodian _
+                            | Untis.DataTransferTypes.Informant _ -> None
                         )
                         |> List.filter (snd >> fun subject ->
                             subjects |> List.contains (CIString subject.ShortName)
@@ -164,8 +164,8 @@ let getConsultationHours : HttpHandler =
             |> List.choose (function
                 | Untis.DataTransferTypes.NormalTeacher (_, teacherShortName, _) -> Some teacherShortName
                 | Untis.DataTransferTypes.FormTeacher (_, teacherShortName) -> Some teacherShortName
-                | Untis.DataTransferTypes.Custodian
-                | Untis.DataTransferTypes.Informant -> None
+                | Untis.DataTransferTypes.Custodian _
+                | Untis.DataTransferTypes.Informant _ -> None
             )
             |> List.distinct
             |> List.map (fun teacherShortName ->
@@ -188,20 +188,20 @@ let getConsultationHours : HttpHandler =
                                     Shared.ConsultationHours.TeacherSubject.Class = schoolClass
                                     Shared.ConsultationHours.TeacherSubject.Subject = { ShortName = subject.ShortName; FullName = subject.FullName }
                                 }
-                            | Untis.DataTransferTypes.NormalTeacher
-                            | Untis.DataTransferTypes.FormTeacher
-                            | Untis.DataTransferTypes.Custodian
-                            | Untis.DataTransferTypes.Informant -> None
+                            | Untis.DataTransferTypes.NormalTeacher _
+                            | Untis.DataTransferTypes.FormTeacher _
+                            | Untis.DataTransferTypes.Custodian _
+                            | Untis.DataTransferTypes.Informant _ -> None
                         )
                         |> List.distinct
                     Shared.ConsultationHours.FormTeacherOfClasses =
                         untisTeachingData
                         |> List.choose (function
                             | Untis.DataTransferTypes.FormTeacher (Untis.DataTransferTypes.SchoolClass schoolClass, teacher) when teacher = teacherShortName -> Some schoolClass
-                            | Untis.DataTransferTypes.FormTeacher
-                            | Untis.DataTransferTypes.NormalTeacher
-                            | Untis.DataTransferTypes.Custodian
-                            | Untis.DataTransferTypes.Informant -> None
+                            | Untis.DataTransferTypes.FormTeacher _
+                            | Untis.DataTransferTypes.NormalTeacher _
+                            | Untis.DataTransferTypes.Custodian _
+                            | Untis.DataTransferTypes.Informant _ -> None
                         )
                     Shared.ConsultationHours.Details =
                         untisTeachingData
@@ -213,10 +213,10 @@ let getConsultationHours : HttpHandler =
                                     Shared.ConsultationHours.ConsultationHourDetails.EndTime = timeFrame.EndTime
                                     Shared.ConsultationHours.ConsultationHourDetails.Location = { ShortName = room.ShortName; FullName = room.FullName }
                                 }
-                            | Untis.DataTransferTypes.Informant
-                            | Untis.DataTransferTypes.FormTeacher
-                            | Untis.DataTransferTypes.NormalTeacher
-                            | Untis.DataTransferTypes.Custodian -> None
+                            | Untis.DataTransferTypes.Informant _
+                            | Untis.DataTransferTypes.FormTeacher _
+                            | Untis.DataTransferTypes.NormalTeacher _
+                            | Untis.DataTransferTypes.Custodian _ -> None
                         )
                 }
             )
@@ -234,10 +234,12 @@ let webApp =
         subRoute "/api"
             (choose [
                 GET >=> choose [
+                    route "/ad/updates" >=> Auth.requiresAdmin >=> ADModifications.HttpHandler.getADModifications
                     route "/aad/group-updates" >=> Auth.requiresAdmin >=> getAADGroupUpdates
                     route "/consultation-hours" >=> getConsultationHours
                 ]
                 POST >=> choose [
+                    route "/ad/updates/apply" >=> Auth.requiresAdmin >=> ADModifications.HttpHandler.applyADModifications
                     route "/aad/group-updates/apply" >=> Auth.requiresAdmin >=> applyAADGroupUpdates
                 ]
             ])
@@ -267,6 +269,7 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
+        |> Extra.withCustom ADModifications.DataTransferTypes.DirectoryModification.encode ADModifications.DataTransferTypes.DirectoryModification.decoder
         |> Extra.withCustom Shared.AADGroupUpdates.GroupUpdate.encode Shared.AADGroupUpdates.GroupUpdate.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 

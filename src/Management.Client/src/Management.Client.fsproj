@@ -12,8 +12,10 @@
     <Compile Include="..\..\Common\String.fs" />
     <Compile Include="..\..\Common\List.fs" />
     <Compile Include="..\..\Management.Server\Shared.fs" />
+    <Compile Include="..\..\Management.Server\ADModifications.DataTransferTypes.fs" />
     <Compile Include="Pages.fs" />
     <Compile Include="Home.fs" />
+    <Compile Include="SyncAD.fs" />
     <Compile Include="SyncAADGroups.fs" />
     <Compile Include="ConsultationHours.fs" />
     <Compile Include="App.fs" />

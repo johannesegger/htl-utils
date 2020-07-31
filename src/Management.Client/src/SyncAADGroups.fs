@@ -325,12 +325,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                             let! updates = Fetch.tryGet("/api/aad/group-updates", Decode.list AADGroupUpdates.GroupUpdate.decoder, requestProperties) |> Async.AwaitPromise
                             match updates with
                             | Ok v -> return v
-                            | Error e ->
-                                let msg =
-                                    if e.Length > 200
-                                    then sprintf "%s ..." <| e.Substring(0, 197)
-                                    else e
-                                return failwith msg
+                            | Error e -> return failwith (String.ellipsis 200 e)
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

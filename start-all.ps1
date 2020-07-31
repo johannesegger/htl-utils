@@ -11,6 +11,7 @@ $commands =
         [System.Tuple]::Create("AAD", "dapr run --app-id aad --app-port 3006 --port 3506 -- dotnet watch -p .\src\AAD\AAD.fsproj run --urls=http://+:3006")
         [System.Tuple]::Create("TeachingServer", "dapr run --app-id teaching-server --app-port 3007 --port 3507 -- dotnet watch -p .\src\Teaching.Server\Teaching.Server.fsproj run --urls=http://+:3007")
         [System.Tuple]::Create("ManagementServer", "dapr run --app-id management-server --app-port 3008 --port 3508 -- dotnet watch -p .\src\Management.Server\Management.Server.fsproj run --urls=http://+:3008")
+        [System.Tuple]::Create("AD", "dapr run --app-id ad --app-port 3009 --port 3509 -- dotnet watch -p .\src\AD\AD.fsproj run --urls=http://+:3009")
     ) |
     ForEach-Object {
         $title = $_.Item1

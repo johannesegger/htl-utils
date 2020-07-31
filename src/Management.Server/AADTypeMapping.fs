@@ -4,7 +4,7 @@ open AAD.DataTransferTypes
 
 module UserId =
     let fromDto (Shared.AADGroupUpdates.UserId userId) = UserId userId
-    let toDto (UserId groupId) = Shared.AADGroupUpdates.UserId groupId
+    let toDto (UserId userId) = Shared.AADGroupUpdates.UserId userId
 
 module GroupId =
     let fromDto (Shared.AADGroupUpdates.GroupId groupId) = GroupId groupId

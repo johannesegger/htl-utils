@@ -4,6 +4,7 @@ let private url serviceName path =
     sprintf "http://localhost:%s/v1.0/invoke/%s/method/api/%s" (Environment.getEnvVarOrFail "DAPR_HTTP_PORT") serviceName path
 
 let aad = url "aad"
+let ad = url "ad"
 let fileStorage = url "file-storage"
 let finalTheses = url "final-theses"
 let photoLibrary = url "photo-library"
