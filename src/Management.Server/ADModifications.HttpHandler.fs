@@ -1,9 +1,9 @@
 module ADModifications.HttpHandler
 
-open ADModifications.DataTransferTypes
-open ADModifications.Mapping
+open DataTransferTypes
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
+open Mapping
 open Thoth.Json.Net
 
 let private userNameFromName (firstName: string) (lastName: string) =
