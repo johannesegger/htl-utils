@@ -1,6 +1,6 @@
-module ADModifications.Mapping
+namespace ADModifications.Mapping
 
-open DataTransferTypes
+open ADModifications.DataTransferTypes
 
 module UserName =
     let fromADDto (AD.DataTransferTypes.UserName userName) = UserName userName

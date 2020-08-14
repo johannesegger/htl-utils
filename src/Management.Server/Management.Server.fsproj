@@ -11,12 +11,14 @@
     <Compile Include="..\FinalTheses\DataTransferTypes.fs" />
     <Compile Include="..\Sokrates\DataTransferTypes.fs" />
     <Compile Include="..\Untis\DataTransferTypes.fs" />
-    <Compile Include="Shared.fs" />
+    <Compile Include="AADGroupUpdates.DataTransferTypes.fs" />
+    <Compile Include="AADGroupUpdates.Mapping.fs" />
+    <Compile Include="AADGroupUpdates.HttpHandler.fs" />
     <Compile Include="ADModifications.DataTransferTypes.fs" />
     <Compile Include="ADModifications.Mapping.fs" />
     <Compile Include="ADModifications.HttpHandler.fs" />
-    <Compile Include="AADTypeMapping.fs" />
-    <Compile Include="AADGroupUpdates.fs" />
+    <Compile Include="ConsultationHours.DataTransferTypes.fs" />
+    <Compile Include="ConsultationHours.HttpHandler.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

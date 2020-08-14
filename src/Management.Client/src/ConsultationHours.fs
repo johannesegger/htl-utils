@@ -1,11 +1,11 @@
 module ConsultationHours
 
+open ConsultationHours.DataTransferTypes
 open Fable.Core
 open Fable.React
 open Fable.React.Props
 open FSharp.Control
 open Fulma
-open Shared.ConsultationHours
 open Thoth.Fetch
 open Thoth.Json
 

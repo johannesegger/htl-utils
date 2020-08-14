@@ -1,4 +1,4 @@
-module ADModifications.DataTransferTypes
+namespace ADModifications.DataTransferTypes
 
 #if FABLE_COMPILER
 open Thoth.Json

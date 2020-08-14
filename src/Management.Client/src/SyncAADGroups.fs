@@ -1,5 +1,6 @@
 module SyncAADGroups
 
+open AADGroupUpdates.DataTransferTypes
 open Fable.Core
 open Fable.FontAwesome
 open Fable.React
@@ -8,85 +9,84 @@ open Fable.Reaction
 open FSharp.Control
 open Fulma
 open Fulma.Extensions.Wikiki
-open Shared
 open Thoth.Fetch
 open Thoth.Json
 
-type UserUpdate = {
+type UIUserUpdate = {
     IsEnabled: bool
-    User: AADGroupUpdates.User
+    User: User
 }
 
-module UserUpdate =
+module UIUserUpdate =
     let fromDto user = { IsEnabled = true; User = user }
     let toDto user = if user.IsEnabled then Some user.User else None
 
-type MemberUpdates = {
-    AddMembers: UserUpdate list
-    RemoveMembers: UserUpdate list
+type UIMemberUpdates = {
+    AddMembers: UIUserUpdate list
+    RemoveMembers: UIUserUpdate list
 }
 
-module MemberUpdates =
-    let fromDto (memberUpdates: AADGroupUpdates.MemberUpdates) =
+module UIMemberUpdates =
+    let fromDto (memberUpdates: MemberUpdates) =
         {
-            AddMembers = List.map UserUpdate.fromDto memberUpdates.AddMembers
-            RemoveMembers = List.map UserUpdate.fromDto memberUpdates.RemoveMembers
+            AddMembers = List.map UIUserUpdate.fromDto memberUpdates.AddMembers
+            RemoveMembers = List.map UIUserUpdate.fromDto memberUpdates.RemoveMembers
         }
     let toDto memberUpdates =
         {
-            AADGroupUpdates.MemberUpdates.AddMembers = List.choose UserUpdate.toDto memberUpdates.AddMembers
-            AADGroupUpdates.MemberUpdates.RemoveMembers = List.choose UserUpdate.toDto memberUpdates.RemoveMembers
+            MemberUpdates.AddMembers = List.choose UIUserUpdate.toDto memberUpdates.AddMembers
+            MemberUpdates.RemoveMembers = List.choose UIUserUpdate.toDto memberUpdates.RemoveMembers
         }
 
-type GroupUpdateType =
-    | CreateGroup of string * UserUpdate list
-    | UpdateGroup of AADGroupUpdates.Group * MemberUpdates
-    | DeleteGroup of AADGroupUpdates.Group
+type UIGroupUpdateType =
+    | CreateGroup of string * UIUserUpdate list
+    | UpdateGroup of Group * UIMemberUpdates
+    | DeleteGroup of Group
 
-module GroupUpdateType =
+module UIGroupUpdateType =
     let fromDto = function
-        | AADGroupUpdates.CreateGroup (name, members) -> CreateGroup (name, List.map UserUpdate.fromDto members)
-        | AADGroupUpdates.UpdateGroup (group, memberUpdates) -> UpdateGroup (group, MemberUpdates.fromDto memberUpdates)
-        | AADGroupUpdates.DeleteGroup group -> DeleteGroup group
+        | GroupUpdate.CreateGroup (name, members) -> CreateGroup (name, List.map UIUserUpdate.fromDto members)
+        | GroupUpdate.UpdateGroup (group, memberUpdates) -> UpdateGroup (group, UIMemberUpdates.fromDto memberUpdates)
+        | GroupUpdate.DeleteGroup group -> DeleteGroup group
     let toDto = function
-        | CreateGroup (name, members) -> AADGroupUpdates.CreateGroup (name, List.choose UserUpdate.toDto members)
-        | UpdateGroup (group, memberUpdates) -> AADGroupUpdates.UpdateGroup (group, MemberUpdates.toDto memberUpdates)
-        | DeleteGroup group -> AADGroupUpdates.DeleteGroup group
+        | CreateGroup (name, members) -> GroupUpdate.CreateGroup (name, List.choose UIUserUpdate.toDto members)
+        | UpdateGroup (group, memberUpdates) -> GroupUpdate.UpdateGroup (group, UIMemberUpdates.toDto memberUpdates)
+        | DeleteGroup group -> GroupUpdate.DeleteGroup group
 
-type GroupUpdate = {
+type UIGroupUpdate = {
     IsEnabled: bool
-    Update: GroupUpdateType
+    Update: UIGroupUpdateType
 }
 
-module GroupUpdate =
-    let fromDto groupUpdate = { IsEnabled = true; Update = GroupUpdateType.fromDto groupUpdate }
+module UIGroupUpdate =
+    let fromDto groupUpdate = { IsEnabled = true; Update = UIGroupUpdateType.fromDto groupUpdate }
     let toDto groupUpdate =
         if groupUpdate.IsEnabled then
-            Some (GroupUpdateType.toDto groupUpdate.Update)
+            Some (UIGroupUpdateType.toDto groupUpdate.Update)
         else None
 
-type GroupUpdatesState =
+type UIGroupUpdatesState =
     | Drafting
     | Applying
     | Applied
 
-type GroupUpdates =
+type UIGroupUpdates =
     | NotLoadedGroupUpdates
     | LoadingGroupUpdates
-    | LoadedGroupUpdates of GroupUpdatesState * GroupUpdate list
+    | LoadedGroupUpdates of UIGroupUpdatesState * UIGroupUpdate list
     | FailedToLoadGroupUpdates
 
 type Model =
     {
-        GroupUpdates: GroupUpdates
+        GroupUpdates: UIGroupUpdates
     }
 
 type Msg =
     | LoadGroupUpdates
-    | LoadGroupUpdatesResponse of Result<AADGroupUpdates.GroupUpdate list, exn>
+    | LoadGroupUpdatesResponse of Result<GroupUpdate list, exn>
     | SelectAllUpdates of bool
-    | ToggleEnableGroupUpdate of GroupUpdate
-    | ToggleEnableMemberUpdate of GroupUpdate * UserUpdate
+    | ToggleEnableGroupUpdate of UIGroupUpdate
+    | ToggleEnableMemberUpdate of UIGroupUpdate * UIUserUpdate
     | ApplyGroupUpdates
     | ApplyGroupUpdatesResponse of Result<unit, exn>
 
@@ -127,7 +127,7 @@ let rec update msg model =
     match msg with
     | LoadGroupUpdates -> { model with GroupUpdates = LoadingGroupUpdates }
     | LoadGroupUpdatesResponse (Ok groupUpdates) ->
-        { model with GroupUpdates = LoadedGroupUpdates (Drafting, List.map GroupUpdate.fromDto groupUpdates) }
+        { model with GroupUpdates = LoadedGroupUpdates (Drafting, List.map UIGroupUpdate.fromDto groupUpdates) }
     | LoadGroupUpdatesResponse (Error ex) ->
         { model with GroupUpdates = FailedToLoadGroupUpdates }
     | SelectAllUpdates value ->
@@ -199,7 +199,7 @@ let view model dispatch =
                 span [] [ str title ]
             ]
 
-        let memberUpdate icon color (memberUpdateModel: UserUpdate) =
+        let memberUpdate icon color (memberUpdateModel: UIUserUpdate) =
             Panel.block [ ] [
                 Panel.icon [] []
                 Button.button
@@ -322,7 +322,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            let! updates = Fetch.tryGet("/api/aad/group-updates", Decode.list AADGroupUpdates.GroupUpdate.decoder, requestProperties) |> Async.AwaitPromise
+                            let! updates = Fetch.tryGet("/api/aad/group-updates", Decode.list GroupUpdate.decoder, requestProperties) |> Async.AwaitPromise
                             match updates with
                             | Ok v -> return v
                             | Error e -> return failwith (String.ellipsis 200 e)
@@ -343,7 +343,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/aad/group-updates/apply"
-                            let data = (List.map AADGroupUpdates.GroupUpdate.encode >> Encode.list) groupUpdates
+                            let data = (List.map GroupUpdate.encode >> Encode.list) groupUpdates
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             return! Fetch.post(url, data, Decode.nil (), requestProperties) |> Async.AwaitPromise
@@ -356,7 +356,7 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                 |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
                 |> AsyncRx.choose (function
                     | (ApplyGroupUpdates, { GroupUpdates = LoadedGroupUpdates (_, groupUpdates) }) ->
-                        Some (applyGroupUpdates (List.choose GroupUpdate.toDto groupUpdates))
+                        Some (applyGroupUpdates (List.choose UIGroupUpdate.toDto groupUpdates))
                     | _ -> None)
                 |> AsyncRx.switchLatest
                 |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AAD group updates failed", e.Message)

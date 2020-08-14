@@ -11,7 +11,8 @@
     <Compile Include="Client.Shared\Views.fs" />
     <Compile Include="..\..\Common\String.fs" />
     <Compile Include="..\..\Common\List.fs" />
-    <Compile Include="..\..\Management.Server\Shared.fs" />
+    <Compile Include="..\..\Management.Server\AADGroupUpdates.DataTransferTypes.fs" />
+    <Compile Include="..\..\Management.Server\ConsultationHours.DataTransferTypes.fs" />
     <Compile Include="..\..\Management.Server\ADModifications.DataTransferTypes.fs" />
     <Compile Include="Pages.fs" />
     <Compile Include="Home.fs" />
