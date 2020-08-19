@@ -18,7 +18,7 @@
     <Compile Include="Home.fs" />
     <Compile Include="SyncAD.fs" />
     <Compile Include="SyncAADGroups.fs" />
-    <Compile Include="ConsultationHours.fs" />
+    <Compile Include="ListConsultationHours.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>
   <ItemGroup>

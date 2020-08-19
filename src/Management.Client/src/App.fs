@@ -22,7 +22,7 @@ type Msg =
     | AuthenticationMsg of Authentication.Msg
     | SyncADMsg of SyncAD.Msg
     | SyncAADGroupsMsg of SyncAADGroups.Msg
-    | ConsultationHoursMsg of ConsultationHours.Msg
+    | ListConsultationHoursMsg of ListConsultationHours.Msg
 
 type Model =
     {
@@ -30,7 +30,7 @@ type Model =
         Authentication: Authentication.Model
         SyncAD: SyncAD.Model
         SyncAADGroups: SyncAADGroups.Model
-        ConsultationHours: ConsultationHours.Model
+        ListConsultationHours: ListConsultationHours.Model
     }
 
 let urlUpdate (result : Page option) model =
@@ -47,7 +47,7 @@ let init page =
         Authentication = Authentication.init
         SyncAD = SyncAD.init
         SyncAADGroups = SyncAADGroups.init
-        ConsultationHours = ConsultationHours.init
+        ListConsultationHours = ListConsultationHours.init
     }
 
 let update msg model =
@@ -58,15 +58,15 @@ let update msg model =
         { model with SyncAD = SyncAD.update msg model.SyncAD }
     | SyncAADGroupsMsg msg ->
         { model with SyncAADGroups = SyncAADGroups.update msg model.SyncAADGroups }
-    | ConsultationHoursMsg msg ->
-        { model with ConsultationHours = ConsultationHours.update msg model.ConsultationHours }
+    | ListConsultationHoursMsg msg ->
+        { model with ListConsultationHours = ListConsultationHours.update msg model.ListConsultationHours }
 
 let root model dispatch =
     let pageHtml = function
         | Home -> Home.view
         | SyncAD -> SyncAD.view model.SyncAD (SyncADMsg >> dispatch)
         | SyncAADGroups -> SyncAADGroups.view model.SyncAADGroups (SyncAADGroupsMsg >> dispatch)
-        | ConsultationHours -> ConsultationHours.view model.ConsultationHours (ConsultationHoursMsg >> dispatch)
+        | ListConsultationHours -> ListConsultationHours.view model.ListConsultationHours (ListConsultationHoursMsg >> dispatch)
 
     div []
         [ yield Navbar.navbar [ Navbar.Color IsDanger ]
@@ -136,12 +136,12 @@ let stream states msgs =
         |> AsyncRx.map SyncAADGroupsMsg
 
         (
-            pageActivated ((=) ConsultationHours),
-            subStates (function ConsultationHoursMsg msg -> Some msg | _ -> None) (fun m -> m.ConsultationHours),
-            msgs |> AsyncRx.choose (function UserMsg (ConsultationHoursMsg msg) -> Some msg | _ -> None)
+            pageActivated ((=) ListConsultationHours),
+            subStates (function ListConsultationHoursMsg msg -> Some msg | _ -> None) (fun m -> m.ListConsultationHours),
+            msgs |> AsyncRx.choose (function UserMsg (ListConsultationHoursMsg msg) -> Some msg | _ -> None)
         )
-        |||> ConsultationHours.stream
-        |> AsyncRx.map ConsultationHoursMsg
+        |||> ListConsultationHours.stream
+        |> AsyncRx.map ListConsultationHoursMsg
     ]
     |> AsyncRx.mergeSeq
     |> AsyncRx.map UserMsg

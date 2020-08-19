@@ -1,4 +1,4 @@
-module ConsultationHours
+module ListConsultationHours
 
 open ConsultationHours.DataTransferTypes
 open Fable.Core
