@@ -119,16 +119,26 @@ module DirectoryModificationGroup =
 
 type ModificationsState =
     | Drafting
-    | Applying
+    | Applying of DirectoryModification list
     | Applied
 
 type LoadableDirectoryModifications =
     | NotLoadedModifications
     | LoadingModifications
-    | LoadedModifications of ModificationsState * DirectoryModificationGroup list
+    | LoadedModifications of DirectoryModificationGroup list
     | FailedToLoadModifications
 
-type Model = LoadableDirectoryModifications
+type ManualModificationDraft = {
+    Modification: DirectoryModification
+    ValidationErrors: string list
+}
+
+type Model = {
+    ModificationsState: ModificationsState
+    AutoModifications: LoadableDirectoryModifications
+    ManualModifications: DirectoryModificationGroup
+    ManualModificationDraft: ManualModificationDraft
+}
 
 type Msg =
     | LoadModifications
@@ -136,18 +146,56 @@ type Msg =
     | SelectAllModifications of bool
     | ToggleEnableModificationGroup of DirectoryModificationGroup
     | ToggleEnableModification of DirectoryModificationGroup * UIDirectoryModification
+    | SetManualModification of DirectoryModification
+    | AddManualModification
     | ApplyModifications
     | ApplyModificationsResponse of Result<unit, exn>
 
+let private validateManualModificationDraft directoryModification =
+    {
+        Modification = directoryModification
+        ValidationErrors =
+            [
+                match directoryModification with
+                | CreateUser ({ Name = UserName userName; Type = Teacher }, _) ->
+                    if System.String.IsNullOrWhiteSpace userName then "User name must not be empty."
+                | CreateUser ({ Name = UserName userName; Type = Student (GroupName className) }, _) ->
+                    if System.String.IsNullOrWhiteSpace className then "Class name must not be empty."
+                    if System.String.IsNullOrWhiteSpace userName then "User name must not be empty."
+                | DeleteUser { Name = UserName userName } ->
+                    if System.String.IsNullOrWhiteSpace userName then "User name must not be empty."
+                | UpdateUser _
+                | CreateGroup _
+                | UpdateGroup _
+                | DeleteGroup _ -> "Modification type not supported"
+            ]
+    }
+
+let private clearManualModificationDraft manualModificationDraft =
+    let clearedModification =
+        match manualModificationDraft.Modification with
+        | CreateUser (user, _) ->
+            CreateUser ({ user with Name = UserName ""; FirstName = ""; LastName = "" }, "")
+        | DeleteUser user ->
+            DeleteUser { user with Name = UserName "" }
+        | UpdateUser _
+        | CreateGroup _
+        | UpdateGroup _
+        | DeleteGroup _ -> failwith "Not implemented"
+    validateManualModificationDraft clearedModification
+
 let rec update msg model =
     let updateDirectoryModificationGroups isMatch fn =
-        match model with
-        | LoadedModifications (Drafting, directoryModificationGroups) ->
-            let directoryModificationGroups =
-                directoryModificationGroups
-                |> List.map (fun p -> if isMatch p then fn p else p)
-            LoadedModifications (Drafting, directoryModificationGroups)
-        | _ -> model
+        if isMatch model.ManualModifications then
+            { model with ManualModifications = fn model.ManualModifications }
+        else
+            match model.ModificationsState, model.AutoModifications with
+            | Drafting, LoadedModifications directoryModificationGroups ->
+                let directoryModificationGroups =
+                    directoryModificationGroups
+                    |> List.map (fun p -> if isMatch p then fn p else p)
+                { model with AutoModifications = LoadedModifications directoryModificationGroups }
+            | _ -> model
 
     let updateDirectoryModificationGroup directoryModificationGroup fn =
         updateDirectoryModificationGroups ((=) directoryModificationGroup) fn
@@ -161,11 +209,11 @@ let rec update msg model =
         )
 
     match msg with
-    | LoadModifications -> LoadingModifications
+    | LoadModifications -> { model with AutoModifications = LoadingModifications }
     | LoadModificationsResponse (Ok directoryModifications) ->
-        LoadedModifications (Drafting, DirectoryModificationGroup.fromDtoList directoryModifications)
+        { model with ModificationsState = Drafting; AutoModifications = LoadedModifications (DirectoryModificationGroup.fromDtoList directoryModifications) }
     | LoadModificationsResponse (Error ex) ->
-        FailedToLoadModifications
+        { model with AutoModifications = FailedToLoadModifications }
     | SelectAllModifications value ->
         updateDirectoryModificationGroups (fun _ -> true) (fun p -> { p with IsEnabled = value })
     | ToggleEnableModificationGroup directoryModificationGroup ->
@@ -173,29 +221,57 @@ let rec update msg model =
     | ToggleEnableModification (directoryModificationGroup, directoryModification) ->
         updateDirectoryModification directoryModificationGroup directoryModification (fun p -> { p with IsEnabled = not p.IsEnabled })
     | ApplyModifications ->
-        match model with
-        | LoadedModifications (Drafting, directoryModificationGroups) ->
-            LoadedModifications (Applying, directoryModificationGroups)
-        | LoadedModifications (Applying, _)
-        | LoadedModifications (Applied, _)
-        | NotLoadedModifications
-        | LoadingModifications
-        | FailedToLoadModifications -> model
+        match model.ModificationsState, model.AutoModifications with
+        | Drafting, LoadedModifications directoryModificationGroups ->
+            { model with ModificationsState = Applying (directoryModificationGroups @ [ model.ManualModifications ] |> List.collect DirectoryModificationGroup.toDtoList) }
+        | Drafting, _ -> { model with ModificationsState = Applying (DirectoryModificationGroup.toDtoList model.ManualModifications) }
+        | Drafting, _
+        | Applying _, _
+        | Applied, _ -> model
+    | SetManualModification directoryModification ->
+        { model with ManualModificationDraft = validateManualModificationDraft directoryModification }
+    | AddManualModification ->
+        if List.isEmpty model.ManualModificationDraft.ValidationErrors then
+            let modification = UIDirectoryModification.fromDto model.ManualModificationDraft.Modification
+            { model with
+                ManualModifications = { model.ManualModifications with Modifications = model.ManualModifications.Modifications @ [ modification ] }
+                ManualModificationDraft = clearManualModificationDraft model.ManualModificationDraft
+            }
+        else
+            model
     | ApplyModificationsResponse (Ok ())
-    | ApplyModificationsResponse (Error _) ->
-        match model with
-        | LoadedModifications (Applying, directoryModificationGroups) ->
-            LoadedModifications (Applied, directoryModificationGroups)
-        | LoadedModifications (Drafting, _)
-        | LoadedModifications (Applied, _)
-        | NotLoadedModifications
-        | LoadingModifications
-        | FailedToLoadModifications -> model
+    | ApplyModificationsResponse (Error _) -> { model with ModificationsState = Applied }
 
-let init = NotLoadedModifications
+let init =
+    {
+        ModificationsState = Drafting
+        AutoModifications = NotLoadedModifications
+        ManualModifications = {
+            IsEnabled = true
+            Title = "Manual modifications"
+            Kind = Update
+            Modifications = []
+        }
+        ManualModificationDraft =
+            let user =
+                {
+                    Name = UserName ""
+                    SokratesId = None
+                    FirstName = ""
+                    LastName = ""
+                    Type = Teacher
+                }
+            CreateUser (user, "") |> validateManualModificationDraft
+    }
 
 let view model dispatch =
-    let bulkOperations isLocked =
+    let isLocked =
+        match model.ModificationsState with
+        | Drafting -> false
+        | Applying _
+        | Applied -> true
+
+    let bulkOperations =
         Button.list [] [
             Button.button
                 [
@@ -217,53 +293,62 @@ let view model dispatch =
                 ]
         ]
 
-    let directoryModificationGroupView isLocked directoryModificationGroup =
-        let heading title icon color =
-            Panel.heading [] [
-                Button.button
-                    [
-                        Button.Disabled isLocked
-                        Button.Size IsSmall
-                        Button.Color (if directoryModificationGroup.IsEnabled then color else NoColor)
-                        Button.Props [ Style [ MarginRight "0.5rem" ] ]
-                        Button.OnClick (fun e -> dispatch (ToggleEnableModificationGroup directoryModificationGroup))
-                    ]
-                    [ Fa.i [ icon ] [] ]
-                span [] [ str title ]
-            ]
-
-        let directoryModificationView icon color (directoryModification: UIDirectoryModification) =
-            Panel.block [ ] [
-                Panel.icon [] []
-                Button.button
-                    [
-                        Button.Disabled (isLocked || not directoryModificationGroup.IsEnabled)
-                        Button.Size IsSmall
-                        Button.Color (if directoryModificationGroup.IsEnabled && directoryModification.IsEnabled then color else NoColor)
-                        Button.Props [ Style [ MarginRight "0.5rem" ] ]
-                        Button.OnClick (fun e -> dispatch (ToggleEnableModification (directoryModificationGroup, directoryModification)))
-                    ]
-                    [ Fa.i [ icon ] [] ]
-                str directoryModification.Description
-            ]
-
-        let memberText i =
-            if i = 1 then sprintf "%d member" i
-            else sprintf "%d members" i
-
+    let directoryModificationGroupHeading directoryModificationGroup =
         let (icon, color) =
             match directoryModificationGroup.Kind with
             | Create -> Fa.Solid.Plus, IsSuccess
             | Update -> Fa.Solid.Sync, IsWarning
             | Delete -> Fa.Solid.Minus, IsDanger
 
-        Panel.panel [ ] [
-            heading directoryModificationGroup.Title icon color
-            yield! List.map (directoryModificationView icon color) directoryModificationGroup.Modifications
+        Panel.heading [] [
+            Button.button
+                [
+                    Button.Disabled isLocked
+                    Button.Size IsSmall
+                    Button.Color (if directoryModificationGroup.IsEnabled then color else NoColor)
+                    Button.Props [ Style [ MarginRight "0.5rem" ] ]
+                    Button.OnClick (fun _ -> dispatch (ToggleEnableModificationGroup directoryModificationGroup))
+                ]
+                [ Fa.i [ icon ] [] ]
+            span [] [ str directoryModificationGroup.Title ]
         ]
 
-    let modifications =
-        match model with
+    let directoryModificationView directoryModificationGroup (directoryModification: UIDirectoryModification) =
+        let (icon, color) =
+            match directoryModification.Type with
+            | CreateUser _
+            | CreateGroup _ -> Fa.Solid.Plus, IsSuccess
+            | UpdateUser _
+            | UpdateGroup _ -> Fa.Solid.Sync, IsWarning
+            | DeleteUser _
+            | DeleteGroup _ -> Fa.Solid.Minus, IsDanger
+
+        Panel.block [] [
+            Panel.icon [] []
+            Button.button
+                [
+                    Button.Disabled (isLocked || not directoryModificationGroup.IsEnabled)
+                    Button.Size IsSmall
+                    Button.Color (if directoryModificationGroup.IsEnabled && directoryModification.IsEnabled then color else NoColor)
+                    Button.Props [ Style [ MarginRight "0.5rem" ] ]
+                    Button.OnClick (fun _ -> dispatch (ToggleEnableModification (directoryModificationGroup, directoryModification)))
+                ]
+                [ Fa.i [ icon ] [] ]
+            str directoryModification.Description
+        ]
+
+    let directoryModificationGroupView directoryModificationGroup =
+        let memberText i =
+            if i = 1 then sprintf "%d member" i
+            else sprintf "%d members" i
+
+        Panel.panel [] [
+            directoryModificationGroupHeading directoryModificationGroup
+            yield! List.map (directoryModificationView directoryModificationGroup) directoryModificationGroup.Modifications
+        ]
+
+    let autoModifications =
+        match model.AutoModifications with
         | NotLoadedModifications
         | LoadingModifications ->
             Section.section [] [
@@ -271,64 +356,203 @@ let view model dispatch =
             ]
         | FailedToLoadModifications ->
             Section.section [] [ Views.errorWithRetryButton "Error while loading modifications" (fun () -> dispatch LoadModifications) ]
-        | LoadedModifications (state, directoryModificationGroups) ->
-            let isLocked =
-                match state with
-                | Drafting -> false
-                | Applying
-                | Applied -> true
+        | LoadedModifications directoryModificationGroups ->
             Section.section [] [
-                bulkOperations isLocked
+                bulkOperations
                 yield!
                     directoryModificationGroups
-                    |> List.map (directoryModificationGroupView isLocked)
+                    |> List.map directoryModificationGroupView
                     |> List.intersperse (Divider.divider [])
-            ]
-
-    let buttons =
-        match model with
-        | NotLoadedModifications
-        | LoadingModifications
-        | FailedToLoadModifications -> None
-        | LoadedModifications (state, _) ->
-            Section.section [] [
-                Field.div [ Field.IsGrouped ] [
-                    Control.div [] [
-                        Button.button
-                            [
-                                let isLocked =
-                                    match state with
-                                    | Applying -> true
-                                    | Drafting
-                                    | Applied -> false
-                                Button.Disabled isLocked
-                                Button.OnClick (fun e -> dispatch LoadModifications)
-                            ]
-                            [
-                                Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
-                                span [] [ str "Reload AD modifications" ]
-                            ]
-                    ]
-                    Control.div [] [
-                        Button.button
-                            [
-                                Button.Disabled (match state with | Applied -> true | Drafting | Applying -> false)
-                                Button.IsLoading (match state with | Applying -> true | Drafting | Applied -> false)
-                                Button.Color IsSuccess
-                                Button.OnClick (fun e -> dispatch ApplyModifications)
-                            ]
-                            [
-                                Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
-                                span [] [ str "Apply modifications" ]
-                            ]
-                    ]
+                Button.list [] [
+                    Button.button
+                        [
+                            Button.Disabled isLocked
+                            Button.OnClick (fun e -> dispatch LoadModifications)
+                        ]
+                        [
+                            Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
+                            span [] [ str "Reload auto modifications" ]
+                        ]
                 ]
             ]
-            |> Some
+
+    let userTypeSelection (user: User) typeChangedMsg =
+        [
+            Field.div [] [
+                Control.div [] [
+                    let radioButtonName = System.Guid.NewGuid().ToString()
+                    yield!
+                        [
+                            "Teacher", Teacher
+                            "Student", Student (GroupName "")
+                        ]
+                        |> List.map (fun (title, data) ->
+                            let isSelected =
+                                match user.Type, data with
+                                | Teacher, Teacher -> true
+                                | Teacher, _ -> false
+                                | Student _, Student _ -> true
+                                | Student _, _ -> false
+                            Radio.radio [] [
+                                Radio.input [
+                                    Radio.Input.Name radioButtonName
+                                    Radio.Input.Props [
+                                        Checked isSelected
+                                        OnChange (fun _ -> dispatch (typeChangedMsg data))
+                                    ]
+                                ]
+                                str title
+                            ]
+                        )
+                ]
+            ]
+            match user.Type with
+            | Teacher -> ()
+            | Student (GroupName className) ->
+                Field.div [] [
+                    Control.div [] [
+                        Input.text [
+                            Input.Placeholder "Class name"
+                            Input.Value className
+                            Input.OnChange (fun ev -> dispatch (typeChangedMsg (Student (GroupName ev.Value))))
+                        ]
+                    ]
+                ]
+        ]
+
+    let manualModificationForm =
+        Container.container [] [
+            Field.div [] [
+                Control.div [] [
+                    yield!
+                        [
+                            "Create user", CreateUser ({ Name = UserName ""; SokratesId = None; FirstName = ""; LastName = ""; Type = Teacher }, "")
+                            "Delete user", DeleteUser { Name = UserName ""; SokratesId = None; FirstName = ""; LastName = ""; Type = Teacher }
+                        ]
+                        |> List.map (fun (title, data) ->
+                            let isSelected =
+                                match model.ManualModificationDraft.Modification, data with
+                                | CreateUser _, CreateUser _ -> true
+                                | CreateUser _, _ -> false
+                                | UpdateUser _, _ -> false
+                                | DeleteUser _, DeleteUser _ -> true
+                                | DeleteUser _, _ -> false
+                                | CreateGroup _, _ -> false
+                                | UpdateGroup _, _ -> false
+                                | DeleteGroup _, _ -> false
+                            Radio.radio [] [
+                                Radio.input [
+                                    Radio.Input.Name "manual-modification-type"
+                                    Radio.Input.Props [
+                                        Checked isSelected
+                                        OnChange (fun _ -> dispatch (SetManualModification data))
+                                    ]
+                                ]
+                                str title
+                            ]
+                        )
+                ]
+            ]
+            match model.ManualModificationDraft.Modification with
+            | CreateUser (user, password) ->
+                yield! userTypeSelection user (fun userType -> SetManualModification (CreateUser ({ user with Type = userType }, password)))
+                Field.div [] [
+                    Control.div [] [
+                        Input.text [
+                            Input.Placeholder "User name"
+                            Input.Value (let (UserName userName) = user.Name in userName)
+                            Input.OnChange (fun ev -> dispatch (SetManualModification (CreateUser ({ user with Name = UserName ev.Value }, password))))
+                        ]
+                    ]
+                ]
+                Field.div [] [
+                    Control.div [] [
+                        Input.text [
+                            Input.Placeholder "First name"
+                            Input.Value user.FirstName
+                            Input.OnChange (fun ev -> dispatch (SetManualModification (CreateUser ({ user with FirstName = ev.Value }, password))))
+                        ]
+                    ]
+                ]
+                Field.div [] [
+                    Control.div [] [
+                        Input.text [
+                            Input.Placeholder "Last name"
+                            Input.Value user.LastName
+                            Input.OnChange (fun ev -> dispatch (SetManualModification (CreateUser ({ user with LastName = ev.Value }, password))))
+                        ]
+                    ]
+                ]
+                Field.div [] [
+                    Control.div [] [
+                        Input.text [
+                            Input.Placeholder "Password"
+                            Input.Value password
+                            Input.OnChange (fun ev -> dispatch (SetManualModification (CreateUser (user, ev.Value))))
+                        ]
+                    ]
+                    Help.help [ Help.Color IsInfo ] [
+                        str "For automatic modifications this defaults to the user's birthday in the format "
+                        b [] [ str "dd.mm.yyyy" ]
+                        str (sprintf ", e.g. 17.03.%d" (System.DateTime.Today.Year - 30))
+                    ]
+                ]
+            | DeleteUser user ->
+                yield! userTypeSelection user (fun userType -> SetManualModification (DeleteUser { user with Type = userType }))
+                Field.div [] [
+                    Control.div [] [
+                        Input.text [
+                            Input.Placeholder "User name"
+                            Input.Value (let (UserName userName) = user.Name in userName)
+                            Input.OnChange (fun ev -> dispatch (SetManualModification (DeleteUser { user with Name = UserName ev.Value })))
+                        ]
+                    ]
+                ]
+            | UpdateUser _
+            | CreateGroup _
+            | UpdateGroup _
+            | DeleteGroup _ -> div [] [ str "Not implemented" ]
+
+            Button.button
+                [
+                    Button.Disabled (isLocked || model.ManualModificationDraft.ValidationErrors.Length > 0)
+                    Button.Color IsSuccess
+                    Button.Props [
+                        Title (model.ManualModificationDraft.ValidationErrors |> String.concat "\n")
+                    ]
+                    Button.OnClick (fun _ -> dispatch AddManualModification)
+                ]
+                [
+                    Icon.icon [] [ Fa.i [ Fa.Solid.Plus ] [] ]
+                    span [] [ str "Add modification" ]
+                ]
+        ]
+
+    let manualModifications =
+        Section.section [] [
+            Panel.panel [] [
+                directoryModificationGroupHeading model.ManualModifications
+                yield! List.map (directoryModificationView model.ManualModifications) model.ManualModifications.Modifications
+                Panel.block [] [
+                    manualModificationForm
+                ]
+            ]
+        ]
 
     Container.container [] [
-        modifications
-        yield! Option.toList buttons
+        autoModifications
+        manualModifications
+        Button.button
+            [
+                Button.Disabled (match model.ModificationsState with | Applied -> true | Drafting | Applying _ -> false)
+                Button.IsLoading (match model.ModificationsState with | Applying _ -> true | Drafting | Applied -> false)
+                Button.Color IsSuccess
+                Button.OnClick (fun _ -> dispatch ApplyModifications)
+            ]
+            [
+                Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
+                span [] [ str "Apply modifications" ]
+            ]
     ]
 
 let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
@@ -373,11 +597,9 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                         |> AsyncRx.catch (Error >> AsyncRx.single)
                     )
 
-                msgs
-                |> AsyncRx.withLatestFrom (AsyncRx.map snd states)
+                states
                 |> AsyncRx.choose (function
-                    | (ApplyModifications, LoadedModifications (_, directoryModificationGroups)) ->
-                        Some (applyModifications (List.collect DirectoryModificationGroup.toDtoList directoryModificationGroups))
+                    | Some ApplyModifications, { ModificationsState = Applying modifications } -> Some (applyModifications modifications)
                     | _ -> None)
                 |> AsyncRx.switchLatest
                 |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AD modifications failed", e.Message)
