@@ -286,7 +286,7 @@ let getBirthdayCalendarId (graphServiceClient: GraphServiceClient) = async {
 
     return
         calendars
-        |> Seq.tryFind (fun c -> String.equalsCaseInsensitive c.Name "Birthdays")
+        |> Seq.tryFind (fun c -> CIString c.Name = CIString "Birthdays")
         |> Option.map (fun c -> c.Id)
         |> Option.defaultWith (fun () ->
             let calendarNames =

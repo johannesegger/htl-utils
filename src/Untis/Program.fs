@@ -84,15 +84,15 @@ let handleGetTeachingData : HttpHandler =
             teachingData
             |> Seq.choose (fun row ->
                 if not <| String.IsNullOrEmpty row.Class && not <| String.IsNullOrEmpty row.Teacher && not <| String.IsNullOrEmpty row.Subject then
-                    if String.equalsCaseInsensitive row.Subject "ord" then
+                    if CIString row.Subject = CIString "ord" then
                         FormTeacher (SchoolClass row.Class, TeacherShortName row.Teacher)
                         |> Some
                     else
                         NormalTeacher (SchoolClass row.Class, TeacherShortName row.Teacher, getSubject row.Subject)
                         |> Some
-                elif String.equalsCaseInsensitive row.Subject "spr" then
+                elif CIString row.Subject = CIString "spr" then
                     timetable
-                    |> Seq.filter (fun r -> String.equalsCaseInsensitive r.Teacher row.Teacher && String.equalsCaseInsensitive r.Subject "spr")
+                    |> Seq.filter (fun r -> CIString r.Teacher = CIString row.Teacher && CIString r.Subject = CIString "spr")
                     |> Seq.tryExactlyOne
                     |> Option.map (fun timetableEntry ->
                         let room =

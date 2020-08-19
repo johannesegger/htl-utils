@@ -25,7 +25,7 @@ let private calculateAll (aadGroups: AAD.DataTransferTypes.Group list) desiredGr
             desiredGroups
             |> List.choose (fun (groupName, userIds) ->
                 aadGroups
-                |> List.tryFind (fun aadGroup -> String.equalsCaseInsensitive groupName aadGroup.Name)
+                |> List.tryFind (fun aadGroup -> CIString groupName = CIString aadGroup.Name)
                 |> function
                 | Some aadGroup ->
                     match calculateMemberUpdates userIds aadGroup.Members with
@@ -39,7 +39,7 @@ let private calculateAll (aadGroups: AAD.DataTransferTypes.Group list) desiredGr
             aadGroups
             |> List.choose (fun aadGroup ->
                 desiredGroups
-                |> List.tryFind (fun (groupName, userIds) -> String.equalsCaseInsensitive groupName aadGroup.Name)
+                |> List.tryFind (fun (groupName, userIds) -> CIString groupName = CIString aadGroup.Name)
                 |> function
                 | Some _ -> None
                 | None -> AAD.DataTransferTypes.DeleteGroup aadGroup.Id |> Some

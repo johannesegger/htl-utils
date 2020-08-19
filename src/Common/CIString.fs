@@ -13,7 +13,7 @@ type CIString =
                 | :? CIString as other ->
                     let (CIString x) = this
                     let (CIString y) = other
-                    String.Equals(x, y, StringComparison.InvariantCultureIgnoreCase)
+                    StringComparer.InvariantCultureIgnoreCase.Equals(x, y)
                 | _ -> false
 
         override this.GetHashCode() =

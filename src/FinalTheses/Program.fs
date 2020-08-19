@@ -33,7 +33,7 @@ let handleGetMentors : HttpHandler =
     fun (next : HttpFunc) (ctx : HttpContext) -> task {
         let mentors =
             mentors
-            |> Seq.filter (fun row -> String.equalsCaseInsensitive row.Typ "Betreuer" && String.equalsCaseInsensitive row.Status "Aktiv")
+            |> Seq.filter (fun row -> CIString row.Typ = CIString "Betreuer" && CIString row.Status = CIString "Aktiv")
             |> Seq.map (fun row -> { FirstName = row.Vorname.Trim(); LastName = row.Nachname.Trim(); MailAddress = row.Email.Trim() })
             |> Seq.toList
         return! Successful.OK mentors next ctx

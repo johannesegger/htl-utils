@@ -197,7 +197,7 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
         let newHomeDirectory = homePath (UserName newUserName) userType
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
-        if not <| String.equalsCaseInsensitive oldHomeDirectory newHomeDirectory then
+        if CIString oldHomeDirectory <> CIString newHomeDirectory then
             use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName oldHomeDirectory)
             use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName newHomeDirectory)
             Directory.Move(oldHomeDirectory, newHomeDirectory)
@@ -206,7 +206,7 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
         | Teacher ->
             let oldExercisePath = teacherExercisePath userName
             let newExercisePath = teacherExercisePath (UserName newUserName)
-            if not <| String.equalsCaseInsensitive oldExercisePath newExercisePath then
+            if CIString oldExercisePath <> CIString newExercisePath then
                 use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName oldExercisePath)
                 use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName newExercisePath)
                 Directory.Move(oldExercisePath, newExercisePath)
@@ -222,7 +222,7 @@ let private moveStudentToClass userName oldClassName newClassName =
         let newHomeDirectory = homePath userName (Student newClassName)
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
-        if not <| String.equalsCaseInsensitive oldHomeDirectory newHomeDirectory then
+        if CIString oldHomeDirectory <> CIString newHomeDirectory then
             use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName oldHomeDirectory)
             use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName newHomeDirectory)
             Directory.Move(oldHomeDirectory, newHomeDirectory)
