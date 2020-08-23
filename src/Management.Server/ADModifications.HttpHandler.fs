@@ -59,18 +59,20 @@ let private modifications (sokratesTeachers: Sokrates.DataTransferTypes.Teacher 
 
     let createOrUpdateTeacherModifications =
         sokratesTeachers
-        |> List.choose (fun teacher ->
+        |> List.collect (fun teacher ->
             let sokratesId = SokratesId.fromSokratesDto teacher.Id
             let userName = UserName teacher.ShortName
             match tryFindADTeacher sokratesId userName with
             | None ->
                 let user = User.fromSokratesTeacherDto teacher
-                Some (CreateUser (user, teacher.DateOfBirth.ToString("dd.MM.yyyy")))
-            | Some adUser when adUser.FirstName <> teacher.FirstName || adUser.LastName <> teacher.LastName ->
-                let user = { User.fromADDto adUser with SokratesId = Some sokratesId }
-                let newUserName = UserName teacher.ShortName
-                Some (UpdateUser (user, ChangeUserName (newUserName, teacher.FirstName, teacher.LastName)))
-            | Some _ -> None
+                [ CreateUser (user, teacher.DateOfBirth.ToString("dd.MM.yyyy")) ]
+            | Some adUser ->
+                [
+                    if adUser.FirstName <> teacher.FirstName || adUser.LastName <> teacher.LastName then
+                        UpdateUser (User.fromADDto adUser, ChangeUserName (UserName teacher.ShortName, teacher.FirstName, teacher.LastName))
+                    elif adUser.SokratesId |> Option.map SokratesId.fromADDto <> Some (SokratesId.fromSokratesDto teacher.Id) then
+                        UpdateUser (User.fromADDto adUser, SetSokratesId (SokratesId.fromSokratesDto teacher.Id))
+                ]
         )
     let createOrUpdateStudentModifications =
         let adUserNames = adUsers |> List.map (fun adUser -> UserName.fromADDto adUser.Name)
@@ -85,22 +87,39 @@ let private modifications (sokratesTeachers: Sokrates.DataTransferTypes.Teacher 
                 let user = User.fromSokratesStudentDto student userName
                 let modification = CreateUser (user, student.DateOfBirth.ToString("dd.MM.yyyy"))
                 (userName :: newUserNames, modification :: modifications)
-            | Some adUser when adUser.FirstName <> student.FirstName1 || adUser.LastName <> student.LastName ->
-                let rawUserName = userNameFromName student.FirstName1 student.LastName
-                let userName =
-                    let oldRawUserName = userNameFromName adUser.FirstName adUser.LastName
-                    if oldRawUserName = rawUserName then UserName.fromADDto adUser.Name
+            | Some adUser ->
+                let (newUserNames, modifications) =
+                    if adUser.FirstName <> student.FirstName1 || adUser.LastName <> student.LastName then
+                        let rawUserName = userNameFromName student.FirstName1 student.LastName
+                        let userName =
+                            let oldRawUserName = userNameFromName adUser.FirstName adUser.LastName
+                            if oldRawUserName = rawUserName then UserName.fromADDto adUser.Name
+                            else
+                                let existingUserNames = (adUserNames |> List.except [ UserName.fromADDto adUser.Name ]) @ newUserNames
+                                uniqueUserName (UserName rawUserName) existingUserNames
+                        let user = User.fromADDto adUser
+                        let modification = UpdateUser (user, ChangeUserName (userName, student.FirstName1, student.LastName))
+                        (userName :: newUserNames, modification :: modifications)
                     else
-                        let existingUserNames = (adUserNames |> List.except [ UserName.fromADDto adUser.Name ]) @ newUserNames
-                        uniqueUserName (UserName rawUserName) existingUserNames
-                let user = User.fromADDto adUser
-                let modification = UpdateUser (user, ChangeUserName (userName, student.FirstName1, student.LastName))
-                (userName :: newUserNames, modification :: modifications)
-            | Some adUser when adUser.Type <> AD.DataTransferTypes.Student (AD.DataTransferTypes.GroupName student.SchoolClass) ->
-                let user = User.fromADDto adUser
-                let modification = UpdateUser (user, MoveStudentToClass (GroupName student.SchoolClass))
-                (newUserNames, modification :: modifications)
-            | Some _ -> (newUserNames, modifications)
+                        (newUserNames, modifications)
+
+                // Not necessary today, but might become useful if lookup strategy changes
+                let (newUserNames, modifications) =
+                    if adUser.SokratesId |> Option.map SokratesId.fromADDto <> Some (SokratesId.fromSokratesDto student.Id) then
+                        let user = User.fromADDto adUser
+                        let modification = UpdateUser (user, SetSokratesId (SokratesId.fromSokratesDto student.Id))
+                        (newUserNames, modification :: modifications)
+                    else
+                        (newUserNames, modifications)
+
+                let (newUserNames, modifications) =
+                    if UserType.fromADDto adUser.Type <> Student (GroupName student.SchoolClass) then
+                        let user = User.fromADDto adUser
+                        let modification = UpdateUser (user, MoveStudentToClass (GroupName student.SchoolClass))
+                        (newUserNames, modification :: modifications)
+                    else
+                        (newUserNames, modifications)
+                (newUserNames, modifications)
         )
         |> snd
     let deleteUserModifications =
@@ -142,7 +161,8 @@ let private modifications (sokratesTeachers: Sokrates.DataTransferTypes.Teacher 
 let getADModifications : HttpHandler =
     fun next ctx -> task {
         let! sokratesTeachers = Http.get ctx (ServiceUrl.sokrates "teachers") (Decode.list Sokrates.DataTransferTypes.Teacher.decoder) |> Async.StartChild
-        let! sokratesStudents = Http.get ctx (ServiceUrl.sokrates "students") (Decode.list Sokrates.DataTransferTypes.Student.decoder) |> Async.StartChild
+        // let! sokratesStudents = Http.get ctx (ServiceUrl.sokrates "students") (Decode.list Sokrates.DataTransferTypes.Student.decoder) |> Async.StartChild
+        let! sokratesStudents = Http.get ctx (ServiceUrl.sokrates "students/2020-07-10") (Decode.list Sokrates.DataTransferTypes.Student.decoder) |> Async.StartChild
         let! adUsers = Http.get ctx (ServiceUrl.ad "users") (Decode.list AD.DataTransferTypes.User.decoder) |> Async.StartChild
 
         let! sokratesTeachers = sokratesTeachers

@@ -60,6 +60,7 @@ module User =
 module UserUpdate =
     let toADDto = function
         | ChangeUserName (userName, firstName, lastName) -> AD.DataTransferTypes.ChangeUserName (UserName.toADDto userName, firstName, lastName)
+        | SetSokratesId sokratesId -> AD.DataTransferTypes.SetSokratesId (SokratesId.toADDto sokratesId)
         | MoveStudentToClass className -> AD.DataTransferTypes.MoveStudentToClass (GroupName.toADDto className)
 
 module GroupUpdate =

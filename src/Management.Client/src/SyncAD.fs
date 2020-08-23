@@ -38,6 +38,12 @@ module UIDirectoryModification =
             | UpdateUser ({ Type = Student (GroupName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s: %s %s (%s) -> %s %s (%s)" className (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
+            | UpdateUser ({ Type = Teacher } as user, SetSokratesId (SokratesId sokratesId)) ->
+                let (UserName userName) = user.Name
+                sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName userName sokratesId
+            | UpdateUser ({ Type = Student (GroupName className) } as user, SetSokratesId (SokratesId sokratesId)) ->
+                let (UserName userName) = user.Name
+                sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName className sokratesId
             | UpdateUser ({ Type = Student (GroupName oldClassName) } as user, MoveStudentToClass (GroupName newClassName)) ->
                 sprintf "%s %s: %s -> %s" (user.LastName.ToUpper()) user.FirstName oldClassName newClassName
             | UpdateUser ({ Type = Teacher }, MoveStudentToClass _) ->
@@ -85,20 +91,22 @@ module DirectoryModificationGroup =
                 sprintf "02-CreateStudent-%s" className, sprintf "Create student of %s" className, Create
             | UpdateUser ({ Type = Teacher }, ChangeUserName _) ->
                 "03-RenameTeacher", "Rename teacher", Update
+            | UpdateUser (_, SetSokratesId _) ->
+                "04-SetSokratesId", "Set Sokrates ID", Update
             | UpdateUser ({ Type = Student _ }, ChangeUserName _) ->
-                "04-RenameStudent", "Rename student", Update
+                "05-RenameStudent", "Rename student", Update
             | UpdateUser (_, MoveStudentToClass (GroupName className)) ->
-                sprintf "05-MoveStudentToClass-%s" className, sprintf "Move student to %s" className, Update
+                sprintf "06-MoveStudentToClass-%s" className, sprintf "Move student to %s" className, Update
             | DeleteUser ({ Type = Teacher }) ->
-                "06-DeleteTeacher", "Delete teacher", Delete
+                "07-DeleteTeacher", "Delete teacher", Delete
             | DeleteUser ({ Type = Student (GroupName className) }) ->
-                sprintf "07-DeleteStudent-%s" className, sprintf "Delete student of %s" className, Delete
+                sprintf "08-DeleteStudent-%s" className, sprintf "Delete student of %s" className, Delete
             | CreateGroup _ ->
-                "08-CreateGroup", "Create user group", Create
+                "09-CreateGroup", "Create user group", Create
             | UpdateGroup (_, ChangeGroupName _) ->
-                "09-RenameGroup", "Rename user group", Update
+                "10-RenameGroup", "Rename user group", Update
             | DeleteGroup _ ->
-                "10-DeleteGroup", "Delete user group", Delete
+                "11-DeleteGroup", "Delete user group", Delete
         )
         |> List.sortBy (fun ((key, _, _), _) -> key)
         |> List.map (fun ((_, title, kind), modifications) ->
@@ -186,16 +194,16 @@ let private clearManualModificationDraft manualModificationDraft =
 
 let rec update msg model =
     let updateDirectoryModificationGroups isMatch fn =
-        if isMatch model.ManualModifications then
-            { model with ManualModifications = fn model.ManualModifications }
-        else
-            match model.ModificationsState, model.AutoModifications with
-            | Drafting, LoadedModifications directoryModificationGroups ->
-                let directoryModificationGroups =
+        { model with
+            ManualModifications = if isMatch model.ManualModifications then fn model.ManualModifications else model.ManualModifications
+            AutoModifications =
+                match model.ModificationsState, model.AutoModifications with
+                | Drafting, LoadedModifications directoryModificationGroups ->
                     directoryModificationGroups
                     |> List.map (fun p -> if isMatch p then fn p else p)
-                { model with AutoModifications = LoadedModifications directoryModificationGroups }
-            | _ -> model
+                    |> LoadedModifications
+                | _ -> model.AutoModifications
+        }
 
     let updateDirectoryModificationGroup directoryModificationGroup fn =
         updateDirectoryModificationGroups ((=) directoryModificationGroup) fn
@@ -366,6 +374,11 @@ let view model dispatch =
                 Button.list [] [
                     Button.button
                         [
+                            let isLocked =
+                                match model.ModificationsState with
+                                | Applying _ -> true
+                                | Drafting
+                                | Applied -> false
                             Button.Disabled isLocked
                             Button.OnClick (fun e -> dispatch LoadModifications)
                         ]

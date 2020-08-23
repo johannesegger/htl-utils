@@ -213,6 +213,11 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
         | Student _ -> ()
     )
 
+let private setSokratesId userName userType (SokratesId sokratesId) =
+    updateUser userName userType [||] (fun adUser ->
+        adUser.Properties.[sokratesIdAttributeName].Value <- sokratesId
+    )
+
 let private moveStudentToClass userName oldClassName newClassName =
     updateUser userName (Student oldClassName) [| "distinguishedName"; "homeDirectory" |] (fun adUser ->
         let targetOu = userRootEntry (Student newClassName)
@@ -352,6 +357,7 @@ let getUsers () =
 let applyDirectoryModification = function
     | CreateUser (user, password) -> createUser user password
     | UpdateUser (userName, userType, ChangeUserName (newUserName, newFirstName, newLastName)) -> changeUserName userName userType (newUserName, newFirstName, newLastName)
+    | UpdateUser (userName, userType, SetSokratesId sokratesId) -> setSokratesId userName userType sokratesId
     | UpdateUser (userName, Student oldClassName, MoveStudentToClass newClassName) -> moveStudentToClass userName oldClassName newClassName
     | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"
     | DeleteUser (userName, userType) -> deleteUser userName userType

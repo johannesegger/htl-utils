@@ -56,16 +56,19 @@ module User =
         )
 
 type UserUpdate =
-    | ChangeUserName of userName: UserName * firstName: string * lastName: string
+    | ChangeUserName of UserName * firstName: string * lastName: string
+    | SetSokratesId of SokratesId
     | MoveStudentToClass of GroupName
 
 module UserUpdate =
     let encode = function
         | ChangeUserName (userName, firstName, lastName) -> Encode.object [ "changeName", Encode.tuple3 UserName.encode Encode.string Encode.string (userName, firstName, lastName) ]
+        | SetSokratesId sokratesId -> Encode.object [ "setSokratesId", SokratesId.encode sokratesId ]
         | MoveStudentToClass newClassName -> Encode.object [ "moveStudentToClass", GroupName.encode newClassName ]
     let decoder : Decoder<_> =
         Decode.oneOf [
             Decode.field "changeName" (Decode.tuple3 UserName.decoder Decode.string Decode.string) |> Decode.map ChangeUserName
+            Decode.field "setSokratesId" SokratesId.decoder |> Decode.map SetSokratesId
             Decode.field "moveStudentToClass" GroupName.decoder |> Decode.map MoveStudentToClass
         ]
 
