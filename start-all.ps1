@@ -1,9 +1,7 @@
-yarn --cwd .\src\Sokrates install --frozen-lockfile
 $commands =
     @(
         [System.Tuple]::Create("WakeUpComputer", "dapr run --app-id wake-up-computer --app-port 3000 --port 3500 -- dotnet watch -p .\src\WakeUpComputer\WakeUpComputer.fsproj run --urls=http://+:3000")
-        # [System.Tuple]::Create("Sokrates", "dapr run --app-id sokrates --app-port 3001 --port 3501 -- node .\src\Sokrates\server.js 3001") # client certs don't work on node >= 12
-        [System.Tuple]::Create("Sokrates", "dapr run --app-id sokrates --app-port 3001 --port 3501 -- docker run --rm -v `"$PSScriptRoot\src\Sokrates:/usr/src/app`" -v `"$(Split-Path -Parent $env:SOKRATES_CLIENT_CERTIFICATE_PATH):/usr/cert/`" --env `"SOKRATES_CLIENT_CERTIFICATE_PATH=/usr/cert/$(Split-Path -Leaf $env:SOKRATES_CLIENT_CERTIFICATE_PATH)`" --env `"SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE=$env:SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE`" -w /usr/src/app -p 3001:3001 node:10 node server.js 3001")
+        [System.Tuple]::Create("Sokrates", "dapr run --app-id sokrates --app-port 3001 --port 3501 -- dotnet watch -p .\src\Sokrates\Sokrates.fsproj run --urls=http://+:3001")
         [System.Tuple]::Create("Untis", "dapr run --app-id untis --app-port 3002 --port 3502 -- dotnet watch -p .\src\Untis\Untis.fsproj run --urls=http://+:3002")
         [System.Tuple]::Create("FinalTheses", "dapr run --app-id final-theses --app-port 3003 --port 3503 -- dotnet watch -p .\src\FinalTheses\FinalTheses.fsproj run --urls=http://+:3003")
         [System.Tuple]::Create("PhotoLibrary", "dapr run --app-id photo-library --app-port 3004 --port 3504 -- dotnet watch -p .\src\PhotoLibrary\PhotoLibrary.fsproj run --urls=http://+:3004")

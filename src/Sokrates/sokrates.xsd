@@ -1,0 +1,390 @@
+<?xml version='1.0' encoding='UTF-8'?><!-- Published by JAX-WS RI at http://jax-ws.dev.java.net. RI's version is JAX-WS RI 2.2.5-b05 . --><xs:schema xmlns:tns="http://wservices.sokrateslfs.siemens.at/" xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.0" targetNamespace="http://wservices.sokrateslfs.siemens.at/">
+
+<xs:element name="SOAPException" type="tns:SOAPException"/>
+
+<xs:element name="UsernameToken" nillable="true" type="tns:authentication"/>
+
+<xs:element name="contactInfoList" type="tns:contactInfoList"/>
+
+<xs:element name="htlmdDataList" type="tns:htlmdDataList"/>
+
+<xs:element name="listPersonID" type="tns:listPersonID"/>
+
+<xs:element name="personPhotoList" type="tns:personPhotoList"/>
+
+<xs:element name="pupilCardList" type="tns:pupilCardList"/>
+
+<xs:element name="pupilList" type="tns:pupilList"/>
+
+<xs:element name="teacherCardList" type="tns:teacherCardList"/>
+
+<xs:element name="teacherList" type="tns:teacherList"/>
+
+<xs:element name="tsnClassList" type="tns:tsnClassList"/>
+
+<xs:element name="tsnPupilList" type="tns:tsnPupilList"/>
+
+<xs:complexType name="DataexchangeRequest">
+<xs:sequence>
+<xs:element name="loginname" type="xs:string"/>
+<xs:element name="kennwort" type="xs:string"/>
+<xs:element name="applicationtoken" type="xs:string" nillable="true" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="authentication">
+<xs:sequence>
+<xs:element name="username" type="xs:string"/>
+<xs:element name="password" type="xs:string"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangeTeacherCardResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstTeacherCard" type="tns:teacherCardList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="dataExchangeResponse">
+<xs:sequence>
+<xs:element name="dataExchangeFault" type="tns:dataExchangeFault" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="teacherCardList">
+<xs:sequence>
+<xs:element name="teacherCardEntry" type="tns:TeacherCard" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="TeacherCard">
+<xs:sequence>
+<xs:element name="sokratesID" type="xs:string"/>
+<xs:element name="teacherID" type="xs:string"/>
+<xs:element name="firstName" type="xs:string"/>
+<xs:element name="lastName" type="xs:string"/>
+<xs:element name="dateOfBirth" type="xs:dateTime"/>
+<xs:element name="departmentTitle" type="xs:string"/>
+<xs:element name="jobTitle" type="xs:string"/>
+<xs:element name="acadDegree" type="xs:string"/>
+<xs:element name="acadDegreeAfter" type="xs:string"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangeFault">
+<xs:sequence>
+<xs:element name="faultCode" type="xs:int"/>
+<xs:element name="faultDetails" type="tns:faultDetail" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+<xs:element name="faultText" type="xs:string" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="faultDetail">
+<xs:sequence>
+<xs:element name="faultCode" type="xs:int"/>
+<xs:element name="faultText" type="xs:string" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="SOAPException">
+<xs:sequence>
+<xs:element name="message" type="xs:string" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangeTSNPupilResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstTSNPupils" type="tns:tsnPupilList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="tsnPupilList">
+<xs:sequence>
+<xs:element name="tsnPupilEntry" type="tns:TSNPupil" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="TSNPupil">
+<xs:sequence>
+<xs:element name="pupilID" type="xs:long"/>
+<xs:element name="title" type="xs:string"/>
+<xs:element name="lastName" type="xs:string"/>
+<xs:element name="firstName" type="xs:string"/>
+<xs:element name="sex" type="xs:string"/>
+<xs:element name="dateOfBirth" type="xs:date"/>
+<xs:element name="schoolID" type="xs:string"/>
+<xs:element name="schoolYear" type="xs:int"/>
+<xs:element name="classID" type="xs:int"/>
+<xs:element name="className" type="xs:string"/>
+<xs:element name="validFrom" type="xs:date"/>
+<xs:element name="validTill" type="xs:date"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="listPersonID">
+<xs:sequence>
+<xs:element name="personIDEntry" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangeContactInfoResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstContactInfo" type="tns:contactInfoList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="contactInfoList">
+<xs:sequence>
+<xs:element name="contactEntry" type="tns:ContactInfo" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="ContactInfo">
+<xs:sequence>
+<xs:element name="personID" type="xs:string" minOccurs="0"/>
+<xs:element name="email" type="xs:string" minOccurs="0"/>
+<xs:element name="address" type="tns:AddressExtended" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="AddressExtended">
+<xs:sequence>
+<xs:element name="type" type="xs:string" minOccurs="0"/>
+<xs:element name="lastName" type="xs:string" minOccurs="0"/>
+<xs:element name="firstName" type="xs:string" minOccurs="0"/>
+<xs:element name="country" type="xs:string" minOccurs="0"/>
+<xs:element name="plz" type="xs:string" minOccurs="0"/>
+<xs:element name="city" type="xs:string" minOccurs="0"/>
+<xs:element name="street" type="xs:string" minOccurs="0"/>
+<xs:element name="streetNumber" type="xs:string" minOccurs="0"/>
+<xs:element name="phone1" type="xs:string" minOccurs="0"/>
+<xs:element name="phone2" type="xs:string" minOccurs="0"/>
+<xs:element name="from" type="xs:dateTime" minOccurs="0"/>
+<xs:element name="till" type="xs:dateTime" minOccurs="0"/>
+<xs:element name="updateDate" type="xs:dateTime" minOccurs="0"/>
+<xs:element name="email" type="xs:string" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="personPhotoList">
+<xs:sequence>
+<xs:element name="personPhotoEntry" type="tns:PersonPhoto" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="PersonPhoto">
+<xs:sequence>
+<xs:element name="schoolID" type="xs:string"/>
+<xs:element name="personID" type="xs:string"/>
+<xs:element name="personGroupKey" type="xs:string"/>
+<xs:element xmlns:ns1="http://www.w3.org/2005/05/xmlmime" name="photoData" ns1:expectedContentTypes="application/octet-stream" type="xs:base64Binary"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangePupilResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstPupils" type="tns:pupilList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="pupilList">
+<xs:sequence>
+<xs:element name="pupilEntry" type="tns:pupilWithAddresses" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="pupilWithAddresses">
+<xs:sequence>
+<xs:element name="addressHome" type="tns:Address" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+<xs:element name="addressPayment" type="tns:Address" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+<xs:element name="pupil" type="tns:Pupil" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="Address">
+<xs:sequence>
+<xs:element name="country" type="xs:string" minOccurs="0"/>
+<xs:element name="plz" type="xs:string" minOccurs="0"/>
+<xs:element name="city" type="xs:string" minOccurs="0"/>
+<xs:element name="street" type="xs:string" minOccurs="0"/>
+<xs:element name="streetNumber" type="xs:string" minOccurs="0"/>
+<xs:element name="phone1" type="xs:string" minOccurs="0"/>
+<xs:element name="phone2" type="xs:string" minOccurs="0"/>
+<xs:element name="from" type="xs:dateTime" minOccurs="0"/>
+<xs:element name="till" type="xs:dateTime" minOccurs="0"/>
+<xs:element name="updateDate" type="xs:dateTime" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="Pupil">
+<xs:sequence>
+<xs:element name="personID" type="xs:string"/>
+<xs:element name="sokratesID" type="xs:string"/>
+<xs:element name="schoolID" type="xs:string"/>
+<xs:element name="nationality" type="xs:string"/>
+<xs:element name="title" type="xs:string"/>
+<xs:element name="lastName" type="xs:string"/>
+<xs:element name="firstName1" type="xs:string"/>
+<xs:element name="firstName2" type="xs:string"/>
+<xs:element name="dateOfBirth" type="xs:date"/>
+<xs:element name="schoolClass" type="xs:string"/>
+<xs:element name="chipID" type="xs:string"/>
+<xs:element name="bankCode" type="xs:string"/>
+<xs:element name="accountNumber" type="xs:string"/>
+<xs:element name="IBAN" type="xs:string"/>
+<xs:element name="BIC" type="xs:string"/>
+<xs:element name="bankInstitute" type="xs:string"/>
+<xs:element name="lastChangedAt" type="xs:date"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangePupilCardResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstPupilCard" type="tns:pupilCardList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="pupilCardList">
+<xs:sequence>
+<xs:element name="pupilCardEntry" type="tns:PupilCard" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="PupilCard">
+<xs:sequence>
+<xs:element name="sokratesID" type="xs:string"/>
+<xs:element name="firstName" type="xs:string"/>
+<xs:element name="lastName" type="xs:string"/>
+<xs:element name="dateOfBirth" type="xs:dateTime"/>
+<xs:element name="acadDegree" type="xs:string"/>
+<xs:element name="acadDegreeAfter" type="xs:string"/>
+<xs:element name="className" type="xs:string"/>
+<xs:element name="postalCode" type="xs:string"/>
+<xs:element name="city" type="xs:string"/>
+<xs:element name="catalogNumber" type="xs:string"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangeTeacherResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstTeacher" type="tns:teacherList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="teacherList">
+<xs:sequence>
+<xs:element name="teacherEntry" type="tns:teacherWithAddresses" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="teacherWithAddresses">
+<xs:sequence>
+<xs:element name="addressHome" type="tns:Address" nillable="true" minOccurs="0" maxOccurs="unbounded"/>
+<xs:element name="teacher" type="tns:Teacher" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="Teacher">
+<xs:sequence>
+<xs:element name="personID" type="xs:string"/>
+<xs:element name="schoolID" type="xs:string"/>
+<xs:element name="nationality" type="xs:string"/>
+<xs:element name="title" type="xs:string"/>
+<xs:element name="lastName" type="xs:string"/>
+<xs:element name="firstName" type="xs:string"/>
+<xs:element name="token" type="xs:string"/>
+<xs:element name="dateOfBirth" type="xs:date"/>
+<xs:element name="degree" type="xs:string"/>
+<xs:element name="degree2" type="xs:string"/>
+<xs:element name="sapNumber" type="xs:string"/>
+<xs:element name="consultationText" type="xs:string"/>
+<xs:element name="consultationComment" type="xs:string"/>
+<xs:element name="bankCode" type="xs:string"/>
+<xs:element name="accountNumber" type="xs:string"/>
+<xs:element name="IBAN" type="xs:string"/>
+<xs:element name="BIC" type="xs:string"/>
+<xs:element name="bankInstitute" type="xs:string"/>
+<xs:element name="lastChangedAt" type="xs:date" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="dataExchangeTSNClassResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstTSNClasses" type="tns:tsnClassList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="tsnClassList">
+<xs:sequence>
+<xs:element name="tsnClassEntry" type="tns:TSNClass" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="TSNClass">
+<xs:sequence>
+<xs:element name="schoolID" type="xs:string"/>
+<xs:element name="schoolYear" type="xs:int"/>
+<xs:element name="classID" type="xs:int"/>
+<xs:element name="className" type="xs:string"/>
+<xs:element name="classAlias" type="xs:string"/>
+<xs:element name="eduLevel" type="xs:int"/>
+<xs:element name="validFrom" type="xs:date"/>
+<xs:element name="validTill" type="xs:date"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="htlmdDataResponse">
+<xs:complexContent>
+<xs:extension base="tns:dataExchangeResponse">
+<xs:sequence>
+<xs:element name="lstHTLMDData" type="tns:htlmdDataList" minOccurs="0"/>
+</xs:sequence>
+</xs:extension>
+</xs:complexContent>
+</xs:complexType>
+
+<xs:complexType name="htlmdDataList">
+<xs:sequence>
+<xs:element name="htlmdDataEntry" type="tns:HTLMDData" minOccurs="0" maxOccurs="unbounded"/>
+</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="HTLMDData">
+<xs:sequence>
+<xs:element name="schoolID" type="xs:string" minOccurs="0"/>
+<xs:element name="schoolYear" type="xs:string" minOccurs="0"/>
+<xs:element name="personID" type="xs:string" minOccurs="0"/>
+<xs:element name="department" type="xs:string" minOccurs="0"/>
+<xs:element name="department_alias" type="xs:string" minOccurs="0"/>
+<xs:element name="externalID" type="xs:string" minOccurs="0"/>
+</xs:sequence>
+</xs:complexType>
+</xs:schema>
