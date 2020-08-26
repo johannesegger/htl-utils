@@ -47,26 +47,27 @@ let private userAgentApplication =
 [<Emit("$0.name === \"InteractionRequiredAuthError\"")>]
 let private isInteractionRequiredAuthError (_ : exn) : bool = jsNative
 
-let private getToken () = async {
-    let authParams = createEmpty<Msal.AuthenticationParameters>
-    authParams.scopes <- Some !![| appId |]
-    let! authResponse = userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise
-    return authResponse.accessToken
-}
-
 let private authenticateUser = async {
-    let! username = async {
-        match userAgentApplication.getAccount() |> Option.ofObj with
-        | Some account ->
-            return account.name
-        | None ->
+    match userAgentApplication.getAccount() |> Option.ofObj with
+    | Some account ->
+        Browser.Dom.console.log("[Auth] Account found. Acquiring token.")
+        let! authResponse = async {
             let authParams = createEmpty<Msal.AuthenticationParameters>
-            // authParams.scopes <- Some (ResizeArray [| "contacts.readwrite" |])
-            let! authResponse = userAgentApplication.loginPopup authParams |> Async.AwaitPromise
-            return authResponse.account.name
-    }
-    let! accessToken = getToken ()
-    return { Name = username; AccessToken = accessToken }
+            authParams.scopes <- Some !![| appId |]
+            try
+                return! userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise
+            with e when isInteractionRequiredAuthError e ->
+                Browser.Dom.console.log("[Auth] Acquiring token silently failed. Showing popup.")
+                return! userAgentApplication.acquireTokenPopup authParams |> Async.AwaitPromise
+        }
+        Browser.Dom.console.log("[Auth] Auth response", authResponse)
+        return { Name = account.name; AccessToken = authResponse.idToken.rawIdToken }
+    | None ->
+        Browser.Dom.console.log("[Auth] No account found. Logging in.")
+        let authParams = createEmpty<Msal.AuthenticationParameters>
+        let! authResponse = userAgentApplication.loginPopup authParams |> Async.AwaitPromise
+        Browser.Dom.console.log("[Auth] Auth response", authResponse)
+        return { Name = authResponse.account.name; AccessToken = authResponse.accessToken }
 }
 
 let tryGetLoggedInUser model =
