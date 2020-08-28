@@ -324,12 +324,7 @@ let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
 [<EntryPoint>]
 let main args =
     Host.CreateDefaultBuilder(args)
-        .ConfigureWebHostDefaults(fun webHostBuilder ->
-            webHostBuilder
-                .Configure(configureApp)
-                .UseWebRoot("../Teaching.Client")
-            |> ignore
-        )
+        .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
         .Build()

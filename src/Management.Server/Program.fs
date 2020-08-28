@@ -48,7 +48,10 @@ let configureApp (app : IApplicationBuilder) =
     match env.IsDevelopment() with
     | true -> app.UseDeveloperExceptionPage() |> ignore
     | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
-    app.UseGiraffe(webApp)
+    app
+        .UseDefaultFiles()
+        .UseStaticFiles()
+        .UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
     services.AddHttpClient() |> ignore
