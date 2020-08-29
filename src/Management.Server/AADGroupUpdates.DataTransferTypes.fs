@@ -1,6 +1,5 @@
 namespace AADGroupUpdates.DataTransferTypes
 
-open System
 #if FABLE_COMPILER
 open Thoth.Json
 #else

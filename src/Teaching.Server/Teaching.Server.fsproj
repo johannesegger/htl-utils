@@ -2,16 +2,12 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\AAD\DataTransferTypes.fs" />
-    <Compile Include="..\FileStorage\DataTransferTypes.fs" />
-    <Compile Include="..\PhotoLibrary\DataTransferTypes.fs" />
-    <Compile Include="..\Sokrates\DataTransferTypes.fs" />
     <Compile Include="Shared.fs" />
-    <Compile Include="FileStorageTypeMapping.fs" />
+    <Compile Include="FileStorage.Mapping.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -23,6 +19,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.fsproj" />
     <ProjectReference Include="..\Common.Server\Common.Server.fsproj" />
+    <ProjectReference Include="..\AAD\AAD.fsproj" />
+    <ProjectReference Include="..\FileStorage\FileStorage.fsproj" />
+    <ProjectReference Include="..\PhotoLibrary\PhotoLibrary.fsproj" />
+    <ProjectReference Include="..\Sokrates\Sokrates.fsproj" />
+    <ProjectReference Include="..\WakeUpComputer\WakeUpComputer.fsproj" />
   </ItemGroup>
 
 </Project>

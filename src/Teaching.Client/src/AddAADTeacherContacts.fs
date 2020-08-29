@@ -62,7 +62,7 @@ let stream getAuthRequestHeader (states: IAsyncObservable<Msg option * Model>) (
         states
         |> AsyncRx.choose (fst >> function | Some Import -> Some import | _ -> None)
         |> AsyncRx.switchLatest
-        |> AsyncRx.showSimpleSuccessToast (fun () -> "Add teacher contacts", sprintf "Successfully started adding teacher contacts. This might take some minutes to finish.")
+        |> AsyncRx.showSimpleSuccessToast (fun () -> "Add teacher contacts", sprintf "Successfully added teacher contacts.")
         |> AsyncRx.showSimpleErrorToast (fun e -> "Adding teacher contacts failed", e.Message)
         |> AsyncRx.map ImportResponse
     ]

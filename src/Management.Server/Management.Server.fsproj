@@ -6,11 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\AAD\DataTransferTypes.fs" />
-    <Compile Include="..\AD\DataTransferTypes.fs" />
-    <Compile Include="..\FinalTheses\DataTransferTypes.fs" />
-    <Compile Include="..\Sokrates\DataTransferTypes.fs" />
-    <Compile Include="..\Untis\DataTransferTypes.fs" />
     <Compile Include="AADGroupUpdates.DataTransferTypes.fs" />
     <Compile Include="AADGroupUpdates.Mapping.fs" />
     <Compile Include="AADGroupUpdates.HttpHandler.fs" />
@@ -31,6 +26,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.fsproj" />
     <ProjectReference Include="..\Common.Server\Common.Server.fsproj" />
+    <ProjectReference Include="..\AAD\AAD.fsproj" />
+    <ProjectReference Include="..\AD\AD.fsproj" />
+    <ProjectReference Include="..\FinalTheses\FinalTheses.fsproj" />
+    <ProjectReference Include="..\Sokrates\Sokrates.fsproj" />
+    <ProjectReference Include="..\Untis\Untis.fsproj" />
   </ItemGroup>
 
 </Project>

@@ -1,19 +1,19 @@
-module Sokrates.HttpHandler
+module Sokrates.Core
 
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open FSharp.Data
-open Giraffe
-open Microsoft.AspNetCore.Http
-open Sokrates.DataTransferTypes
+open Sokrates.Domain
 open System
 open System.Net.Http
+open System.Security.Cryptography.X509Certificates
 open System.Text
 open System.Text.RegularExpressions
 open System.Xml
 open System.Xml.Linq
 open System.Xml.XPath
 
-type SokratesApi = XmlProvider<Schema = "sokrates.xsd">
+[<Literal>]
+let private SchemaFile = __SOURCE_DIRECTORY__ + "\\sokrates.xsd"
+type private SokratesApi = XmlProvider<Schema = SchemaFile>
 
 let private parsePhoneNumber (text: string) =
     let text = Regex.Replace(text, @"[\/\s]", "")
@@ -53,9 +53,16 @@ let private getRequestContent messageName parameters =
     </soap:Body>
 </soap:Envelope>""" userName password messageName schoolId xmlParameters messageName
 
-let private fetch (ctx: HttpContext) requestContent = async {
-    let httpClientFactory = ctx.GetService<IHttpClientFactory>()
-    use httpClient = httpClientFactory.CreateClient("SokratesApiClient")
+let private createHttpClient () =
+    let clientCertFile = Environment.getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PATH"
+    let clientCertPassphrase = Environment.getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE"
+    let httpClientHandler = new HttpClientHandler()
+    let cert = new X509Certificate2(clientCertFile, clientCertPassphrase)
+    httpClientHandler.ClientCertificates.Add(cert) |> ignore
+    new HttpClient(httpClientHandler)
+
+let private fetch requestContent = async {
+    use httpClient = createHttpClient ()
     use! response =
         httpClient.PostAsync(
             "https://www.sokrates-bund.at/BRZPRODWS/ws/dataexchange",
@@ -70,7 +77,6 @@ let private fetch (ctx: HttpContext) requestContent = async {
     namespaceManager.AddNamespace("S", "http://schemas.xmlsoap.org/soap/envelope/")
     namespaceManager.AddNamespace("ns2", "http://wservices.sokrateslfs.siemens.at/")
     let dataExchangeFault = doc.XPathSelectElement("/S:Envelope/S:Body/ns2:*/return/dataExchangeFault", namespaceManager)
-    printfn "DataExchangeFault: %A" dataExchangeFault
     let faultCode = dataExchangeFault.Element(XName.Get "faultCode").Value
     let faultText = dataExchangeFault.Element(XName.Get "faultText").Value
     if faultCode <> "0" then
@@ -124,12 +130,10 @@ let private parseTeachers (xmlElement: XElement) =
     )
     |> Seq.toList
 
-let handleGetTeachers : HttpHandler =
-    fun next ctx -> task {
-        let! xmlElement = fetch ctx (getRequestContent "getTeacher" [])
-        let teachers = parseTeachers xmlElement
-        return! Successful.OK teachers next ctx
-    }
+let getTeachers () = async {
+    let! xmlElement = fetch (getRequestContent "getTeacher" [])
+    return parseTeachers xmlElement
+}
 
 let private parseClassName text =
     Regex.Replace(text, "_(WS|SS)$", "")
@@ -141,18 +145,16 @@ let private parseClasses (xmlElement: XElement) =
     |> Seq.distinct
     |> Seq.toList
 
-let handleGetClasses schoolYear : HttpHandler =
-    fun next ctx -> task {
-        let schoolYear =
-            schoolYear
-            |> Option.defaultValue (
-                if DateTime.Now.Month < 8 then DateTime.Now.Year - 1
-                else DateTime.Now.Year
-            )
-        let! xmlElement = fetch ctx (getRequestContent "getTSNClasses" [ "schoolYear", string schoolYear ])
-        let classes = parseClasses xmlElement
-        return! Successful.OK classes next ctx
-    }
+let getClasses schoolYear = async {
+    let schoolYear =
+        schoolYear
+        |> Option.defaultValue (
+            if DateTime.Now.Month < 8 then DateTime.Now.Year - 1
+            else DateTime.Now.Year
+        )
+    let! xmlElement = fetch (getRequestContent "getTSNClasses" [ "schoolYear", string schoolYear ])
+    return parseClasses xmlElement
+}
 
 let private parseStudents (xmlElement: XElement) =
     SokratesApi.PupilList(xmlElement).PupilEntries
@@ -169,16 +171,11 @@ let private parseStudents (xmlElement: XElement) =
     )
     |> Seq.toList
 
-let handleGetStudents className date : HttpHandler =
-    fun next ctx -> task {
-        let date = date |> Option.defaultValue DateTime.Today
-        let! xmlElement = fetch ctx (getRequestContent "getPupils" [ "dateOfInterest", date.ToString("s") ])
-        let students = parseStudents xmlElement
-        let filteredStudents =
-            match className with
-            | Some className ->
-                students
-                |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
-            | None -> students
-        return! Successful.OK filteredStudents next ctx
-    }
+let getStudents className date = async {
+    let date = date |> Option.defaultValue DateTime.Today
+    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", date.ToString("s") ])
+    let students = parseStudents xmlElement
+    match className with
+    | Some className -> return students |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
+    | None -> return students
+}

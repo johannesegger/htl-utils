@@ -1,17 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="ServiceUrl.fs" />
     <Compile Include="Http.fs" />
-    <Compile Include="Auth.fs" />
+    <Compile Include="HttpHandler.fs" />
+    <Compile Include="Server.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Giraffe" Version="4.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="3.0.0" />
     <PackageReference Include="Thoth.Json.Giraffe" Version="2.2.0" />
   </ItemGroup>

@@ -1,6 +1,6 @@
-module AD.BusinessLogic
+module AD.Core
 
-open AD.DataTransferTypes
+open AD.Domain
 open System.DirectoryServices
 open System.IO
 open System.Security.AccessControl
@@ -364,3 +364,5 @@ let applyDirectoryModification = function
     | CreateGroup (userType, members) -> createGroup userType members
     | UpdateGroup (userType, ChangeGroupName newGroupName) ->  changeGroupName userType newGroupName
     | DeleteGroup userType -> deleteGroup userType
+
+let applyDirectoryModifications = List.iter applyDirectoryModification

@@ -2,6 +2,7 @@ namespace global
 
 open System
 
+#if !FABLE_COMPILER
 [<CustomEquality; CustomComparison>]
 type CIString =
     CIString of string
@@ -28,3 +29,4 @@ type CIString =
                     let (CIString y) = other
                     StringComparer.InvariantCultureIgnoreCase.Compare(x, y)
                 | _ -> invalidArg "other" "Cannot compare objects of different types"
+#endif

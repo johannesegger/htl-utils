@@ -3,8 +3,6 @@
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open Microsoft.AspNetCore.Http
-open System
-open System.IO
 open System.Net
 open System.Net.Http
 open System.Text

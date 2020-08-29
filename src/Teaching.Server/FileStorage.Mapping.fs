@@ -1,6 +1,6 @@
-module FileStorageTypeMapping
+module FileStorage.Mapping
 
-open FileStorage.DataTransferTypes
+open FileStorage.Domain
 
 module Bytes =
     let toDto (Bytes v) = Shared.InspectDirectory.Bytes v
