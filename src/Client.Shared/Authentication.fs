@@ -50,23 +50,18 @@ let private isInteractionRequiredAuthError (_ : exn) : bool = jsNative
 let private authenticateUser = async {
     match userAgentApplication.getAccount() |> Option.ofObj with
     | Some account ->
-        Browser.Dom.console.log("[Auth] Account found. Acquiring token.")
         let! authResponse = async {
             let authParams = createEmpty<Msal.AuthenticationParameters>
             authParams.scopes <- Some !![| appId |]
             try
                 return! userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise
             with e when isInteractionRequiredAuthError e ->
-                Browser.Dom.console.log("[Auth] Acquiring token silently failed. Showing popup.")
                 return! userAgentApplication.acquireTokenPopup authParams |> Async.AwaitPromise
         }
-        Browser.Dom.console.log("[Auth] Auth response", authResponse)
         return { Name = account.name; AccessToken = authResponse.idToken.rawIdToken }
     | None ->
-        Browser.Dom.console.log("[Auth] No account found. Logging in.")
         let authParams = createEmpty<Msal.AuthenticationParameters>
         let! authResponse = userAgentApplication.loginPopup authParams |> Async.AwaitPromise
-        Browser.Dom.console.log("[Auth] Auth response", authResponse)
         return { Name = authResponse.account.name; AccessToken = authResponse.idToken.rawIdToken }
 }
 
