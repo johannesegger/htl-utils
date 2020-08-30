@@ -67,7 +67,7 @@ let private authenticateUser = async {
         let authParams = createEmpty<Msal.AuthenticationParameters>
         let! authResponse = userAgentApplication.loginPopup authParams |> Async.AwaitPromise
         Browser.Dom.console.log("[Auth] Auth response", authResponse)
-        return { Name = authResponse.account.name; AccessToken = authResponse.accessToken }
+        return { Name = authResponse.account.name; AccessToken = authResponse.idToken.rawIdToken }
 }
 
 let tryGetLoggedInUser model =
