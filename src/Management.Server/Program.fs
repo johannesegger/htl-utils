@@ -90,9 +90,10 @@ let configureApp (app : IApplicationBuilder) =
     | true -> app.UseDeveloperExceptionPage() |> ignore
     | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
     app
-        .UseAuthentication()
+        .UseHttpsRedirection()
         .UseDefaultFiles()
         .UseStaticFiles()
+        .UseAuthentication()
         .UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
