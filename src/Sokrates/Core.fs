@@ -57,7 +57,7 @@ let private createHttpClient () =
     let clientCertFile = Environment.getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PATH"
     let clientCertPassphrase = Environment.getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE"
     let httpClientHandler = new HttpClientHandler()
-    let cert = new X509Certificate2(clientCertFile, clientCertPassphrase)
+    let cert = new X509Certificate2(clientCertFile, clientCertPassphrase, X509KeyStorageFlags.EphemeralKeySet) // https://stackoverflow.com/a/52840537/1293659
     httpClientHandler.ClientCertificates.Add(cert) |> ignore
     new HttpClient(httpClientHandler)
 
