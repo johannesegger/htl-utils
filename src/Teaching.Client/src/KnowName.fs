@@ -432,7 +432,7 @@ let view model dispatch =
                                                                     Dropdown.Item.div
                                                                         [
                                                                             Dropdown.Item.Props [
-                                                                                Title (sprintf "Kein Foto von \"%s\" gefunden" person.DisplayName)
+                                                                                Title (sprintf "\"%s\" doesn't have a photo" person.DisplayName)
                                                                                 Style [ Color "red" ]
                                                                             ]
                                                                         ]
@@ -444,9 +444,9 @@ let view model dispatch =
                         ]
                 | { RemainingPersons = [] } ->
                     Notification.notification [ Notification.Color IsDanger ]
-                        [ str "Für keine Person der ausgewählten Gruppen ist ein Foto vorhanden" ]
+                        [ str "No person of the selected groups has a photo." ]
             ]
-        | GroupsLoadError -> Views.errorWithRetryButton "Fehler beim Laden der Daten." (fun () -> dispatch LoadGroups)
+        | GroupsLoadError -> Views.errorWithRetryButton "Error while loading data." (fun () -> dispatch LoadGroups)
     ]
 
 let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
