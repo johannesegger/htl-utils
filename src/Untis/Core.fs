@@ -7,7 +7,7 @@ open Untis.Domain
 
 [<Literal>]
 let private TimetablePath = __SOURCE_DIRECTORY__ + "/data/GPU001.TXT"
-type private Timetable = CsvProvider<TimetablePath, Schema=",Class,Teacher,Subject,Room,Day,Period", Separators="\t">
+type private Timetable = CsvProvider<TimetablePath, Schema=",Class,Teacher,Subject,Room,Day,Period">
 
 let private timetable =
     Environment.getEnvVarOrFail "UNTIS_GPU001_FILE_PATH"
@@ -16,7 +16,7 @@ let private timetable =
 
 [<Literal>]
 let private TeachingDataPath = __SOURCE_DIRECTORY__ + "/data/GPU002.TXT"
-type private TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject", Separators="\t">
+type private TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject">
 
 [<Literal>]
 let private RoomsPath = __SOURCE_DIRECTORY__ + "/data/GPU005.TXT"
