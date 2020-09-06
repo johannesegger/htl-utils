@@ -129,12 +129,19 @@ type ModificationsState =
     | Drafting
     | Applying of DirectoryModification list
     | Applied
+module ModificationsState =
+    let isDrafting = function | Drafting -> true | _ -> false
+    let isApplying = function | Applying _ -> true | _ -> false
+    let isApplied = function | Applied -> true | _ -> false
 
 type LoadableDirectoryModifications =
-    | NotLoadedModifications
     | LoadingModifications
     | LoadedModifications of DirectoryModificationGroup list
     | FailedToLoadModifications
+module LoadableDirectoryModifications =
+    let isLoading = function | LoadingModifications -> true | _ -> false
+    let isLoaded = function | LoadedModifications _ -> true | _ -> false
+    let isFailed = function | FailedToLoadModifications -> true | _ -> false
 
 type ManualModificationDraft = {
     Modification: DirectoryModification
@@ -253,7 +260,7 @@ let rec update msg model =
 let init =
     {
         ModificationsState = Drafting
-        AutoModifications = NotLoadedModifications
+        AutoModifications = LoadingModifications
         ManualModifications = {
             IsEnabled = true
             Title = "Manual modifications"
@@ -273,11 +280,7 @@ let init =
     }
 
 let view model dispatch =
-    let isLocked =
-        match model.ModificationsState with
-        | Drafting -> false
-        | Applying _
-        | Applied -> true
+    let isLocked = ModificationsState.isApplying model.ModificationsState || ModificationsState.isApplied model.ModificationsState
 
     let bulkOperations =
         Button.list [] [
@@ -357,7 +360,6 @@ let view model dispatch =
 
     let autoModifications =
         match model.AutoModifications with
-        | NotLoadedModifications
         | LoadingModifications ->
             Section.section [] [
                 Progress.progress [ Progress.Color IsDanger ] []
@@ -371,22 +373,6 @@ let view model dispatch =
                     directoryModificationGroups
                     |> List.map directoryModificationGroupView
                     |> List.intersperse (Divider.divider [])
-                Button.list [] [
-                    Button.button
-                        [
-                            let isLocked =
-                                match model.ModificationsState with
-                                | Applying _ -> true
-                                | Drafting
-                                | Applied -> false
-                            Button.Disabled isLocked
-                            Button.OnClick (fun e -> dispatch LoadModifications)
-                        ]
-                        [
-                            Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
-                            span [] [ str "Reload auto modifications" ]
-                        ]
-                ]
             ]
 
     let userTypeSelection (user: User) typeChangedMsg =
@@ -555,17 +541,28 @@ let view model dispatch =
     Container.container [] [
         autoModifications
         manualModifications
-        Button.button
-            [
-                Button.Disabled (match model.ModificationsState with | Applied -> true | Drafting | Applying _ -> false)
-                Button.IsLoading (match model.ModificationsState with | Applying _ -> true | Drafting | Applied -> false)
-                Button.Color IsSuccess
-                Button.OnClick (fun _ -> dispatch ApplyModifications)
-            ]
-            [
-                Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
-                span [] [ str "Apply modifications" ]
-            ]
+        Button.list [] [
+            Button.button
+                [
+                    Button.Disabled (ModificationsState.isApplying model.ModificationsState || LoadableDirectoryModifications.isLoading model.AutoModifications)
+                    Button.OnClick (fun e -> dispatch LoadModifications)
+                ]
+                [
+                    Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
+                    span [] [ str "Reload auto modifications" ]
+                ]
+            Button.button
+                [
+                    Button.Disabled (ModificationsState.isApplied model.ModificationsState || LoadableDirectoryModifications.isLoading model.AutoModifications)
+                    Button.IsLoading (ModificationsState.isApplying model.ModificationsState)
+                    Button.Color IsSuccess
+                    Button.OnClick (fun _ -> dispatch ApplyModifications)
+                ]
+                [
+                    Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
+                    span [] [ str "Apply modifications" ]
+                ]
+        ]
     ]
 
 let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
@@ -589,13 +586,12 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                         |> AsyncRx.catch (Error >> AsyncRx.single)
                     )
 
-                states
-                |> AsyncRx.choose (fst >> function | Some LoadModifications -> Some loadUpdates | _ -> None)
+                msgs
+                |> AsyncRx.startWith [ LoadModifications ]
+                |> AsyncRx.choose (function | LoadModifications -> Some loadUpdates | _ -> None)
                 |> AsyncRx.switchLatest
                 |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AD modifications failed", e.Message)
                 |> AsyncRx.map LoadModificationsResponse
-
-                AsyncRx.single LoadModifications
 
                 let applyModifications modifications =
                     AsyncRx.defer (fun () ->
