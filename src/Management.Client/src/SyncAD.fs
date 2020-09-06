@@ -565,7 +565,7 @@ let view model dispatch =
         ]
     ]
 
-let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
+let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
     pageActive
     |> AsyncRx.flatMapLatest (function
         | true ->

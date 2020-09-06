@@ -112,35 +112,32 @@ let stream states msgs =
     }
 
     [
-        (
-            subStates (function AuthenticationMsg msg -> Some msg | _ -> None) (fun m -> m.Authentication),
-            msgs |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None) |> AsyncRx.merge (loginObservable |> AsyncRx.map (fun () -> Authentication.SignIn))
-        )
-        ||> Authentication.stream
+        Authentication.stream
+            (subStates (function AuthenticationMsg msg -> Some msg | _ -> None) (fun m -> m.Authentication))
+            (msgs
+                |> AsyncRx.choose (function UserMsg (AuthenticationMsg msg) -> Some msg | _ -> None)
+                |> AsyncRx.merge (loginObservable |> AsyncRx.map (fun () -> Authentication.SignIn))
+            )
         |> AsyncRx.map AuthenticationMsg
 
-        (
-            (login, pageActivated ((=) SyncAD)),
-            subStates (function SyncADMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAD),
-            msgs |> AsyncRx.choose (function UserMsg (SyncADMsg msg) -> Some msg | _ -> None)
-        )
-        |||> SyncAD.stream
+        SyncAD.stream
+            login
+            (pageActivated ((=) SyncAD))
+            (subStates (function SyncADMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAD))
+            (msgs |> AsyncRx.choose (function UserMsg (SyncADMsg msg) -> Some msg | _ -> None))
         |> AsyncRx.map SyncADMsg
 
-        (
-            (login, pageActivated ((=) SyncAADGroups)),
-            subStates (function SyncAADGroupsMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAADGroups),
-            msgs |> AsyncRx.choose (function UserMsg (SyncAADGroupsMsg msg) -> Some msg | _ -> None)
-        )
-        |||> SyncAADGroups.stream
+        SyncAADGroups.stream
+            login
+            (pageActivated ((=) SyncAADGroups))
+            (subStates (function SyncAADGroupsMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAADGroups))
+            (msgs |> AsyncRx.choose (function UserMsg (SyncAADGroupsMsg msg) -> Some msg | _ -> None))
         |> AsyncRx.map SyncAADGroupsMsg
 
-        (
-            pageActivated ((=) ListConsultationHours),
-            subStates (function ListConsultationHoursMsg msg -> Some msg | _ -> None) (fun m -> m.ListConsultationHours),
-            msgs |> AsyncRx.choose (function UserMsg (ListConsultationHoursMsg msg) -> Some msg | _ -> None)
-        )
-        |||> ListConsultationHours.stream
+        ListConsultationHours.stream
+            (pageActivated ((=) ListConsultationHours))
+            (subStates (function ListConsultationHoursMsg msg -> Some msg | _ -> None) (fun m -> m.ListConsultationHours))
+            (msgs |> AsyncRx.choose (function UserMsg (ListConsultationHoursMsg msg) -> Some msg | _ -> None))
         |> AsyncRx.map ListConsultationHoursMsg
     ]
     |> AsyncRx.mergeSeq
