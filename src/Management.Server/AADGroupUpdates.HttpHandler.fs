@@ -191,7 +191,6 @@ let applyAADIncrementClassGroupUpdates : HttpHandler =
         let modifications =
             data
             |> List.map (ClassGroupModification.toAADGroupModification (flip Map.find aadGroupNameLookupByName))
-        // do! AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications)
-        printfn "Modifications: %A" modifications
+        do! AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications)
         return! Successful.OK () next ctx
     }
