@@ -75,3 +75,10 @@ module DirectoryModification =
         | CreateGroup (userType, members) -> AD.Domain.CreateGroup (UserType.toADDto userType, members |> List.map UserName.toADDto)
         | UpdateGroup (userType, groupUpdate) -> AD.Domain.UpdateGroup (UserType.toADDto userType, GroupUpdate.toADDto groupUpdate)
         | DeleteGroup userType -> AD.Domain.DeleteGroup (UserType.toADDto userType)
+
+module ClassGroupModification =
+    let toDirectoryModification = function
+        | ChangeClassGroupName (oldName, newName) ->
+            UpdateGroup (Student oldName, ChangeGroupName newName)
+        | DeleteClassGroup name ->
+            DeleteGroup (Student name)

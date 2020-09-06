@@ -110,3 +110,34 @@ module DirectoryModification =
             Decode.field "updateGroup" (Decode.tuple2 UserType.decoder GroupUpdate.decoder) |> Decode.map UpdateGroup
             Decode.field "deleteGroup" UserType.decoder |> Decode.map DeleteGroup
         ]
+
+type ClassGroupModification =
+    | ChangeClassGroupName of oldName: GroupName * newName: GroupName
+    | DeleteClassGroup of GroupName
+module ClassGroupModification =
+    let encode = function
+        | ChangeClassGroupName (oldName, newName) -> Encode.object [ "changeClassGroupName", Encode.tuple2 GroupName.encode GroupName.encode (oldName, newName) ]
+        | DeleteClassGroup groupName -> Encode.object [ "deleteClassGroup", GroupName.encode groupName ]
+    let decoder : Decoder<_> =
+        Decode.oneOf [
+            Decode.field "changeClassGroupName" (Decode.tuple2 GroupName.decoder GroupName.decoder) |> Decode.map ChangeClassGroupName
+            Decode.field "deleteClassGroup" GroupName.decoder |> Decode.map DeleteClassGroup
+        ]
+
+type ClassGroupModificationGroup = {
+    Title: string
+    Modifications: ClassGroupModification list
+}
+module ClassGroupModificationGroup =
+    let encode g =
+        Encode.object [
+            "title", Encode.string g.Title
+            "modifications", (List.map ClassGroupModification.encode >> Encode.list) g.Modifications
+        ]
+    let decoder : Decoder<_> =
+        Decode.object (fun get ->
+            {
+                Title = get.Required.Field "title" Decode.string
+                Modifications = get.Required.Field "modifications" (Decode.list ClassGroupModification.decoder)
+            }
+        )

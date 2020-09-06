@@ -4,7 +4,8 @@ open ADModifications.DataTransferTypes
 open ADModifications.Mapping
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
-open Thoth.Json.Net
+open System
+open System.Text.RegularExpressions
 
 let private userNameFromName (firstName: string) (lastName: string) =
     [firstName; lastName]
@@ -176,6 +177,80 @@ let applyADModifications : HttpHandler =
         let! data = ctx.BindJsonAsync<DirectoryModification list>()
         data
         |> List.map DirectoryModification.toADDto
+        |> AD.Core.applyDirectoryModifications
+        return! Successful.OK () next ctx
+    }
+
+let getADIncrementClassGroupUpdates : HttpHandler =
+    fun next ctx -> task {
+        let adClassGroups = AD.Core.getClassGroups ()
+
+        let classLevels =
+            Environment.getEnvVarOrFail "MGMT_CLASS_LEVELS"
+            |> String.split ";"
+            |> Seq.mapi (fun index row ->
+                let parts = row.Split ","
+                let title =
+                    Array.tryItem 0 parts
+                    |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of class levels setting: Can't get title" row)
+                let pattern =
+                    Array.tryItem 1 parts
+                    |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of class levels setting: Can't get pattern" row)
+                let maxLevel =
+                    Array.tryItem 2 parts
+                    |> Option.bind (tryDo Int32.TryParse)
+                    |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of class levels setting: Can't parse max level" row)
+                (index, title, pattern, maxLevel)
+            )
+            |> Seq.toList
+
+        let modifications =
+            adClassGroups
+            |> Seq.choose (GroupName.fromADDto >> fun (GroupName groupName) ->
+                classLevels
+                |> List.choose (fun (index, title, pattern, maxLevel) ->
+                    let m =
+                        try
+                            Regex.Match(groupName, pattern)
+                        with e -> failwithf "Error while matching group name \"%s\" with pattern \"%s\": %s" groupName pattern e.Message
+                    if m.Success then
+                        let classLevel =
+                            m.Value
+                            |> tryDo Int32.TryParse
+                            |> Option.defaultWith (fun () -> failwithf "Pattern \"%s\" doesn't match class level of \"%s\" as number" pattern groupName)
+                        if classLevel < maxLevel then
+                            let newName = Regex.Replace(groupName, pattern, string (classLevel + 1))
+                            Some ((index, title), classLevel, ChangeClassGroupName (GroupName groupName, GroupName newName))
+                        else
+                            Some ((index, title), classLevel, DeleteClassGroup (GroupName groupName))
+                    else None
+                )
+                |> function
+                | [] -> None
+                | [ x ] -> Some x
+                | _ -> failwithf "Class \"%s\" was matched by multiple patterns" groupName
+            )
+            |> Seq.groupBy(fun (group, _, _) -> group)
+            |> Seq.sortBy fst
+            |> Seq.map (fun ((_, title), modifications) ->
+                {
+                    Title = title
+                    Modifications =
+                        modifications
+                        |> Seq.sortByDescending (fun (_, classLevel, _) -> classLevel)
+                        |> Seq.map (fun (_, _, modification) -> modification)
+                        |> Seq.toList
+                }
+            )
+            |> Seq.toList
+        return! Successful.OK modifications next ctx
+    }
+
+let applyADIncrementClassGroupUpdates : HttpHandler =
+    fun next ctx -> task {
+        let! data = ctx.BindJsonAsync<ClassGroupModification list>()
+        data
+        |> List.map (ClassGroupModification.toDirectoryModification >> DirectoryModification.toADDto)
         |> AD.Core.applyDirectoryModifications
         return! Successful.OK () next ctx
     }

@@ -354,6 +354,22 @@ let getUsers () =
     )
     |> Seq.toList
 
+let getClassGroups () =
+    use groupCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
+
+    let studentGroup =
+        let groupName = Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME" |> GroupName
+        group groupCtx groupName [| "member" |]
+
+    studentGroup.Properties.["member"]
+    |> Seq.cast<string>
+    |> Seq.map (fun groupName ->
+        use group = adDirectoryEntry groupName
+        group.RefreshCache([| "sAMAccountName" |])
+        group.Properties.["sAMAccountName"].Value :?> string |> GroupName
+    )
+    |> Seq.toList
+
 let applyDirectoryModification = function
     | CreateUser (user, password) -> createUser user password
     | UpdateUser (userName, userType, ChangeUserName (newUserName, newFirstName, newLastName)) -> changeUserName userName userType (newUserName, newFirstName, newLastName)

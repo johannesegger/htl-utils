@@ -20,6 +20,7 @@ importAll "../sass/main.sass"
 
 type Msg =
     | AuthenticationMsg of Authentication.Msg
+    | IncrementADClassGroupsMsg of IncrementADClassGroups.Msg
     | SyncADMsg of SyncAD.Msg
     | SyncAADGroupsMsg of SyncAADGroups.Msg
     | ListConsultationHoursMsg of ListConsultationHours.Msg
@@ -28,6 +29,7 @@ type Model =
     {
         CurrentPage: Page
         Authentication: Authentication.Model
+        IncrementADClassGroups: IncrementADClassGroups.Model
         SyncAD: SyncAD.Model
         SyncAADGroups: SyncAADGroups.Model
         ListConsultationHours: ListConsultationHours.Model
@@ -45,6 +47,7 @@ let init page =
     {
         CurrentPage = Option.defaultValue Home page
         Authentication = Authentication.init
+        IncrementADClassGroups = IncrementADClassGroups.init
         SyncAD = SyncAD.init
         SyncAADGroups = SyncAADGroups.init
         ListConsultationHours = ListConsultationHours.init
@@ -54,6 +57,8 @@ let update msg model =
     match msg with
     | AuthenticationMsg msg ->
         { model with Authentication = Authentication.update msg model.Authentication }
+    | IncrementADClassGroupsMsg msg ->
+        { model with IncrementADClassGroups = IncrementADClassGroups.update msg model.IncrementADClassGroups }
     | SyncADMsg msg ->
         { model with SyncAD = SyncAD.update msg model.SyncAD }
     | SyncAADGroupsMsg msg ->
@@ -64,6 +69,7 @@ let update msg model =
 let root model dispatch =
     let pageHtml = function
         | Home -> Home.view
+        | IncrementADClassGroups -> IncrementADClassGroups.view model.IncrementADClassGroups (IncrementADClassGroupsMsg >> dispatch)
         | SyncAD -> SyncAD.view model.SyncAD (SyncADMsg >> dispatch)
         | SyncAADGroups -> SyncAADGroups.view model.SyncAADGroups (SyncAADGroupsMsg >> dispatch)
         | ListConsultationHours -> ListConsultationHours.view model.ListConsultationHours (ListConsultationHoursMsg >> dispatch)
@@ -119,6 +125,13 @@ let stream states msgs =
                 |> AsyncRx.merge (loginObservable |> AsyncRx.map (fun () -> Authentication.SignIn))
             )
         |> AsyncRx.map AuthenticationMsg
+
+        IncrementADClassGroups.stream
+            login
+            (pageActivated ((=) IncrementADClassGroups))
+            (subStates (function IncrementADClassGroupsMsg msg -> Some msg | _ -> None) (fun m -> m.IncrementADClassGroups))
+            (msgs |> AsyncRx.choose (function UserMsg (IncrementADClassGroupsMsg msg) -> Some msg | _ -> None))
+        |> AsyncRx.map IncrementADClassGroupsMsg
 
         SyncAD.stream
             login

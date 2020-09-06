@@ -59,6 +59,7 @@ let webApp =
             (choose [
                 GET >=> choose [
                     route "/ad/updates" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.getADModifications
+                    route "/ad/increment-class-group-updates" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates
                     route "/aad/group-updates" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours
                     #if DEBUG
@@ -67,6 +68,7 @@ let webApp =
                 ]
                 POST >=> choose [
                     route "/ad/updates/apply" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.applyADModifications
+                    route "/ad/increment-class-group-updates/apply" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates
                     route "/aad/group-updates/apply" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates
                 ]
             ])
@@ -102,6 +104,7 @@ let configureServices (services : IServiceCollection) =
     let coders =
         Extra.empty
         |> Extra.withCustom ADModifications.DataTransferTypes.DirectoryModification.encode ADModifications.DataTransferTypes.DirectoryModification.decoder
+        |> Extra.withCustom ADModifications.DataTransferTypes.ClassGroupModification.encode ADModifications.DataTransferTypes.ClassGroupModification.decoder
         |> Extra.withCustom AADGroupUpdates.DataTransferTypes.GroupUpdate.encode AADGroupUpdates.DataTransferTypes.GroupUpdate.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
