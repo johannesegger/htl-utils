@@ -13,10 +13,10 @@ module GroupId =
 module User =
     let fromAADDto (user: AAD.Domain.User) =
         {
-            User.Id = UserId.fromAADDto user.Id
-            User.FirstName = user.FirstName
-            User.LastName = user.LastName
-            User.ShortName = user.UserName
+            Id = UserId.fromAADDto user.Id
+            FirstName = user.FirstName
+            LastName = user.LastName
+            UserName = user.UserName
         }
 
 module Group =
@@ -36,37 +36,8 @@ module MemberModification =
                 memberUpdates.RemoveMembers
                 |> List.map (fun user -> UserId.toAADDto user.Id |> AAD.Domain.RemoveMember)
         ]
-    let toDto users memberUpdates =
-        let addMembers =
-            memberUpdates
-            |> List.choose (function
-                | AAD.Domain.AddMember userId ->
-                    Some (Map.find userId users)
-                | AAD.Domain.RemoveMember _ -> None
-            )
-        let removeMembers =
-            memberUpdates
-            |> List.choose (function
-                | AAD.Domain.RemoveMember userId ->
-                    Some (Map.find userId users)
-                | AAD.Domain.AddMember _ -> None
-            )
-        {
-            AddMembers = addMembers
-            RemoveMembers = removeMembers
-        }
 
 module GroupModification =
-    let fromAADDto users groups = function
-        | AAD.Domain.CreateGroup (groupName, memberIds) ->
-            let members = memberIds |> List.map (flip Map.find users)
-            CreateGroup (groupName, members)
-        | AAD.Domain.UpdateGroup (groupId, memberUpdates) ->
-            let group = groups |> Map.find groupId
-            UpdateGroup (group, MemberModification.toDto users memberUpdates)
-        | AAD.Domain.DeleteGroup groupId ->
-            let group = groups |> Map.find groupId
-            DeleteGroup group
     let toAADDto = function
         | CreateGroup (name, users) ->
             AAD.Domain.CreateGroup (name, users |> List.map (fun user -> UserId.toAADDto user.Id))
@@ -74,3 +45,10 @@ module GroupModification =
             AAD.Domain.UpdateGroup (GroupId.toAADDto group.Id, MemberModification.toAADDto memberUpdates)
         | DeleteGroup group ->
             AAD.Domain.DeleteGroup (GroupId.toAADDto group.Id)
+
+module ClassGroupModification =
+    let toAADGroupModification lookupGroupId = function
+        | IncrementClassGroups.DataTransferTypes.ChangeClassGroupName (oldName, newName) ->
+            AAD.Domain.ChangeGroupName (lookupGroupId oldName, newName)
+        | IncrementClassGroups.DataTransferTypes.DeleteClassGroup name ->
+            AAD.Domain.DeleteGroup (lookupGroupId name)

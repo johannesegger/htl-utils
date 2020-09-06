@@ -178,6 +178,12 @@ let private applyMemberModifications groupId memberModifications =
     |> Async.Parallel
     |> Async.Ignore
 
+let private changeGroupName (GroupId groupId) newName =
+    retryRequest
+        (graphServiceClient.Groups.[groupId].Request())
+        (fun request -> request.UpdateAsync(Group(Id = groupId, DisplayName = newName, MailNickname = newName)) |> Async.AwaitTask |> Async.StartAsTask)
+    |> Async.Ignore
+
 let private applySingleGroupModifications modifications = async {
     match modifications with
     | CreateGroup (name, memberIds) ->
@@ -189,6 +195,8 @@ let private applySingleGroupModifications modifications = async {
             |> applyMemberModifications groupId
     | UpdateGroup (groupId, memberModifications) ->
         do! applyMemberModifications groupId memberModifications
+    | ChangeGroupName (groupId, newName) ->
+        do! changeGroupName groupId newName
     | DeleteGroup groupId ->
         do! deleteGroup groupId
 }

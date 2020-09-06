@@ -27,6 +27,14 @@ let view =
                 ]
             ]
             Tile.ancestor [] [
+                Tile.parent [ Tile.Size Tile.Is5 ] [
+                    Tile.child [ Tile.CustomClass "box" ] [
+                        a [ Href (toHash IncrementAADClassGroups); Style [ Display DisplayOptions.Block ] ] [
+                            span [ Class "title"; Style [ Display DisplayOptions.Block ] ] [ str "Increment AAD class groups" ]
+                            span [] [ str "Increment the class number of Azure Active Directory class groups." ]
+                        ]
+                    ]
+                ]
                 Tile.parent [ Tile.Size Tile.Is4 ] [
                     Tile.child [ Tile.CustomClass "box" ] [
                         a [ Href (toHash SyncAADGroups); Style [ Display DisplayOptions.Block ] ] [

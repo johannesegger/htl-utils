@@ -61,6 +61,7 @@ let webApp =
                     route "/ad/updates" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.getADModifications
                     route "/ad/increment-class-group-updates" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates
                     route "/aad/group-updates" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates
+                    route "/aad/increment-class-group-updates" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours
                     #if DEBUG
                     route "/auth-test" >=> authTest
@@ -70,6 +71,7 @@ let webApp =
                     route "/ad/updates/apply" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.applyADModifications
                     route "/ad/increment-class-group-updates/apply" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates
                     route "/aad/group-updates/apply" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates
+                    route "/aad/increment-class-group-updates/apply" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADIncrementClassGroupUpdates
                 ]
             ])
         setStatusCode 404 >=> text "Not Found" ]
@@ -104,7 +106,7 @@ let configureServices (services : IServiceCollection) =
     let coders =
         Extra.empty
         |> Extra.withCustom ADModifications.DataTransferTypes.DirectoryModification.encode ADModifications.DataTransferTypes.DirectoryModification.decoder
-        |> Extra.withCustom ADModifications.DataTransferTypes.ClassGroupModification.encode ADModifications.DataTransferTypes.ClassGroupModification.decoder
+        |> Extra.withCustom IncrementClassGroups.DataTransferTypes.ClassGroupModification.encode IncrementClassGroups.DataTransferTypes.ClassGroupModification.decoder
         |> Extra.withCustom AADGroupUpdates.DataTransferTypes.GroupUpdate.encode AADGroupUpdates.DataTransferTypes.GroupUpdate.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 

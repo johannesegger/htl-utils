@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="IncrementClassGroups.DataTransferTypes.fs" />
+    <Compile Include="IncrementClassGroups.Core.fs" />
     <Compile Include="AADGroupUpdates.DataTransferTypes.fs" />
     <Compile Include="AADGroupUpdates.Mapping.fs" />
     <Compile Include="AADGroupUpdates.HttpHandler.fs" />

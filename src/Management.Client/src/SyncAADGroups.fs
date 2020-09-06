@@ -211,7 +211,7 @@ let view model dispatch =
                         Button.OnClick (fun e -> dispatch (ToggleEnableMemberUpdate (groupUpdateModel, memberUpdateModel)))
                     ]
                     [ Fa.i [ icon ] [] ]
-                str (sprintf "%s - %s %s" memberUpdateModel.User.ShortName (memberUpdateModel.User.LastName.ToUpper()) memberUpdateModel.User.FirstName)
+                str (sprintf "%s - %s %s" memberUpdateModel.User.UserName (memberUpdateModel.User.LastName.ToUpper()) memberUpdateModel.User.FirstName)
             ]
 
         let memberText i =

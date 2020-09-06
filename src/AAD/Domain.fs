@@ -28,6 +28,7 @@ type MemberModification =
 type GroupModification =
     | CreateGroup of name: string * memberIds: UserId list
     | UpdateGroup of GroupId * MemberModification list
+    | ChangeGroupName of GroupId * newName: string
     | DeleteGroup of GroupId
 
 type Base64EncodedImage = Base64EncodedImage of string

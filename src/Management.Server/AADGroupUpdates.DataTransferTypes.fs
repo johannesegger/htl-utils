@@ -21,7 +21,7 @@ module GroupId =
 type User =
     {
         Id: UserId
-        ShortName: string
+        UserName: string
         FirstName: string
         LastName: string
     }
@@ -30,7 +30,7 @@ module User =
     let encode u =
         Encode.object [
             "id", UserId.encode u.Id
-            "shortName", Encode.string u.ShortName
+            "shortName", Encode.string u.UserName
             "firstName", Encode.string u.FirstName
             "lastName", Encode.string u.LastName
         ]
@@ -38,7 +38,7 @@ module User =
         Decode.object (fun get ->
             {
                 Id = get.Required.Field "id" UserId.decoder
-                ShortName = get.Required.Field "shortName" Decode.string
+                UserName = get.Required.Field "shortName" Decode.string
                 FirstName = get.Required.Field "firstName" Decode.string
                 LastName = get.Required.Field "lastName" Decode.string
             }
@@ -51,6 +51,9 @@ type MemberUpdates =
     }
 
 module MemberUpdates =
+    let isEmpty memberUpdates =
+        memberUpdates.AddMembers.IsEmpty && memberUpdates.RemoveMembers.IsEmpty
+
     let encode memberUpdates =
         Encode.object [
             "addMembers", (List.map User.encode >> Encode.list) memberUpdates.AddMembers
@@ -95,5 +98,5 @@ module GroupUpdate =
         Decode.oneOf [
             Decode.field "createGroup" (Decode.tuple2 Decode.string (Decode.list User.decoder)) |> Decode.map CreateGroup
             Decode.field "updateGroup" (Decode.tuple2 Group.decoder MemberUpdates.decoder) |> Decode.map UpdateGroup
-            Decode.field "deleteGroup" Group.decoder|> Decode.map DeleteGroup
+            Decode.field "deleteGroup" Group.decoder |> Decode.map DeleteGroup
         ]

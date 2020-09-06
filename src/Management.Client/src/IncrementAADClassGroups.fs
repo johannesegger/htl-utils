@@ -1,4 +1,4 @@
-module IncrementADClassGroups
+module IncrementAADClassGroups
 
 open Fable.Core
 open Fable.FontAwesome
@@ -208,7 +208,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            let! modifications = Fetch.tryGet("/api/ad/increment-class-group-updates", Decode.list ClassGroupModificationGroup.decoder, requestProperties) |> Async.AwaitPromise
+                            let! modifications = Fetch.tryGet("/api/aad/increment-class-group-updates", Decode.list ClassGroupModificationGroup.decoder, requestProperties) |> Async.AwaitPromise
                             match modifications with
                             | Ok v -> return v
                             | Error e -> return failwith (String.ellipsis 200 e)
@@ -221,13 +221,13 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                 |> AsyncRx.startWith [ LoadModifications ]
                 |> AsyncRx.choose (function | LoadModifications -> Some loadUpdates | _ -> None)
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AD modifications failed", e.Message)
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AAD modifications failed", e.Message)
                 |> AsyncRx.map LoadModificationsResponse
 
                 let applyModifications modifications =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
-                            let url = sprintf "/api/ad/increment-class-group-updates/apply"
+                            let url = sprintf "/api/aad/increment-class-group-updates/apply"
                             let data = (List.map ClassGroupModification.encode >> Encode.list) modifications
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
@@ -242,8 +242,8 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                     | Some ApplyModifications, LoadedModifications { State = Applying modifications } -> Some (applyModifications modifications)
                     | _ -> None)
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AD modifications failed", e.Message)
-                |> AsyncRx.showSimpleSuccessToast (fun () -> "Applying AD modifications", "Successfully applied AD modifications")
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AAD modifications failed", e.Message)
+                |> AsyncRx.showSimpleSuccessToast (fun () -> "Applying AAD modifications", "Successfully applied AAD modifications")
                 |> AsyncRx.map ApplyModificationsResponse
             ]
             |> AsyncRx.mergeSeq

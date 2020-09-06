@@ -11,13 +11,15 @@
     <Compile Include="Client.Shared\Views.fs" />
     <Compile Include="..\..\Common\String.fs" />
     <Compile Include="..\..\Common\List.fs" />
+    <Compile Include="..\..\Management.Server\IncrementClassGroups.DataTransferTypes.fs" />
     <Compile Include="..\..\Management.Server\AADGroupUpdates.DataTransferTypes.fs" />
-    <Compile Include="..\..\Management.Server\ConsultationHours.DataTransferTypes.fs" />
     <Compile Include="..\..\Management.Server\ADModifications.DataTransferTypes.fs" />
+    <Compile Include="..\..\Management.Server\ConsultationHours.DataTransferTypes.fs" />
     <Compile Include="Pages.fs" />
     <Compile Include="Home.fs" />
     <Compile Include="IncrementADClassGroups.fs" />
     <Compile Include="SyncAD.fs" />
+    <Compile Include="IncrementAADClassGroups.fs" />
     <Compile Include="SyncAADGroups.fs" />
     <Compile Include="ListConsultationHours.fs" />
     <Compile Include="App.fs" />

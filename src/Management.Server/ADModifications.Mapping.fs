@@ -78,7 +78,7 @@ module DirectoryModification =
 
 module ClassGroupModification =
     let toDirectoryModification = function
-        | ChangeClassGroupName (oldName, newName) ->
-            UpdateGroup (Student oldName, ChangeGroupName newName)
-        | DeleteClassGroup name ->
-            DeleteGroup (Student name)
+        | IncrementClassGroups.DataTransferTypes.ChangeClassGroupName (oldName, newName) ->
+            UpdateGroup (Student (GroupName oldName), ChangeGroupName (GroupName newName))
+        | IncrementClassGroups.DataTransferTypes.DeleteClassGroup name ->
+            DeleteGroup (Student (GroupName name))
