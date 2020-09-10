@@ -39,7 +39,7 @@ let view =
                     Tile.child [ Tile.CustomClass "box" ] [
                         a [ Href (toHash SyncAADGroups); Style [ Display DisplayOptions.Block ] ] [
                             span [ Class "title"; Style [ Display DisplayOptions.Block ] ] [ str "Sync AAD groups" ]
-                            span [] [ str "Update members of Office 365 groups based on data from Sokrates, Untis and more." ]
+                            span [] [ str "Update members of Office 365 groups based on data from Active Directory, Untis and more." ]
                         ]
                     ]
                 ]

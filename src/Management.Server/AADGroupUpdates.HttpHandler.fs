@@ -4,6 +4,8 @@ open AADGroupUpdates.DataTransferTypes
 open AADGroupUpdates.Mapping
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
+open System
+open System.Globalization
 
 let private calculateMemberUpdates teacherIds aadGroupMemberIds =
     {
@@ -41,7 +43,7 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
         let teachingData = Untis.Core.getTeachingData ()
-        let! sokratesTeachers = Sokrates.Core.getTeachers ()
+        let adUsers = AD.Core.getUsers ()
         let finalThesesMentors = FinalTheses.Core.getMentors ()
         let! aadUsers = async {
             let! users = AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getUsers
@@ -73,8 +75,24 @@ let getAADGroupUpdates : HttpHandler =
         }
 
         let teachers =
-            sokratesTeachers
-            |> List.choose (fun teacher -> Map.tryFind teacher.ShortName aadUserLookupByUserName)
+            adUsers
+            |> List.choose (fun user ->
+                match user.Type with
+                | AD.Domain.Teacher ->
+                    let (AD.Domain.UserName userName) = user.Name
+                    Map.tryFind userName aadUserLookupByUserName
+                | AD.Domain.Student _ -> None
+            )
+
+        let students =
+            adUsers
+            |> List.choose (fun user ->
+                match user.Type with
+                | AD.Domain.Student _ ->
+                    let (AD.Domain.UserName userName) = user.Name
+                    Map.tryFind userName aadUserLookupByUserName
+                | AD.Domain.Teacher -> None
+            )
 
         let classGroupsWithTeachers =
             teachingData
@@ -148,6 +166,7 @@ let getAADGroupUpdates : HttpHandler =
             ("GrpDA-Betreuer", finalThesesMentorIds)
             yield! classGroupsWithTeachers
             yield! professionalGroupsWithTeachers
+            ("GrpSchueler", students)
         ]
 
         let updates = calculateAll aadAutoGroups desiredGroups

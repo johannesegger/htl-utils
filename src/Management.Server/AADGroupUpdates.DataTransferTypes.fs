@@ -30,7 +30,7 @@ module User =
     let encode u =
         Encode.object [
             "id", UserId.encode u.Id
-            "shortName", Encode.string u.UserName
+            "userName", Encode.string u.UserName
             "firstName", Encode.string u.FirstName
             "lastName", Encode.string u.LastName
         ]
@@ -38,7 +38,7 @@ module User =
         Decode.object (fun get ->
             {
                 Id = get.Required.Field "id" UserId.decoder
-                UserName = get.Required.Field "shortName" Decode.string
+                UserName = get.Required.Field "userName" Decode.string
                 FirstName = get.Required.Field "firstName" Decode.string
                 LastName = get.Required.Field "lastName" Decode.string
             }
