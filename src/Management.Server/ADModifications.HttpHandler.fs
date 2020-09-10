@@ -5,7 +5,7 @@ open ADModifications.Mapping
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open System
-open System.Text.RegularExpressions
+open System.Globalization
 
 let private userNameFromName (firstName: string) (lastName: string) =
     [firstName; lastName]
@@ -162,7 +162,14 @@ let private modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokr
 let getADModifications : HttpHandler =
     fun next ctx -> task {
         let! sokratesTeachers = Sokrates.Core.getTeachers () |> Async.StartChild
-        let! sokratesStudents = Sokrates.Core.getStudents None None |> Async.StartChild
+        let timestamp =
+            match ctx.TryGetQueryStringValue "date" with
+            | Some date ->
+                tryDo (fun () -> (DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.CurrentCulture, DateTimeStyles.None))) ()
+                |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\"" date)
+                |> Some
+            | None -> None
+        let! sokratesStudents = Sokrates.Core.getStudents None timestamp |> Async.StartChild
         let adUsers = AD.Core.getUsers ()
 
         let! sokratesTeachers = sokratesTeachers

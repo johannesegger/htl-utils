@@ -9,6 +9,7 @@ open Fable.Reaction
 open FSharp.Control
 open Fulma
 open Fulma.Extensions.Wikiki
+open System
 open Thoth.Fetch
 open Thoth.Json
 
@@ -153,6 +154,7 @@ type Model = {
     AutoModifications: LoadableDirectoryModifications
     ManualModifications: DirectoryModificationGroup
     ManualModificationDraft: ManualModificationDraft
+    Timestamp: DateTime
 }
 
 type Msg =
@@ -163,6 +165,7 @@ type Msg =
     | ToggleEnableModification of DirectoryModificationGroup * UIDirectoryModification
     | SetManualModification of DirectoryModification
     | AddManualModification
+    | SetTimestamp of DateTime
     | ApplyModifications
     | ApplyModificationsResponse of Result<unit, exn>
 
@@ -254,6 +257,7 @@ let rec update msg model =
             }
         else
             model
+    | SetTimestamp timestamp -> { model with Timestamp = timestamp }
     | ApplyModificationsResponse (Ok ())
     | ApplyModificationsResponse (Error _) -> { model with ModificationsState = Applied }
 
@@ -277,6 +281,7 @@ let init =
                     Type = Teacher
                 }
             CreateUser (user, "") |> validateManualModificationDraft
+        Timestamp = DateTime.Today
     }
 
 let view model dispatch =
@@ -541,16 +546,26 @@ let view model dispatch =
     Container.container [] [
         autoModifications
         manualModifications
+        Field.div [ Field.HasAddons ] [
+            Control.div [] [
+                Input.date [
+                    Input.Value (model.Timestamp.ToString("yyyy-MM-dd"))
+                    Input.OnChange (fun e -> dispatch (SetTimestamp (DateTime.Parse e.Value)))
+                ]
+            ]
+            Control.div [] [
+                Button.button
+                    [
+                        Button.Color IsInfo
+                        Button.OnClick (fun e -> dispatch LoadModifications)
+                    ]
+                    [
+                        Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
+                        span [] [ str "Reload auto modifications" ]
+                    ]
+            ]
+        ]
         Button.list [] [
-            Button.button
-                [
-                    Button.Disabled (ModificationsState.isApplying model.ModificationsState || LoadableDirectoryModifications.isLoading model.AutoModifications)
-                    Button.OnClick (fun e -> dispatch LoadModifications)
-                ]
-                [
-                    Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
-                    span [] [ str "Reload auto modifications" ]
-                ]
             Button.button
                 [
                     Button.Disabled (ModificationsState.isApplied model.ModificationsState || LoadableDirectoryModifications.isLoading model.AutoModifications)
@@ -572,12 +587,13 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
             [
                 msgs
 
-                let loadUpdates =
+                let loadUpdates (timestamp: DateTime) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
+                            let url = sprintf "/api/ad/updates?date=%s" (timestamp.ToString("yyyy-MM-dd"))
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            let! modifications = Fetch.tryGet("/api/ad/updates", Decode.list DirectoryModification.decoder, requestProperties) |> Async.AwaitPromise
+                            let! modifications = Fetch.tryGet(url, Decode.list DirectoryModification.decoder, requestProperties) |> Async.AwaitPromise
                             match modifications with
                             | Ok v -> return v
                             | Error e -> return failwith (String.ellipsis 200 e)
@@ -587,9 +603,11 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                     )
 
                 msgs
-                |> AsyncRx.startWith [ LoadModifications ]
-                |> AsyncRx.choose (function | LoadModifications -> Some loadUpdates | _ -> None)
-                |> AsyncRx.switchLatest
+                |> AsyncRx.choose (function | LoadModifications -> Some () | _ -> None)
+                |> AsyncRx.withLatestFrom (states |> AsyncRx.map (snd >> (fun state -> state.Timestamp)))
+                |> AsyncRx.map snd
+                |> AsyncRx.startWith [ init.Timestamp ]
+                |> AsyncRx.flatMapLatest loadUpdates
                 |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AD modifications failed", e.Message)
                 |> AsyncRx.map LoadModificationsResponse
 
