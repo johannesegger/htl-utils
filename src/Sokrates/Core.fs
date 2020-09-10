@@ -149,7 +149,7 @@ let getClasses schoolYear = async {
     let schoolYear =
         schoolYear
         |> Option.defaultValue (
-            if DateTime.Now.Month < 8 then DateTime.Now.Year - 1
+            if DateTime.Now.Month < 9 then DateTime.Now.Year - 1
             else DateTime.Now.Year
         )
     let! xmlElement = fetch (getRequestContent "getTSNClasses" [ "schoolYear", string schoolYear ])
