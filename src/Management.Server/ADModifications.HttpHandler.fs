@@ -163,12 +163,11 @@ let getADModifications : HttpHandler =
     fun next ctx -> task {
         let! sokratesTeachers = Sokrates.Core.getTeachers () |> Async.StartChild
         let timestamp =
-            match ctx.TryGetQueryStringValue "date" with
-            | Some date ->
+            ctx.TryGetQueryStringValue "date"
+            |> Option.map (fun date ->
                 tryDo (fun () -> (DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.CurrentCulture, DateTimeStyles.None))) ()
                 |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\"" date)
-                |> Some
-            | None -> None
+            )
         let! sokratesStudents = Sokrates.Core.getStudents None timestamp |> Async.StartChild
         let adUsers = AD.Core.getUsers ()
 
