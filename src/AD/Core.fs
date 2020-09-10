@@ -50,6 +50,10 @@ let private groupNameFromUserType = function
     | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME" |> GroupName
     | Student className -> className
 
+let private departmentFromUserType = function
+    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME"
+    | Student (GroupName className) -> sprintf "%s - %s" (Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME") className
+
 let private objectSid (directoryEntry: DirectoryEntry) =
     let data = directoryEntry.Properties.["objectSid"].[0] :?> byte array
     SecurityIdentifier(data, 0)
@@ -89,6 +93,7 @@ let private createUser (newUser: User) password =
     adUser.Properties.["sn"].Value <- newUser.LastName
     adUser.Properties.["displayName"].Value <- sprintf "%s %s" newUser.LastName newUser.FirstName
     adUser.Properties.["sAMAccountName"].Value <- userName
+    adUser.Properties.["department"].Value <- departmentFromUserType newUser.Type
     adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" newUser.LastName newUser.FirstName mailDomain
     adUser.Properties.["proxyAddresses"].Value <- proxyAddresses newUser.FirstName newUser.LastName mailDomain |> List.toArray
     let userHomePath = homePath newUser.Name newUser.Type
