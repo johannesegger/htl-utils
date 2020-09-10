@@ -381,4 +381,9 @@ let applyDirectoryModification = function
     | UpdateGroup (userType, ChangeGroupName newGroupName) ->  changeGroupName userType newGroupName
     | DeleteGroup userType -> deleteGroup userType
 
-let applyDirectoryModifications = List.iter applyDirectoryModification
+let applyDirectoryModifications =
+    List.iter (fun modification ->
+        try
+            applyDirectoryModification modification
+        with e -> failwithf "Error while applying modification \"%A\": %O" modification e
+    )
