@@ -40,6 +40,8 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
             )
     ]
 
+let predefinedGroupPrefix = Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUP_PREFIX"
+
 let getAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
         let teachingData = Untis.Core.getTeachingData ()
@@ -61,14 +63,14 @@ let getAADGroupUpdates : HttpHandler =
             aadUsers
             |> List.map (fun (user, mailAddresses) -> user.UserName, user)
             |> Map.ofList
-        let! aadAutoGroups = async {
-            let! autoGroups = AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getAutoGroups
+        let! aadPredefinedGroups = async {
+            let! predefinedGroups = AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.getGroupsWithPrefix predefinedGroupPrefix)
             return
-                autoGroups
-                |> List.map (fun autoGroup ->
-                    let group = Group.fromAADDto autoGroup
+                predefinedGroups
+                |> List.map (fun predefinedGroup ->
+                    let group = Group.fromAADDto predefinedGroup
                     let users =
-                        autoGroup.Members
+                        predefinedGroup.Members
                         |> List.map (UserId.fromAADDto >> flip Map.find aadUserLookupById)
                     group, users
                 )
@@ -94,7 +96,7 @@ let getAADGroupUpdates : HttpHandler =
                 | AD.Domain.Teacher -> None
             )
 
-        let classGroupsWithTeachers =
+        let classGroupsWithTeachers nameFn =
             teachingData
             |> List.choose (function
                 | Untis.Domain.NormalTeacher (schoolClass, teacherShortName, _)
@@ -109,7 +111,7 @@ let getAADGroupUpdates : HttpHandler =
                     teachers
                     |> List.choose (snd >> fun (Untis.Domain.TeacherShortName v) -> Map.tryFind v aadUserLookupByUserName)
                     |> List.distinct
-                (sprintf "GrpLehrer%s" schoolClass, teacherIds)
+                (nameFn schoolClass, teacherIds)
             )
 
         let formTeachers =
@@ -131,19 +133,13 @@ let getAADGroupUpdates : HttpHandler =
             )
             |> Map.ofList
 
-        let finalThesesMentorIds =
+        let finalThesesMentors =
             finalThesesMentors
             |> List.choose (fun m -> Map.tryFind (CIString m.MailAddress) aadUserLookupByMailAddress)
 
-        let professionalGroupsWithTeachers =
-            [
-                "GrpD", [ "D" ]
-                "GrpE", [ "E1" ]
-                "GrpAM", [ "AM" ]
-                "GrpCAD", [ "KOBE"; "KOP1"; "MT"; "PLP" ]
-                "GrpWE", [ "ETAUTWP_4"; "FET1WP_3"; "FET1WP_4"; "WLA"; "WPT_3"; "WPT_4" ]
-            ]
-            |> List.map (Tuple.mapSnd (List.map CIString) >> fun (groupName, subjects) ->
+        let professionalGroupsWithTeachers groupsWithSubjects =
+            groupsWithSubjects
+            |> Seq.map (Tuple.mapSnd (List.map CIString) >> fun (groupName, subjects) ->
                 let teacherIds =
                     teachingData
                     |> List.choose (function
@@ -161,16 +157,42 @@ let getAADGroupUpdates : HttpHandler =
                 (groupName, teacherIds)
             )
 
-        let desiredGroups = [
-            ("GrpLehrer", teachers)
-            ("GrpKV", formTeachers)
-            ("GrpDA-Betreuer", finalThesesMentorIds)
-            yield! classGroupsWithTeachers
-            yield! professionalGroupsWithTeachers
-            ("GrpSchueler", students)
-        ]
+        let desiredGroups =
+            Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUPS"
+            |> String.split ";"
+            |> Seq.collect (fun row ->
+                let rowParts = String.split "," row
+                let groupId = Array.tryItem 0 rowParts |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of predefined groups settings: Can't get group id." row)
+                let groupName = Array.tryItem 1 rowParts |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of predefined groups settings: Can't get group name." row)
+                match groupId with
+                | "Teachers" -> [ (groupName, teachers) ]
+                | "FormTeachers" -> [ (groupName, formTeachers) ]
+                | "FinalThesesMentors" -> [ (groupName, finalThesesMentors) ]
+                | "ClassTeachers" -> classGroupsWithTeachers (fun name -> String.replace "<class>" name groupName)
+                | "ProfessionalGroups" ->
+                    Environment.getEnvVarOrFail "AAD_PROFESSIONAL_GROUPS_SUBJECTS"
+                    |> String.split ";"
+                    |> Seq.map (fun row ->
+                        let (rawGroupName, subjectString) =
+                            match row.IndexOf("-") with
+                            | idx when idx >= 0 -> (row.Substring(0, idx), row.Substring(idx + 1))
+                            | _ -> failwithf "Error in row \"%s\" of professional groups subjects settings: Can't find separator between group name and subjects" row
+                        let fullGroupName = String.replace "<subject>" rawGroupName groupName
+                        let subjects =
+                            subjectString
+                            |> String.split ","
+                            |> List.ofArray
+                        (fullGroupName, subjects)
+                    )
+                    |> professionalGroupsWithTeachers
+                    |> Seq.toList
+                | "Students" -> [ (groupName, students) ]
+                | _ -> failwithf "Error in row \"%s\" of predefined groups settings: Unknown group id \"%s\"" row groupId
+            )
+            |> Seq.map (Tuple.mapFst (sprintf "%s%s" predefinedGroupPrefix))
+            |> Seq.toList
 
-        let updates = calculateAll aadAutoGroups desiredGroups
+        let updates = calculateAll aadPredefinedGroups desiredGroups
 
         return! Successful.OK updates next ctx
     }
@@ -188,9 +210,9 @@ let applyAADGroupUpdates : HttpHandler =
 let getAADIncrementClassGroupUpdates : HttpHandler =
     fun next ctx -> task {
         let! classGroups = async {
-            let! aadGroups = AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getAutoGroups
+            let! predefinedGroups = AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.getGroupsWithPrefix predefinedGroupPrefix)
             return
-                aadGroups
+                predefinedGroups
                 |> List.map (fun group -> group.Name)
         }
 
@@ -201,9 +223,9 @@ let getAADIncrementClassGroupUpdates : HttpHandler =
 let applyAADIncrementClassGroupUpdates : HttpHandler =
     fun next ctx -> task {
         let! aadGroupNameLookupByName = async {
-            let! autoGroups = AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getAutoGroups
+            let! predefinedGroups = AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.getGroupsWithPrefix predefinedGroupPrefix)
             return
-                autoGroups
+                predefinedGroups
                 |> List.map (fun autoGroup -> autoGroup.Name, autoGroup.Id)
                 |> Map.ofList
         }

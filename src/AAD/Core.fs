@@ -91,12 +91,12 @@ module private User =
                 |> Seq.toList
         }
 
-let getAutoGroups authToken = async {
+let getGroupsWithPrefix authToken prefix = async {
     do! acquireToken authToken [ "Group.ReadWrite.All" ]
     let! graphGroups =
         readAll
             (graphServiceClient.Groups.Request()
-                .Filter("startsWith(displayName,'Grp')")
+                .Filter(sprintf "startsWith(displayName,'%s')" prefix)
                 .Select("id,displayName,mail"))
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
@@ -150,6 +150,8 @@ let private createGroup name = async {
             ResourceBehaviorOptions = [| "WelcomeEmailDisabled" |]
         )
     let! group = retryRequest (graphServiceClient.Groups.Request()) (fun request -> request.AddAsync group)
+
+    // `AutoSubscribeNewMembers` must be set separately, see https://docs.microsoft.com/en-us/graph/api/resources/group#properties
     let groupUpdate = Group(AutoSubscribeNewMembers = Nullable true)
     return! retryRequest (graphServiceClient.Groups.[group.Id].Request()) (fun request -> request.UpdateAsync groupUpdate)
 }
