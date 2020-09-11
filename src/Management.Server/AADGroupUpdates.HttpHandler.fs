@@ -103,6 +103,7 @@ let getAADGroupUpdates : HttpHandler =
                 | Untis.Domain.Informant _ -> None
             )
             |> List.groupBy fst
+            |> List.sortBy fst
             |> List.map (fun (Untis.Domain.SchoolClass schoolClass, teachers) ->
                 let teacherIds =
                     teachers
