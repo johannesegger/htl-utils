@@ -22,6 +22,7 @@ type Msg =
     | AuthenticationMsg of Authentication.Msg
     | IncrementADClassGroupsMsg of IncrementADClassGroups.Msg
     | SyncADMsg of SyncAD.Msg
+    | ModifyADMsg of ModifyAD.Msg
     | IncrementAADClassGroupsMsg of IncrementAADClassGroups.Msg
     | SyncAADGroupsMsg of SyncAADGroups.Msg
     | ListConsultationHoursMsg of ListConsultationHours.Msg
@@ -32,6 +33,7 @@ type Model =
         Authentication: Authentication.Model
         IncrementADClassGroups: IncrementADClassGroups.Model
         SyncAD: SyncAD.Model
+        ModifyAD: ModifyAD.Model
         IncrementAADClassGroups: IncrementAADClassGroups.Model
         SyncAADGroups: SyncAADGroups.Model
         ListConsultationHours: ListConsultationHours.Model
@@ -51,6 +53,7 @@ let init page =
         Authentication = Authentication.init
         IncrementADClassGroups = IncrementADClassGroups.init
         SyncAD = SyncAD.init
+        ModifyAD = ModifyAD.init
         IncrementAADClassGroups = IncrementAADClassGroups.init
         SyncAADGroups = SyncAADGroups.init
         ListConsultationHours = ListConsultationHours.init
@@ -64,6 +67,8 @@ let update msg model =
         { model with IncrementADClassGroups = IncrementADClassGroups.update msg model.IncrementADClassGroups }
     | SyncADMsg msg ->
         { model with SyncAD = SyncAD.update msg model.SyncAD }
+    | ModifyADMsg msg ->
+        { model with ModifyAD = ModifyAD.update msg model.ModifyAD }
     | IncrementAADClassGroupsMsg msg ->
         { model with IncrementAADClassGroups = IncrementAADClassGroups.update msg model.IncrementAADClassGroups }
     | SyncAADGroupsMsg msg ->
@@ -76,6 +81,7 @@ let root model dispatch =
         | Home -> Home.view
         | IncrementADClassGroups -> IncrementADClassGroups.view model.IncrementADClassGroups (IncrementADClassGroupsMsg >> dispatch)
         | SyncAD -> SyncAD.view model.SyncAD (SyncADMsg >> dispatch)
+        | ModifyAD -> ModifyAD.view model.ModifyAD (ModifyADMsg >> dispatch)
         | IncrementAADClassGroups -> IncrementAADClassGroups.view model.IncrementAADClassGroups (IncrementAADClassGroupsMsg >> dispatch)
         | SyncAADGroups -> SyncAADGroups.view model.SyncAADGroups (SyncAADGroupsMsg >> dispatch)
         | ListConsultationHours -> ListConsultationHours.view model.ListConsultationHours (ListConsultationHoursMsg >> dispatch)
@@ -145,6 +151,13 @@ let stream states msgs =
             (subStates (function SyncADMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAD))
             (msgs |> AsyncRx.choose (function UserMsg (SyncADMsg msg) -> Some msg | _ -> None))
         |> AsyncRx.map SyncADMsg
+
+        ModifyAD.stream
+            login
+            (pageActivated ((=) ModifyAD))
+            (subStates (function ModifyADMsg msg -> Some msg | _ -> None) (fun m -> m.ModifyAD))
+            (msgs |> AsyncRx.choose (function UserMsg (ModifyADMsg msg) -> Some msg | _ -> None))
+        |> AsyncRx.map ModifyADMsg
 
         IncrementAADClassGroups.stream
             login

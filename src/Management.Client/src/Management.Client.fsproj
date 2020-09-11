@@ -19,6 +19,7 @@
     <Compile Include="Home.fs" />
     <Compile Include="IncrementADClassGroups.fs" />
     <Compile Include="SyncAD.fs" />
+    <Compile Include="ModifyAD.fs" />
     <Compile Include="IncrementAADClassGroups.fs" />
     <Compile Include="SyncAADGroups.fs" />
     <Compile Include="ListConsultationHours.fs" />
