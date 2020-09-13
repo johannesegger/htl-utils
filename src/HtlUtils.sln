@@ -35,6 +35,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "AD", "AD\AD.fsproj", "{25E2
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Sokrates", "Sokrates\Sokrates.fsproj", "{F58B18A3-9985-4169-90A5-4D1AE1019BF9}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Management.Server.Test", "Management.Server.Test\Management.Server.Test.fsproj", "{14D5E333-EE92-4906-88D8-DCF4C1178C1E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -216,6 +218,18 @@ Global
 		{F58B18A3-9985-4169-90A5-4D1AE1019BF9}.Release|x64.Build.0 = Release|Any CPU
 		{F58B18A3-9985-4169-90A5-4D1AE1019BF9}.Release|x86.ActiveCfg = Release|Any CPU
 		{F58B18A3-9985-4169-90A5-4D1AE1019BF9}.Release|x86.Build.0 = Release|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Debug|x64.Build.0 = Debug|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Debug|x86.Build.0 = Debug|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Release|x64.ActiveCfg = Release|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Release|x64.Build.0 = Release|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Release|x86.ActiveCfg = Release|Any CPU
+		{14D5E333-EE92-4906-88D8-DCF4C1178C1E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{E9449B49-2DCD-4BF8-8D4A-DCB37E8E2AF4} = {80768CFC-F9DB-427C-8150-8DC447F5CEE2}

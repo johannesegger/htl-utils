@@ -7,7 +7,7 @@ open Giraffe
 open System
 open System.Globalization
 
-let private userNameFromName (firstName: string) (lastName: string) =
+let userNameFromName (firstName: string) (lastName: string) =
     [firstName; lastName]
     |> List.map (
         String.replace "Ä" "Ae"
@@ -19,15 +19,16 @@ let private userNameFromName (firstName: string) (lastName: string) =
         >> Unidecode.NET.Unidecoder.Unidecode
     )
     |> String.concat "."
+    |> UserName
 
-let private uniqueUserName (UserName rawUserName) existingUserNames =
+let uniqueUserName (UserName rawUserName) existingUserNames =
     Seq.initInfinite ((+)2)
     |> Seq.map string
     |> Seq.append [ "" ]
     |> Seq.map (sprintf "%s%s" rawUserName >> UserName)
     |> Seq.find (fun name -> not <| List.contains name existingUserNames)
 
-let private modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStudents: Sokrates.Domain.Student list) (adUsers: AD.Domain.User list) =
+let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStudents: Sokrates.Domain.Student list) (adUsers: AD.Domain.User list) =
     let adUserLookupBySokratesId =
         adUsers
         |> List.choose (fun user -> user.SokratesId |> Option.map (fun sokratesId -> SokratesId.fromADDto sokratesId, user))
@@ -49,9 +50,12 @@ let private modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokr
         |> List.map (fun adUser -> UserType.fromADDto adUser.Type)
         |> Set.ofList
     let sokratesUserTypes =
-        sokratesStudents
-        |> List.map (fun student -> Student (GroupName student.SchoolClass))
-        |> List.append [ Teacher ]
+        [
+            yield!
+                sokratesStudents
+                |> List.map (fun student -> Student (GroupName student.SchoolClass))
+            if not <| List.isEmpty sokratesTeachers then Teacher
+        ]
         |> Set.ofList
 
     let tryFindADTeacher sokratesId userName =
@@ -77,14 +81,14 @@ let private modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokr
         )
     let createOrUpdateStudentModifications =
         let adUserNames = adUsers |> List.map (fun adUser -> UserName.fromADDto adUser.Name)
-        (sokratesStudents, ([], []))
-        ||> List.foldBack (fun student (newUserNames, modifications) ->
+        (([], []), sokratesStudents)
+        ||> List.fold (fun (newUserNames, modifications) student ->
             let studentId = SokratesId.fromSokratesDto student.Id
             match Map.tryFind studentId adUserLookupBySokratesId with
             | None ->
                 let existingUserNames = adUserNames @ newUserNames
                 let rawUserName = userNameFromName student.FirstName1 student.LastName
-                let userName = uniqueUserName (UserName rawUserName) existingUserNames
+                let userName = uniqueUserName rawUserName existingUserNames
                 let user = User.fromSokratesStudentDto student userName
                 let modification = CreateUser (user, student.DateOfBirth.ToString("dd.MM.yyyy"))
                 (userName :: newUserNames, modification :: modifications)
@@ -97,7 +101,7 @@ let private modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokr
                             if oldRawUserName = rawUserName then UserName.fromADDto adUser.Name
                             else
                                 let existingUserNames = (adUserNames |> List.except [ UserName.fromADDto adUser.Name ]) @ newUserNames
-                                uniqueUserName (UserName rawUserName) existingUserNames
+                                uniqueUserName rawUserName existingUserNames
                         let user = User.fromADDto adUser
                         let modification = UpdateUser (user, ChangeUserName (userName, student.FirstName1, student.LastName))
                         (userName :: newUserNames, modification :: modifications)
@@ -123,6 +127,7 @@ let private modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokr
                 (newUserNames, modifications)
         )
         |> snd
+        |> List.rev
     let deleteUserModifications =
         adUsers
         |> List.choose (fun adUser ->
@@ -151,10 +156,10 @@ let private modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokr
         |> Seq.toList
 
     [
+        createGroupModifications
         createOrUpdateTeacherModifications
         createOrUpdateStudentModifications
         deleteUserModifications
-        createGroupModifications
         deleteGroupModifications
     ]
     |> List.concat

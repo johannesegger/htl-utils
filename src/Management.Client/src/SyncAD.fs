@@ -86,24 +86,24 @@ module DirectoryModificationGroup =
     let fromDtoList modifications =
         modifications
         |> List.groupBy (function
-            | CreateUser ({ Type = Teacher }, _) ->
-                "01-CreateTeacher", "Create teacher", Create
-            | CreateUser ({ Type = Student (GroupName className) }, _) ->
-                sprintf "02-CreateStudent-%s" className, sprintf "Create student of %s" className, Create
-            | UpdateUser ({ Type = Teacher }, ChangeUserName _) ->
-                "03-RenameTeacher", "Rename teacher", Update
-            | UpdateUser (_, SetSokratesId _) ->
-                "04-SetSokratesId", "Set Sokrates ID", Update
-            | UpdateUser ({ Type = Student _ }, ChangeUserName _) ->
-                "05-RenameStudent", "Rename student", Update
-            | UpdateUser (_, MoveStudentToClass (GroupName className)) ->
-                sprintf "06-MoveStudentToClass-%s" className, sprintf "Move student to %s" className, Update
-            | DeleteUser ({ Type = Teacher }) ->
-                "07-DeleteTeacher", "Delete teacher", Delete
-            | DeleteUser ({ Type = Student (GroupName className) }) ->
-                sprintf "08-DeleteStudent-%s" className, sprintf "Delete student of %s" className, Delete
             | CreateGroup _ ->
-                "09-CreateGroup", "Create user group", Create
+                "01-CreateGroup", "Create user group", Create
+            | CreateUser ({ Type = Teacher }, _) ->
+                "02-CreateTeacher", "Create teacher", Create
+            | CreateUser ({ Type = Student (GroupName className) }, _) ->
+                sprintf "03-CreateStudent-%s" className, sprintf "Create student of %s" className, Create
+            | UpdateUser ({ Type = Teacher }, ChangeUserName _) ->
+                "04-RenameTeacher", "Rename teacher", Update
+            | UpdateUser (_, SetSokratesId _) ->
+                "05-SetSokratesId", "Set Sokrates ID", Update
+            | UpdateUser ({ Type = Student _ }, ChangeUserName _) ->
+                "06-RenameStudent", "Rename student", Update
+            | UpdateUser (_, MoveStudentToClass (GroupName className)) ->
+                sprintf "07-MoveStudentToClass-%s" className, sprintf "Move student to %s" className, Update
+            | DeleteUser ({ Type = Teacher }) ->
+                "08-DeleteTeacher", "Delete teacher", Delete
+            | DeleteUser ({ Type = Student (GroupName className) }) ->
+                sprintf "09-DeleteStudent-%s" className, sprintf "Delete student of %s" className, Delete
             | UpdateGroup (_, ChangeGroupName _) ->
                 "10-RenameGroup", "Rename user group", Update
             | DeleteGroup _ ->
