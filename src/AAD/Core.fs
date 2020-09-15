@@ -237,15 +237,11 @@ let private removeContact (UserId userId) contactId =
         (graphServiceClient.Users.[userId].Contacts.[contactId].Request())
         (fun request -> request.DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
 
-let private removeAutoContacts userId = async {
-    let! existingContactIds = getAutoContactIds userId
-
-    do!
-        existingContactIds
-        |> Seq.map (removeContact userId)
-        |> Async.Sequential
-        |> Async.Ignore
-}
+let private removeAutoContacts userId contactIds =
+    contactIds
+    |> Seq.map (removeContact userId)
+    |> Async.Sequential
+    |> Async.Ignore
 
 let private addContact (UserId userId) contact =
     retryRequest
@@ -346,29 +342,61 @@ let private updateCalendarEvent calendarId eventId updatedEvent =
         (graphServiceClient.Me.Calendars.[calendarId].Events.[eventId].Request())
         (fun request -> request.UpdateAsync updatedEvent)
 
+let private getBirthdayCalendarEventCount = async {
+    let! birthdayCalendarId = getBirthdayCalendarId
+    let! birthdayEventIds = getCalendarEventIds birthdayCalendarId
+    return List.length birthdayEventIds
+}
 
-let private turnOffBirthdayReminders = async {
+let private configureBirthdayReminders = async {
     let! birthdayCalendarId = getBirthdayCalendarId
     let! birthdayEventIds = getCalendarEventIds birthdayCalendarId
 
     do!
         birthdayEventIds
         |> Seq.map (fun eventId -> async {
-            let event' = Event(IsReminderOn = Nullable<_> false)
+            let event' = Event(IsReminderOn = Nullable<_> true, ReminderMinutesBeforeStart = Nullable 0)
             return! updateCalendarEvent birthdayCalendarId eventId event'
         })
         |> Async.Sequential
         |> Async.Ignore
 }
 
+let rec private waitUntil workflow = async {
+    let! result = workflow
+    if result then return ()
+    else
+        do! Async.Sleep 5000
+        return! waitUntil workflow
+}
+
 let updateAutoContacts authToken userId contacts = async {
     do! acquireToken authToken [ "Contacts.ReadWrite" ]
 
+    let! birthdayEventCount = getBirthdayCalendarEventCount
+
     printfn "%O: Removing existing contacts" DateTime.Now
-    do! removeAutoContacts userId
+    let! autoContactIds = getAutoContactIds userId
+    do! removeAutoContacts userId autoContactIds
+    
+    printfn "%O: Waiting until birthday calendar is cleared" DateTime.Now
+    do! waitUntil (async {
+        let! newBirthdayEventCount = getBirthdayCalendarEventCount
+        return newBirthdayEventCount = birthdayEventCount - (List.length autoContactIds)
+    })
+    let! birthdayEventCount = getBirthdayCalendarEventCount
+
     printfn "%O: Adding new contacts" DateTime.Now
     do! addAutoContacts userId contacts
-    // do! Async.Sleep 30000 // Wait a bit and hope the birthday calendar synchronized itself
-    // do! turnOffBirthdayReminders graphServiceClient
+
+    printfn "%O: Waiting until birthday calendar is filled" DateTime.Now
+    do! waitUntil (async {
+        let! newBirthdayEventCount = getBirthdayCalendarEventCount
+        return newBirthdayEventCount = birthdayEventCount + (List.length contacts)
+    })
+
+    printfn "%O: Configuring birthday events" DateTime.Now
+    do! configureBirthdayReminders
+
     printfn "%O: Finished" DateTime.Now
 }

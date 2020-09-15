@@ -94,8 +94,8 @@ let handleAddTeachersAsContacts : HttpHandler =
                 | None -> None
             )
 
-        do! AAD.Auth.withAuthenticationFromHttpContext ctx (fun authToken userId -> AAD.Core.updateAutoContacts authToken userId contacts)
-        return! Successful.OK () next ctx
+        AAD.Auth.withAuthenticationFromHttpContext ctx (fun authToken userId -> AAD.Core.updateAutoContacts authToken userId contacts) |> Async.Start
+        return! Successful.ACCEPTED () next ctx
     }
 
 let handleGetChildDirectories : HttpHandler =
