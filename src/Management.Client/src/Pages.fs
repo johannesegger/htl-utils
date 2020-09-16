@@ -10,6 +10,7 @@ type Page =
     | IncrementAADClassGroups
     | SyncAADGroups
     | ListConsultationHours
+    | ShowComputerInfo
 
 let toHash = function
     | Home -> "#home"
@@ -19,6 +20,7 @@ let toHash = function
     | IncrementAADClassGroups -> "#increment-aad-class-groups"
     | SyncAADGroups -> "#sync-aad-groups"
     | ListConsultationHours -> "#list-consultation-hours"
+    | ShowComputerInfo -> "#show-computer-info"
 
 let pageParser: Parser<Page->Page,Page> =
     oneOf [
@@ -29,4 +31,5 @@ let pageParser: Parser<Page->Page,Page> =
         map IncrementAADClassGroups (s "increment-aad-class-groups")
         map SyncAADGroups (s "sync-aad-groups")
         map ListConsultationHours (s "list-consultation-hours")
+        map ShowComputerInfo (s "show-computer-info")
     ]

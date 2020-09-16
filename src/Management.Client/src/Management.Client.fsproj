@@ -15,6 +15,7 @@
     <Compile Include="..\..\Management.Server\AADGroupUpdates.DataTransferTypes.fs" />
     <Compile Include="..\..\Management.Server\ADModifications.DataTransferTypes.fs" />
     <Compile Include="..\..\Management.Server\ConsultationHours.DataTransferTypes.fs" />
+    <Compile Include="..\..\Management.Server\ShowComputerInfo.DataTransferTypes.fs" />
     <Compile Include="Pages.fs" />
     <Compile Include="Home.fs" />
     <Compile Include="IncrementADClassGroups.fs" />
@@ -23,6 +24,7 @@
     <Compile Include="IncrementAADClassGroups.fs" />
     <Compile Include="SyncAADGroups.fs" />
     <Compile Include="ListConsultationHours.fs" />
+    <Compile Include="ShowComputerInfo.fs" />
     <Compile Include="App.fs" />
   </ItemGroup>
   <ItemGroup>

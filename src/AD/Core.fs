@@ -122,6 +122,8 @@ let private userContainer = function
 
 let internal userRootEntry = userContainer >> adDirectoryEntry [||]
 
+let private computerContainer = Environment.getEnvVarOrFail "AD_COMPUTER_CONTAINER" |> DistinguishedName
+
 let internal user ctx (UserName userName) properties =
     use searcher = new DirectorySearcher(ctx, sprintf "(&(objectCategory=person)(objectClass=user)(sAMAccountName=%s))" userName, properties)
     searcher.FindOne()
@@ -503,6 +505,18 @@ let getClassGroups () =
     |> Seq.map (DistinguishedName >> fun groupName ->
         use group = adDirectoryEntry [| "sAMAccountName" |] groupName
         group.Properties.["sAMAccountName"].Value :?> string |> GroupName
+    )
+    |> Seq.toList
+
+let getComputers () =
+    use computerCtx = adDirectoryEntry [||] computerContainer
+    use searcher = new DirectorySearcher(computerCtx, "(objectCategory=computer)", [| "dNSHostName" |], PageSize = 1024)
+    use searchResults = searcher.FindAll()
+    searchResults
+    |> Seq.cast<SearchResult>
+    |> Seq.filter (fun adComputer -> adComputer.Properties.["dNSHostName"].Count > 0)
+    |> Seq.choose (fun adComputer ->
+        adComputer.Properties.["dNSHostName"] |> Seq.cast<string> |> Seq.tryExactlyOne
     )
     |> Seq.toList
 

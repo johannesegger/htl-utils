@@ -7,3 +7,5 @@ $managementDir = "$PSScriptRoot\deploy\Management"
 dotnet publish .\src\Management.Server -c Release -o $managementDir
 yarn --cwd .\src\Management.Client install --frozen-lockfile
 yarn --cwd .\src\Management.Client webpack --output-path "$managementDir\wwwroot"
+
+dotnet publish .\src\QueryComputerInfo.Service -c Release -o "$PSScriptRoot\deploy\QueryComputerInfo.Service"

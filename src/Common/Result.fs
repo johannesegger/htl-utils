@@ -20,3 +20,7 @@ let sequence list =
         | Ok _, Error es -> Error es
         | Error e, Error es -> Error (e :: es)
     )
+
+let ofOption error = function
+    | Some v -> Ok v
+    | None -> Error error

@@ -16,6 +16,9 @@
     <Compile Include="ADModifications.HttpHandler.fs" />
     <Compile Include="ConsultationHours.DataTransferTypes.fs" />
     <Compile Include="ConsultationHours.HttpHandler.fs" />
+    <Compile Include="ShowComputerInfo.DataTransferTypes.fs" />
+    <Compile Include="ShowComputerInfo.Mapping.fs" />
+    <Compile Include="ShowComputerInfo.HttpHandler.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -33,6 +36,7 @@
     <ProjectReference Include="..\FinalTheses\FinalTheses.fsproj" />
     <ProjectReference Include="..\Sokrates\Sokrates.fsproj" />
     <ProjectReference Include="..\Untis\Untis.fsproj" />
+    <ProjectReference Include="..\DataStore\DataStore.fsproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-module IncrementClassGroups.DataTransferTypes
+namespace IncrementClassGroups.DataTransferTypes
 
 #if FABLE_COMPILER
 open Thoth.Json

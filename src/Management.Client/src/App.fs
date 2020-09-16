@@ -26,6 +26,7 @@ type Msg =
     | IncrementAADClassGroupsMsg of IncrementAADClassGroups.Msg
     | SyncAADGroupsMsg of SyncAADGroups.Msg
     | ListConsultationHoursMsg of ListConsultationHours.Msg
+    | ShowComputerInfoMsg of ShowComputerInfo.Msg
 
 type Model =
     {
@@ -37,6 +38,7 @@ type Model =
         IncrementAADClassGroups: IncrementAADClassGroups.Model
         SyncAADGroups: SyncAADGroups.Model
         ListConsultationHours: ListConsultationHours.Model
+        ShowComputerInfo: ShowComputerInfo.Model
     }
 
 let urlUpdate (result : Page option) model =
@@ -57,6 +59,7 @@ let init page =
         IncrementAADClassGroups = IncrementAADClassGroups.init
         SyncAADGroups = SyncAADGroups.init
         ListConsultationHours = ListConsultationHours.init
+        ShowComputerInfo = ShowComputerInfo.init
     }
 
 let update msg model =
@@ -75,6 +78,8 @@ let update msg model =
         { model with SyncAADGroups = SyncAADGroups.update msg model.SyncAADGroups }
     | ListConsultationHoursMsg msg ->
         { model with ListConsultationHours = ListConsultationHours.update msg model.ListConsultationHours }
+    | ShowComputerInfoMsg msg ->
+        { model with ShowComputerInfo = ShowComputerInfo.update msg model.ShowComputerInfo }
 
 let root model dispatch =
     let pageHtml = function
@@ -85,6 +90,7 @@ let root model dispatch =
         | IncrementAADClassGroups -> IncrementAADClassGroups.view model.IncrementAADClassGroups (IncrementAADClassGroupsMsg >> dispatch)
         | SyncAADGroups -> SyncAADGroups.view model.SyncAADGroups (SyncAADGroupsMsg >> dispatch)
         | ListConsultationHours -> ListConsultationHours.view model.ListConsultationHours (ListConsultationHoursMsg >> dispatch)
+        | ShowComputerInfo -> ShowComputerInfo.view model.ShowComputerInfo (ShowComputerInfoMsg >> dispatch)
 
     div []
         [ yield Navbar.navbar [ Navbar.Color IsDanger ]
@@ -178,6 +184,12 @@ let stream states msgs =
             (subStates (function ListConsultationHoursMsg msg -> Some msg | _ -> None) (fun m -> m.ListConsultationHours))
             (msgs |> AsyncRx.choose (function UserMsg (ListConsultationHoursMsg msg) -> Some msg | _ -> None))
         |> AsyncRx.map ListConsultationHoursMsg
+
+        ShowComputerInfo.stream
+            (pageActivated ((=) ShowComputerInfo))
+            (subStates (function ShowComputerInfoMsg msg -> Some msg | _ -> None) (fun m -> m.ShowComputerInfo))
+            (msgs |> AsyncRx.choose (function UserMsg (ShowComputerInfoMsg msg) -> Some msg | _ -> None))
+        |> AsyncRx.map ShowComputerInfoMsg
     ]
     |> AsyncRx.mergeSeq
     |> AsyncRx.map UserMsg

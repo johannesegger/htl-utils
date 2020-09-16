@@ -62,5 +62,15 @@ let view =
                     ]
                 ]
             ]
+            Tile.ancestor [] [
+                Tile.parent [ Tile.Size Tile.Is4 ] [
+                    Tile.child [ Tile.CustomClass "box" ] [
+                        a [ Href (toHash ShowComputerInfo); Style [ Display DisplayOptions.Block ] ] [
+                            span [ Class "title"; Style [ Display DisplayOptions.Block ] ] [ str "Show computer info" ]
+                            span [] [ str "Show info about domain computers." ]
+                        ]
+                    ]
+                ]
+            ]
         ]
     ]
