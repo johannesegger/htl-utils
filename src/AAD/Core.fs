@@ -183,7 +183,7 @@ let private applyMemberModifications groupId memberModifications =
 let private changeGroupName (GroupId groupId) newName =
     retryRequest
         (graphServiceClient.Groups.[groupId].Request())
-        (fun request -> request.UpdateAsync(Group(Id = groupId, DisplayName = newName, MailNickname = newName)) |> Async.AwaitTask |> Async.StartAsTask)
+        (fun request -> request.UpdateAsync(Group(Id = groupId, DisplayName = newName, MailNickname = newName)) |> Async.AwaitTask |> Async.StartAsTask) // TODO mail address and aliases are not updated
     |> Async.Ignore
 
 let private applySingleGroupModifications modifications = async {
