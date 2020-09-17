@@ -148,7 +148,7 @@ let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStud
         )
     let createGroupModifications =
         Set.difference sokratesUserTypes adUserTypes
-        |> Seq.map (fun userType -> (CreateGroup (userType, [])))
+        |> Seq.map (fun userType -> (CreateGroup userType))
         |> Seq.toList
     let deleteGroupModifications =
         Set.difference adUserTypes sokratesUserTypes

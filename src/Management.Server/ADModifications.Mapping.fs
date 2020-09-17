@@ -72,7 +72,7 @@ module DirectoryModification =
         | CreateUser (user, password) -> AD.Domain.CreateUser (User.toADDto user, password)
         | UpdateUser (user, update) -> AD.Domain.UpdateUser (UserName.toADDto user.Name, UserType.toADDto user.Type, UserUpdate.toADDto update)
         | DeleteUser user -> AD.Domain.DeleteUser (UserName.toADDto user.Name, UserType.toADDto user.Type)
-        | CreateGroup (userType, members) -> AD.Domain.CreateGroup (UserType.toADDto userType, members |> List.map UserName.toADDto)
+        | CreateGroup userType -> AD.Domain.CreateGroup (UserType.toADDto userType)
         | UpdateGroup (userType, groupUpdate) -> AD.Domain.UpdateGroup (UserType.toADDto userType, GroupUpdate.toADDto groupUpdate)
         | DeleteGroup userType -> AD.Domain.DeleteGroup (UserType.toADDto userType)
 

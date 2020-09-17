@@ -54,9 +54,9 @@ module UIDirectoryModification =
                 sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
             | DeleteUser ({ Type = Student _ } as user) ->
                 sprintf "%s %s" (user.LastName.ToUpper()) user.FirstName
-            | CreateGroup (Teacher, _) ->
+            | CreateGroup Teacher ->
                 "Teachers"
-            | CreateGroup (Student (GroupName className), _) ->
+            | CreateGroup (Student (GroupName className)) ->
                 className
             | UpdateGroup (Teacher, ChangeGroupName (GroupName newGroupName)) ->
                 sprintf "Teachers -> %s" newGroupName

@@ -90,7 +90,7 @@ type DirectoryModification =
     | CreateUser of User * password: string
     | UpdateUser of User * UserUpdate
     | DeleteUser of User
-    | CreateGroup of UserType * UserName list
+    | CreateGroup of UserType
     | UpdateGroup of UserType * GroupUpdate
     | DeleteGroup of UserType
 module DirectoryModification =
@@ -98,7 +98,7 @@ module DirectoryModification =
         | CreateUser (user, password) -> Encode.object [ "createUser", Encode.tuple2 User.encode Encode.string (user, password) ]
         | UpdateUser (user, update) -> Encode.object [ "updateUser", Encode.tuple2 User.encode UserUpdate.encode (user, update) ]
         | DeleteUser user -> Encode.object [ "deleteUser", User.encode user ]
-        | CreateGroup (userType, members) -> Encode.object [ "createGroup", Encode.tuple2 UserType.encode (List.map UserName.encode >> Encode.list) (userType, members) ]
+        | CreateGroup userType -> Encode.object [ "createGroup", UserType.encode userType ]
         | UpdateGroup (userType, update) -> Encode.object [ "updateGroup", Encode.tuple2 UserType.encode GroupUpdate.encode (userType, update) ]
         | DeleteGroup userType -> Encode.object [ "deleteGroup", UserType.encode userType ]
     let decoder : Decoder<_> =
@@ -106,7 +106,7 @@ module DirectoryModification =
             Decode.field "createUser" (Decode.tuple2 User.decoder Decode.string) |> Decode.map CreateUser
             Decode.field "updateUser" (Decode.tuple2 User.decoder UserUpdate.decoder) |> Decode.map UpdateUser
             Decode.field "deleteUser" User.decoder |> Decode.map DeleteUser
-            Decode.field "createGroup" (Decode.tuple2 UserType.decoder (Decode.list UserName.decoder)) |> Decode.map CreateGroup
+            Decode.field "createGroup" UserType.decoder |> Decode.map CreateGroup
             Decode.field "updateGroup" (Decode.tuple2 UserType.decoder GroupUpdate.decoder) |> Decode.map UpdateGroup
             Decode.field "deleteGroup" UserType.decoder |> Decode.map DeleteGroup
         ]

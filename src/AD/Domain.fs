@@ -28,6 +28,6 @@ type DirectoryModification =
     | CreateUser of User * password: string
     | UpdateUser of UserName * UserType * UserUpdate
     | DeleteUser of UserName * UserType
-    | CreateGroup of UserType * UserName list
+    | CreateGroup of UserType
     | UpdateGroup of UserType * GroupUpdate
     | DeleteGroup of UserType

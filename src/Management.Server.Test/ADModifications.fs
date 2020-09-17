@@ -83,9 +83,9 @@ module private AD =
             Type = Teacher
         }
 
-    let createTeacherGroup = CreateGroup (Teacher, [])
+    let createTeacherGroup = CreateGroup Teacher
 
-    let createStudentGroup className = CreateGroup (Student (GroupName className), [])
+    let createStudentGroup className = CreateGroup (Student (GroupName className))
 
     let deleteStudentGroup className = DeleteGroup (Student (GroupName className))
 

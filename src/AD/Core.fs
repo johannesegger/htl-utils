@@ -260,7 +260,7 @@ let private deleteUser userName userType =
         Directory.Delete(exercisePath, true)
     | Student _ -> ()
 
-let private createGroup userType members =
+let private createGroup userType =
     let (GroupName groupName) = groupNameFromUserType userType
     use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
     let adGroup = adCtx.Children.Add(sprintf "CN=%s" groupName, "group")
@@ -270,14 +270,6 @@ let private createGroup userType members =
     adGroup.Properties.["displayName"].Value <- groupName
     let mailDomain = Environment.getEnvVarOrFail "AD_MAIL_DOMAIN"
     adGroup.Properties.["mail"].Value <- sprintf "%s@%s" groupName mailDomain
-
-    use adUserCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_USER_CONTAINER")
-    members
-    |> List.iter (fun userName ->
-        let searchResult = user adUserCtx userName [| "distinguishedName" |]
-        adGroup.Properties.["member"].Add(searchResult.Properties.["distinguishedName"].[0]) |> ignore
-    )
-
     adGroup.CommitChanges()
 
     match userType with
@@ -382,7 +374,7 @@ let applyDirectoryModification = function
     | UpdateUser (userName, Student oldClassName, MoveStudentToClass newClassName) -> moveStudentToClass userName oldClassName newClassName
     | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"
     | DeleteUser (userName, userType) -> deleteUser userName userType
-    | CreateGroup (userType, members) -> createGroup userType members
+    | CreateGroup (userType) -> createGroup userType
     | UpdateGroup (userType, ChangeGroupName newGroupName) ->  changeGroupName userType newGroupName
     | DeleteGroup userType -> deleteGroup userType
 
