@@ -8,7 +8,7 @@ open System
 open System.Globalization
 
 let userNameFromName (firstName: string) (lastName: string) =
-    [firstName; lastName]
+    [String.cut 1 firstName; lastName]
     |> List.map (
         String.replace "Ä" "Ae"
         >> String.replace "Ö" "Oe"
@@ -25,7 +25,7 @@ let uniqueUserName (UserName rawUserName) existingUserNames =
     Seq.initInfinite ((+)2)
     |> Seq.map string
     |> Seq.append [ "" ]
-    |> Seq.map (sprintf "%s%s" rawUserName >> UserName)
+    |> Seq.map (fun number -> sprintf "%s%s" (String.cut (20 - number.Length) rawUserName) number |> UserName)
     |> Seq.find (fun name -> not <| List.contains name existingUserNames)
 
 let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStudents: Sokrates.Domain.Student list) (adUsers: AD.Domain.User list) =

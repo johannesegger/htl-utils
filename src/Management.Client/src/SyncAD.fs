@@ -32,7 +32,8 @@ module UIDirectoryModification =
                 let (UserName userName) = user.Name
                 sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
             | CreateUser ({ Type = Student _ } as user, _) ->
-                sprintf "%s %s" (user.LastName.ToUpper()) user.FirstName
+                let (UserName userName) = user.Name
+                sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
             | UpdateUser ({ Type = Teacher } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s %s (%s) -> %s %s (%s)" (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
