@@ -5,6 +5,7 @@ open System.DirectoryServices
 open System.IO
 open System.Security.AccessControl
 open System.Security.Principal
+open System.Text.RegularExpressions
 
 // see http://www.gabescode.com/active-directory/2018/12/15/better-performance-activedirectory.html
 
@@ -18,6 +19,17 @@ let private adPassword = Environment.getEnvVarOrFail "AD_PASSWORD"
 
 let private adDirectoryEntry path =
     new DirectoryEntry(sprintf "LDAP://%s/%s" serverIpAddress path, adUserName, adPassword)
+
+let private groupHomePath userType =
+    let basePath =
+        match userType with
+        | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_HOME_PATH"
+        | Student (GroupName className) -> Environment.getEnvVarOrFail "AD_STUDENT_HOME_PATH" |> String.replace "<class>" className
+    let rec parent (path: string) =
+        if Path.GetFileName(path).Contains("<username>")
+        then Path.GetDirectoryName(path)
+        else Path.GetDirectoryName(path) |> parent
+    parent basePath
 
 let private homePath (UserName userName) userType =
     match userType with
@@ -35,6 +47,32 @@ let private teacherExercisePath (UserName userName) =
 let private userContainer = function
     | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_CONTAINER"
     | Student (GroupName className) -> Environment.getEnvVarOrFail "AD_STUDENT_CONTAINER" |> String.replace "<class>" className
+
+let rec tryFindOUInHierarchy path filter =
+    let adCtx = adDirectoryEntry path
+    if filter adCtx then Some adCtx
+    else
+        match path.IndexOf(",") with
+        | -1 -> None
+        | idx -> tryFindOUInHierarchy (path.Substring(idx + 1)) filter
+
+let rec private createOU path =
+    let adCtx = adDirectoryEntry path
+    try
+        adCtx.Guid |> ignore // Test if OU exists
+        Some adCtx
+    with _ ->
+        match path.IndexOf(",") with
+        | -1 -> None
+        | idx ->
+            createOU (path.Substring(idx + 1))
+            |> Option.map (fun parentCtx ->
+                use __ = parentCtx
+                let childName = path.Substring(0, idx)
+                let child = parentCtx.Children.Add(childName, "organizationalUnit")
+                child.CommitChanges()
+                child
+            )
 
 let private userRootEntry = userContainer >> adDirectoryEntry
 
@@ -109,7 +147,7 @@ let private createUser (newUser: User) password =
         group.Properties.["member"].Add(adUser.Properties.["distinguishedName"].Value) |> ignore
     )
 
-    use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName userHomePath)
+    use __ = NetworkConnection.create adUserName adPassword userHomePath
 
     let adUserSid = objectSid adUser
 
@@ -203,8 +241,8 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
         if CIString oldHomeDirectory <> CIString newHomeDirectory then
-            use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName oldHomeDirectory)
-            use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName newHomeDirectory)
+            use __ = NetworkConnection.create adUserName adPassword oldHomeDirectory
+            use __ = NetworkConnection.create adUserName adPassword newHomeDirectory
             Directory.Move(oldHomeDirectory, newHomeDirectory)
 
         match userType with
@@ -212,8 +250,8 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
             let oldExercisePath = teacherExercisePath userName
             let newExercisePath = teacherExercisePath (UserName newUserName)
             if CIString oldExercisePath <> CIString newExercisePath then
-                use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName oldExercisePath)
-                use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName newExercisePath)
+                use __ = NetworkConnection.create adUserName adPassword oldExercisePath
+                use __ = NetworkConnection.create adUserName adPassword newExercisePath
                 Directory.Move(oldExercisePath, newExercisePath)
         | Student _ -> ()
     )
@@ -233,8 +271,8 @@ let private moveStudentToClass userName oldClassName newClassName =
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
         if CIString oldHomeDirectory <> CIString newHomeDirectory then
-            use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName oldHomeDirectory)
-            use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName newHomeDirectory)
+            use __ = NetworkConnection.create adUserName adPassword oldHomeDirectory
+            use __ = NetworkConnection.create adUserName adPassword newHomeDirectory
             Directory.Move(oldHomeDirectory, newHomeDirectory)
 
         let distinguishedName = adUser.Properties.["distinguishedName"].Value :?> string
@@ -250,17 +288,26 @@ let private deleteUser userName userType =
     adUser.DeleteTree()
 
     do
-        use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName homeDirectory)
+        use __ = NetworkConnection.create adUserName adPassword homeDirectory
         Directory.Delete(homeDirectory, true)
 
     match userType with
     | Teacher ->
         let exercisePath = teacherExercisePath userName
-        use __ = NetworkConnection.create adUserName adPassword (Path.GetDirectoryName exercisePath)
+        use __ = NetworkConnection.create adUserName adPassword exercisePath
         Directory.Delete(exercisePath, true)
     | Student _ -> ()
 
 let private createGroup userType =
+    do
+        use __ = userContainer userType |> createOU |> Option.defaultWith (fun () -> failwithf "Error while creating OU for user type %A" userType)
+        ()
+
+    do
+        let groupHomePath = groupHomePath userType
+        use __ = NetworkConnection.create adUserName adPassword groupHomePath
+        Directory.CreateDirectory(groupHomePath) |> ignore
+
     let (GroupName groupName) = groupNameFromUserType userType
     use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
     let adGroup = adCtx.Children.Add(sprintf "CN=%s" groupName, "group")
@@ -281,6 +328,26 @@ let private createGroup userType =
     | Teacher -> ()
 
 let private changeGroupName userType (GroupName newGroupName) =
+    let (GroupName oldGroupName, newUserType) =
+        match userType with
+        | Teacher -> failwith "Can't rename teacher group"
+        | Student groupName -> groupName, Student (GroupName newGroupName)
+
+    do
+        let path = userContainer userType
+        use adCtx =
+            tryFindOUInHierarchy path (fun adCtx -> Regex.IsMatch(adCtx.Name, sprintf "^OU=.*%s" (Regex.Escape(oldGroupName))))
+            |> Option.defaultWith (fun () -> failwithf "Can't rename OU: \"%s\" doesn't exist" path)
+        adCtx.Rename(sprintf "OU=%s" newGroupName)
+        adCtx.CommitChanges()
+
+    do
+        let oldGroupHomePath = groupHomePath userType
+        let newGroupHomePath = groupHomePath newUserType
+        use __ = NetworkConnection.create adUserName adPassword oldGroupHomePath
+        use __ = NetworkConnection.create adUserName adPassword newGroupHomePath
+        Directory.Move(oldGroupHomePath, newGroupHomePath)
+
     let oldGroupName = groupNameFromUserType userType
     updateGroup oldGroupName [||] (fun adGroup ->
         adGroup.Rename(sprintf "CN=%s" newGroupName)
@@ -291,11 +358,21 @@ let private changeGroupName userType (GroupName newGroupName) =
     )
 
 let private deleteGroup userType =
-    let groupName = groupNameFromUserType userType
-    use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
-    let searchResult = group adCtx groupName [||]
-    use adGroup = searchResult.GetDirectoryEntry()
-    adGroup.DeleteTree()
+    do
+        use adCtx = userRootEntry userType
+        if adCtx.Children |> Seq.cast<DirectoryEntry> |> Seq.isEmpty |> not
+        then failwith "Can't delete non-empty OU"
+        adCtx.DeleteTree()
+    do
+        let groupHomePath = groupHomePath userType
+        use __ = NetworkConnection.create adUserName adPassword groupHomePath
+        try Directory.Delete(groupHomePath) with _ -> ()
+    do
+        let groupName = groupNameFromUserType userType
+        use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
+        let searchResult = group adCtx groupName [||]
+        use adGroup = searchResult.GetDirectoryEntry()
+        adGroup.DeleteTree()
 
 let private getUserType teachers classGroups userName =
     if teachers |> Seq.contains userName then Some Teacher

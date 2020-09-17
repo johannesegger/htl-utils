@@ -5,6 +5,7 @@ module NetworkConnection
 open System
 open System.ComponentModel
 open System.Runtime.InteropServices
+open System.Text.RegularExpressions
 
 type private ResourceScope =
     | Connected = 1
@@ -57,7 +58,11 @@ module private Win32 =
     [<DllImport("mpr.dll")>]
     extern int WNetCancelConnection2(string name, int flags, bool force)
 
-let create userName password networkName =
+let create userName password path =
+    let networkName =
+        let m = Regex.Match(path, @"^\\\\[^\\]+\\[^\\]+")
+        if m.Success then m.Value
+        else failwithf "Can't get share name from path \"%s\"" path
     let result = Win32.WNetAddConnection2(NetResource(networkName), password, userName, 0)
     if result <> 0 then raise (Win32Exception(result, sprintf "Error connecting to remote share %s" networkName))
 
