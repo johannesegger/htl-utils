@@ -9,6 +9,17 @@ open Microsoft.Graph
 open Microsoft.Graph.Auth
 open Microsoft.Identity.Client
 
+let private clientApp =
+    ConfidentialClientApplicationBuilder
+        .Create(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID")
+        .WithClientSecret(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_APP_KEY")
+        .WithRedirectUri("https://localhost:8080")
+        .Build()
+
+let private authProvider = OnBehalfOfProvider(clientApp)
+
+let private graphServiceClient = GraphServiceClient(authProvider)
+
 let tryGetBearerTokenFromHttpRequest (request: HttpRequest) =
     match request.Headers.TryGetValue "Authorization" with
     | (true, values) ->
@@ -24,16 +35,16 @@ let withAuthenticationFromHttpContext (ctx: HttpContext) fn =
     match tryGetBearerTokenFromHttpRequest ctx.Request with
     | Some authToken ->
         let userId = UserId (ctx.User.ToGraphUserAccount().ObjectId)
-        fn authToken userId
+        fn { Client = graphServiceClient; Authentication = OnBehalfOf authToken } userId
     | None -> failwith "Auth token not found."
 
 let withAuthTokenFromHttpContext (ctx: HttpContext) fn =
-    withAuthenticationFromHttpContext ctx (fun authToken _ -> fn authToken)
+    withAuthenticationFromHttpContext ctx (fun graphClient _ -> fn graphClient)
 
 type Role = Admin | Teacher
 
-let getUserRoles authToken userId = async {
-    let! groups = getUserGroups authToken userId
+let getUserRoles graphClient userId = async {
+    let! groups = getUserGroups graphClient userId
     return
         groups
         |> List.choose (function
@@ -49,7 +60,7 @@ let requiresRole role : HttpHandler =
         match tryGetBearerTokenFromHttpRequest ctx.Request with
         | Some authToken ->
             try
-                let! userRoles = getUserRoles authToken (UserId (ctx.User.ToGraphUserAccount().ObjectId))
+                let! userRoles = getUserRoles { Client = graphServiceClient; Authentication = OnBehalfOf authToken } (UserId (ctx.User.ToGraphUserAccount().ObjectId))
                 if List.contains role userRoles
                 then return! next ctx
                 else return! RequestErrors.forbidden HttpHandler.nil next ctx

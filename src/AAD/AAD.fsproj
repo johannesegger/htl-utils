@@ -17,8 +17,8 @@
 
   <ItemGroup>
     <PackageReference Include="Giraffe" Version="4.0.0" />
-    <PackageReference Include="Microsoft.Graph" Version="1.17.0" />
-    <PackageReference Include="Microsoft.Graph.Auth" Version="1.0.0-preview.1" />
+    <PackageReference Include="Microsoft.Graph" Version="3.14.0" />
+    <PackageReference Include="Microsoft.Graph.Auth" Version="1.0.0-preview.5" />
     <PackageReference Include="Polly" Version="7.1.1" />
   </ItemGroup>
 
