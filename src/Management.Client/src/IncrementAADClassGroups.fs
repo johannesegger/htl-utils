@@ -169,6 +169,7 @@ let view model dispatch =
             Section.section [] [ Views.errorWithRetryButton "Error while loading modifications" (fun () -> dispatch LoadModifications) ]
         | LoadedModifications modifications ->
             Section.section [] [
+                Views.warning "Mail addresses and proxy addresses can't be updated. However that can be done using `Set-UnifiedGroup` in Exchange PowerShell."
                 bulkOperations
                 yield! List.map modificationGroupView modifications.ModificationGroups
                 Button.list [] [

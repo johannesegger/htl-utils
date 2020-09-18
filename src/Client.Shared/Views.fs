@@ -32,7 +32,7 @@ let errorWithRetryButton text onRetryClick =
             ]
     ]
 
-let signInNotification text =
+let warning text =
     Notification.notification [ Notification.Color IsWarning ]
         [
             Icon.icon [ Icon.Props [ Style [ MarginRight "10px" ] ] ] [ Fa.i [ Fa.Solid.ExclamationTriangle ] [] ]
