@@ -36,3 +36,16 @@ type Teacher = {
     Phones: Phone list
     Address: Address option
 }
+
+type StudentAddress = {
+    StudentId: SokratesId
+    Zip: string option
+    City: string option
+    Street: string option
+    Phone1: string option
+    Phone2: string option
+    Country: string option
+    From: DateTimeOffset option
+    Till: DateTimeOffset option
+    UpdateDate: DateTimeOffset option
+}

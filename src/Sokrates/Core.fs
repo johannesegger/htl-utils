@@ -179,3 +179,32 @@ let getStudents className date = async {
     | Some className -> return students |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
     | None -> return students
 }
+
+let private parseStudentAddresses (xmlElement: XElement) =
+    SokratesApi.PupilList(xmlElement).PupilEntries
+    |> Seq.collect (fun n ->
+        match n.Pupil with
+        | Some student -> n.AddressHomes |> Seq.map (fun address -> student, address)
+        | None -> Seq.empty
+    )
+    |> Seq.map (fun (student, address) ->
+        {
+            StudentId = SokratesId student.SokratesId
+            Zip = address.Plz
+            City = address.City
+            Street = address.Street
+            Phone1 = address.Phone1
+            Phone2 = address.Phone2
+            Country = address.Country
+            From = address.From
+            Till = address.Till
+            UpdateDate = address.UpdateDate
+        }
+    )
+    |> Seq.toList
+
+let getStudentAddresses date = async {
+    let date = date |> Option.defaultValue DateTime.Today
+    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", date.ToString("s") ])
+    return parseStudentAddresses xmlElement
+}

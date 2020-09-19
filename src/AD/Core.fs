@@ -1,6 +1,7 @@
 module AD.Core
 
 open AD.Domain
+open System
 open System.DirectoryServices
 open System.IO
 open System.Security.AccessControl
@@ -409,7 +410,7 @@ let getUsers () =
         |> Seq.toList
 
     use userCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_USER_CONTAINER")
-    use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", [| "distinguishedName"; "sAMAccountName"; "givenName"; "sn"; sokratesIdAttributeName |], PageSize = 1024)
+    use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", [| "distinguishedName"; "sAMAccountName"; "givenName"; "sn"; "whenCreated"; sokratesIdAttributeName |], PageSize = 1024)
     use searchResults = searcher.FindAll()
     searchResults
     |> Seq.cast<SearchResult>
@@ -423,6 +424,7 @@ let getUsers () =
                 FirstName = adUser.Properties.["givenName"].[0] :?> string
                 LastName = adUser.Properties.["sn"].[0] :?> string
                 Type = userType
+                CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
             }
         )
     )

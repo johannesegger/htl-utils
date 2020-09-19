@@ -1,5 +1,7 @@
 module AD.Domain
 
+open System
+
 type UserName = UserName of string
 
 type SokratesId = SokratesId of string
@@ -14,6 +16,7 @@ type User = {
     FirstName: string
     LastName: string
     Type: UserType
+    CreatedAt: DateTime
 }
 
 type UserUpdate =
