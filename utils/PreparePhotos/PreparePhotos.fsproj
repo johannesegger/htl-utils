@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\Sokrates\DataTransferTypes.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -16,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Common\Common.fsproj" />
+    <ProjectReference Include="..\..\src\Sokrates\Sokrates.fsproj" />
   </ItemGroup>
 
 </Project>
