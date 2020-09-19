@@ -39,13 +39,26 @@ type Teacher = {
 
 type StudentAddress = {
     StudentId: SokratesId
-    Zip: string option
-    City: string option
-    Street: string option
+    Address: Address option
     Phone1: string option
     Phone2: string option
-    Country: string option
     From: DateTimeOffset option
     Till: DateTimeOffset option
     UpdateDate: DateTimeOffset option
+}
+
+type StudentContactAddress = {
+    Type: string
+    Name: string
+    EMailAddress: string option
+    Address: Address option
+    Phones: string list
+    From: DateTimeOffset option
+    Till: DateTimeOffset option
+    UpdateDate: DateTimeOffset option
+}
+
+type StudentContact = {
+    StudentId: SokratesId
+    ContactAddresses: StudentContactAddress list
 }

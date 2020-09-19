@@ -110,20 +110,52 @@ let syncStudentAddresses () =
     use connection = new MySqlConnection(connectionString)
     connection.Open()
     let dbTransaction = connection.BeginTransaction()
-    let addressType = "Wohnadresse"
-    connection.Execute("DELETE FROM address WHERE addrType=@AddressType", {| AddressType = addressType |}) |> ignore
+    connection.Execute("DELETE FROM address WHERE addrType='Wohnadresse'") |> ignore
     let updates =
         addresses
         |> List.map (fun address ->
             {
                 PersonId = (let (Sokrates.Domain.SokratesId studentId) = address.StudentId in studentId)
-                AddressType = addressType
-                Zip = address.Zip |> Option.toObj
-                City = address.City |> Option.toObj
-                Street = address.Street |> Option.toObj
+                AddressType = "Wohnadresse"
+                Zip = address.Address |> Option.map (fun address -> address.Zip) |> Option.toObj
+                City = address.Address |> Option.map (fun address -> address.City) |> Option.toObj
+                Street = address.Address |> Option.map (fun address -> address.Street) |> Option.toObj
                 Phone1 = address.Phone1 |> Option.toObj
                 Phone2 = address.Phone2 |> Option.toObj
-                Country = address.Country |> Option.toObj
+                Country = address.Address |> Option.map (fun address -> address.Country) |> Option.toObj
+                From = address.From |> Option.map (fun d -> d.DateTime) |> Option.defaultValue DateTime.MinValue
+                FromSpecified = match address.From with | Some _ -> 1 | None -> 0
+                Till = address.Till |> Option.map (fun d -> d.DateTime) |> Option.defaultValue DateTime.MinValue
+                TillSpecified = match address.Till with | Some _ -> 1 | None -> 0
+                UpdateDate = address.UpdateDate |> Option.map (fun d -> d.DateTime) |> Option.defaultValue DateTime.MinValue
+                UpdateDateSpecified = match address.UpdateDate with | Some _ -> 1 | None -> 0
+            }
+        )
+    connection.Execute("INSERT INTO address (addrType, personID, plz, city, street, phone1, phone2,  country, fromDate, fromSpecified, tillDate, tillSpecified, updateDate, updateDateSpecified) VALUES (@AddressType, @PersonId, @Zip, @City, @Street, @Phone1, @Phone2, @Country, @From, @FromSpecified, @Till, @TillSpecified, @UpdateDate, @UpdateDateSpecified)", updates) |> ignore
+    dbTransaction.Commit()
+
+let syncStudentContactInfos () =
+    use connection = new MySqlConnection(connectionString)
+    let studentIds = connection.Query<string>("SELECT DISTINCT personID FROM pupil") |> Seq.map Sokrates.Domain.SokratesId |> Seq.toList
+
+    let contactInfos = Sokrates.Core.getStudentContactInfos studentIds None |> Async.RunSynchronously
+    use connection = new MySqlConnection(connectionString)
+    connection.Open()
+    let dbTransaction = connection.BeginTransaction()
+    connection.Execute("DELETE FROM address WHERE addrType<>'Wohnadresse'") |> ignore
+    let updates =
+        contactInfos
+        |> List.collect (fun contactInfo -> contactInfo.ContactAddresses |> List.map (fun address -> contactInfo.StudentId, address))
+        |> List.map (fun (Sokrates.Domain.SokratesId studentId, address) ->
+            {
+                PersonId = studentId
+                AddressType = address.Type
+                Zip = address.Address |> Option.map (fun address -> address.Zip) |> Option.toObj
+                City = address.Address |> Option.map (fun address -> address.City) |> Option.toObj
+                Street = address.Address |> Option.map (fun address -> address.Street) |> Option.toObj
+                Phone1 = address.Phones |> List.tryItem 0 |> Option.toObj
+                Phone2 = address.Phones |> List.tryItem 1 |> Option.toObj
+                Country = address.Address |> Option.map (fun address -> address.Country) |> Option.toObj
                 From = address.From |> Option.map (fun d -> d.DateTime) |> Option.defaultValue DateTime.MinValue
                 FromSpecified = match address.From with | Some _ -> 1 | None -> 0
                 Till = address.Till |> Option.map (fun d -> d.DateTime) |> Option.defaultValue DateTime.MinValue
@@ -137,9 +169,12 @@ let syncStudentAddresses () =
 
 [<EntryPoint>]
 let main argv =
-    printfn "== Syncing students"
-    syncStudents ()
+    // printfn "== Syncing students"
+    // syncStudents ()
 
-    printfn "== Syncing student addresses"
-    syncStudentAddresses ()
+    // printfn "== Syncing student addresses"
+    // syncStudentAddresses ()
+
+    printfn "== Syncing student contact infos"
+    syncStudentContactInfos ()
     0

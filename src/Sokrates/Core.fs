@@ -27,10 +27,23 @@ let private parsePhoneNumber (text: string) =
     else
         Home text
 
+type ParameterType =
+    | Simple of string
+    | List of (string * string) list
+
 let private getRequestContent messageName parameters =
     let xmlParameters =
         parameters
-        |> List.map (fun (key, value) -> sprintf "<%s xmlns=\"\">%s</%s>" key value key)
+        |> List.map (fun (key, value) ->
+            match value with
+            | Simple text -> sprintf "<%s xmlns=\"\">%s</%s>" key text key
+            | List values ->
+                let children =
+                    values
+                    |> List.map (fun (key, value) -> sprintf "<%s>%s</%s>" key value key)
+                    |> String.concat ""
+                sprintf "<%s xmlns=\"\">%s</%s>" key children key
+        )
         |> String.concat Environment.NewLine
     let userName = Environment.getEnvVarOrFail "SOKRATES_USER_NAME"
     let password = Environment.getEnvVarOrFail "SOKRATES_PASSWORD"
@@ -83,6 +96,20 @@ let private fetch requestContent = async {
         failwithf "Data exchange fault: Code %s: %s" faultCode faultText
     return dataExchangeFault.ElementsAfterSelf() |> Seq.exactlyOne
 }
+
+let private tryGetAddress street streetNumber zip city country =
+    match street, streetNumber, zip, city, country with
+    | Some street, streetNumber, Some zip, Some city, Some country ->
+        Some {
+            Country = country
+            Zip = zip
+            City = city
+            Street =
+                match streetNumber with
+                | Some streetNumber -> sprintf "%s %s" street streetNumber
+                | None -> street
+        }
+    | _ -> None
 
 let private parseTeachers (xmlElement: XElement) =
     SokratesApi.TeacherList(xmlElement).TeacherEntries
@@ -152,7 +179,7 @@ let getClasses schoolYear = async {
             if DateTime.Now.Month < 9 then DateTime.Now.Year - 1
             else DateTime.Now.Year
         )
-    let! xmlElement = fetch (getRequestContent "getTSNClasses" [ "schoolYear", string schoolYear ])
+    let! xmlElement = fetch (getRequestContent "getTSNClasses" [ "schoolYear", Simple (string schoolYear) ])
     return parseClasses xmlElement
 }
 
@@ -173,7 +200,7 @@ let private parseStudents (xmlElement: XElement) =
 
 let getStudents className date = async {
     let date = date |> Option.defaultValue DateTime.Today
-    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", date.ToString("s") ])
+    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ])
     let students = parseStudents xmlElement
     match className with
     | Some className -> return students |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
@@ -190,12 +217,9 @@ let private parseStudentAddresses (xmlElement: XElement) =
     |> Seq.map (fun (student, address) ->
         {
             StudentId = SokratesId student.SokratesId
-            Zip = address.Plz
-            City = address.City
-            Street = address.Street
+            Address = tryGetAddress address.Street address.StreetNumber address.Plz address.City address.Country
             Phone1 = address.Phone1
             Phone2 = address.Phone2
-            Country = address.Country
             From = address.From
             Till = address.Till
             UpdateDate = address.UpdateDate
@@ -205,6 +229,43 @@ let private parseStudentAddresses (xmlElement: XElement) =
 
 let getStudentAddresses date = async {
     let date = date |> Option.defaultValue DateTime.Today
-    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", date.ToString("s") ])
+    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ])
     return parseStudentAddresses xmlElement
+}
+
+let private parseContactInfos (xmlElement: XElement) =
+    SokratesApi.ContactInfoList(xmlElement).ContactEntries
+    |> Seq.choose (fun contactEntry ->
+        match contactEntry.PersonId with
+        | Some studentId ->
+            Some {
+                StudentId = SokratesId studentId
+                ContactAddresses =
+                    contactEntry.Addresses
+                    |> Seq.map (fun address ->
+                        {
+                            Type = Option.defaultValue "" address.Type
+                            Name = [ address.FirstName; address.LastName ] |> Seq.choose id |> String.concat " "
+                            EMailAddress = address.Email
+                            Address = tryGetAddress address.Street address.StreetNumber address.Plz address.City address.Country
+                            Phones = [ address.Phone1; address.Phone2 ] |> List.choose id
+                            From = address.From
+                            Till = address.Till
+                            UpdateDate = address.UpdateDate
+                        }
+                    )
+                    |> Seq.toList
+            }
+        | None -> None
+    )
+    |> Seq.toList
+
+let getStudentContactInfos studentIds date = async {
+    let date = date |> Option.defaultValue DateTime.Today
+    let personIdsParameter =
+        studentIds
+        |> List.map (fun (SokratesId sokratesId) -> "personIDEntry", sokratesId)
+        |> List
+    let! xmlElement = fetch (getRequestContent "getContactInfos" [ "dateOfInterest", Simple (date.ToString("s")); "personIDs", personIdsParameter ])
+    return parseContactInfos xmlElement
 }
