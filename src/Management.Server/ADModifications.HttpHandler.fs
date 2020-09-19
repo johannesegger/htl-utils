@@ -28,7 +28,7 @@ let uniqueUserName (UserName rawUserName) existingUserNames =
     |> Seq.map (fun number -> sprintf "%s%s" (String.cut (20 - number.Length) rawUserName) number |> UserName)
     |> Seq.find (fun name -> not <| List.contains name existingUserNames)
 
-let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStudents: Sokrates.Domain.Student list) (adUsers: AD.Domain.User list) =
+let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStudents: Sokrates.Domain.Student list) (adUsers: AD.Domain.ExistingUser list) =
     let adUserLookupBySokratesId =
         adUsers
         |> List.choose (fun user -> user.SokratesId |> Option.map (fun sokratesId -> SokratesId.fromADDto sokratesId, user))

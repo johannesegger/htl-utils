@@ -40,7 +40,7 @@ module User =
             LastName = student.LastName
             Type = Student (GroupName student.SchoolClass)
         }
-    let fromADDto (user: AD.Domain.User) =
+    let fromADDto (user: AD.Domain.ExistingUser) =
         {
             Name = UserName.fromADDto user.Name
             SokratesId = user.SokratesId |> Option.map SokratesId.fromADDto

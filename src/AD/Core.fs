@@ -118,7 +118,7 @@ let private updateGroup groupName properties fn =
     fn adGroup
     adGroup.CommitChanges()
 
-let private createUser (newUser: User) password =
+let private createUser (newUser: NewUser) password =
     use adCtx = userRootEntry newUser.Type
     let (UserName userName) = newUser.Name
     let adUser = adCtx.Children.Add(sprintf "CN=%s" userName, "user")

@@ -54,7 +54,17 @@ module private AD =
     open ADModifications.DataTransferTypes
     open ADModifications.Mapping
 
-    let toDomainUser = User.toADDto
+    let toExistingADUser (user: AD.Domain.NewUser) =
+        {
+            AD.Domain.ExistingUser.Name = user.Name
+            AD.Domain.ExistingUser.SokratesId = user.SokratesId
+            AD.Domain.ExistingUser.FirstName = user.FirstName
+            AD.Domain.ExistingUser.LastName = user.LastName
+            AD.Domain.ExistingUser.Type = user.Type
+            AD.Domain.ExistingUser.CreatedAt = System.DateTime.Today
+        }
+
+    let toExistingDomainUser = User.toADDto >> toExistingADUser
 
     let asStudent className user =
         { user with Name = userNameFromName user.FirstName user.LastName; Type = Student (GroupName className) }
@@ -104,7 +114,7 @@ let tests =
             Expect.equal actual expected "New teacher and group should be created"
 
         testCase "Create another teacher" <| fun _ ->
-            let actual = modifications [ Sokrates.einstein; Sokrates.bohr ] [] [ AD.toDomainUser AD.einstein ]
+            let actual = modifications [ Sokrates.einstein; Sokrates.bohr ] [] [ AD.toExistingDomainUser AD.einstein ]
             let expected = [ AD.createUser AD.bohr "07.10.1885" ]
             Expect.equal actual expected "New teacher should be created"
 
@@ -114,17 +124,17 @@ let tests =
             Expect.equal actual expected "New student and group should be created"
 
         testCase "Create another student from same class" <| fun _ ->
-            let actual = modifications [] [ Sokrates.asStudent "1A" Sokrates.einstein; Sokrates.asStudent "1A" Sokrates.bohr ] [ AD.einstein |> AD.asStudent "1A" |> AD.toDomainUser ]
+            let actual = modifications [] [ Sokrates.asStudent "1A" Sokrates.einstein; Sokrates.asStudent "1A" Sokrates.bohr ] [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser ]
             let expected = [ AD.createUser (AD.asStudent "1A" AD.bohr) "07.10.1885" ]
             Expect.equal actual expected "New student should be created"
 
         testCase "Create another student from different class" <| fun _ ->
-            let actual = modifications [] [ Sokrates.asStudent "1A" Sokrates.einstein; Sokrates.asStudent "1B" Sokrates.bohr ] [ AD.einstein |> AD.asStudent "1A" |> AD.toDomainUser ]
+            let actual = modifications [] [ Sokrates.asStudent "1A" Sokrates.einstein; Sokrates.asStudent "1B" Sokrates.bohr ] [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser ]
             let expected = [ AD.createStudentGroup "1B"; AD.createUser (AD.asStudent "1B" AD.bohr) "07.10.1885" ]
             Expect.equal actual expected "New student and group should be created"
 
         testCase "Create unique user name if user name already exists" <| fun _ ->
-            let actual = modifications [] [ Sokrates.asStudent "1A" Sokrates.einstein; Sokrates.asStudent "1B" (Sokrates.einstein |> Sokrates.withId "9999") ] [ AD.einstein |> AD.asStudent "1A" |> AD.toDomainUser ]
+            let actual = modifications [] [ Sokrates.asStudent "1A" Sokrates.einstein; Sokrates.asStudent "1B" (Sokrates.einstein |> Sokrates.withId "9999") ] [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser ]
             let expected = [
                 AD.createStudentGroup "1B"
                 AD.createUser (AD.einstein |> AD.asStudent "1B" |> AD.withId "9999" |> AD.withUserName "Albert.Einstein2") "14.03.1879"
@@ -142,12 +152,12 @@ let tests =
             Expect.equal actual expected "Students with unique names should be created"
 
         testCase "Change user name" <| fun _ ->
-            let actual = modifications [ Sokrates.einstein |> Sokrates.withName "ZWEA" "Albert" "Zweistein" ] [] [ AD.toDomainUser AD.einstein ]
+            let actual = modifications [ Sokrates.einstein |> Sokrates.withName "ZWEA" "Albert" "Zweistein" ] [] [ AD.toExistingDomainUser AD.einstein ]
             let expected = [ AD.changeUserName AD.einstein "ZWEA" "Albert" "Zweistein" ]
             Expect.equal actual expected "Teacher name should be changed"
 
         testCase "Move student to another class" <| fun _ ->
-            let actual = modifications [] [ Sokrates.einstein |> Sokrates.asStudent "1B" ] [ AD.einstein |> AD.asStudent "1A" |> AD.toDomainUser ]
+            let actual = modifications [] [ Sokrates.einstein |> Sokrates.asStudent "1B" ] [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser ]
             let expected = [
                 AD.createStudentGroup "1B"
                 AD.moveStudentToClass (AD.einstein |> AD.asStudent "1A") "1B"

@@ -10,7 +10,15 @@ type GroupName = GroupName of string
 
 type UserType = Teacher | Student of className: GroupName
 
-type User = {
+type NewUser = {
+    Name: UserName
+    SokratesId: SokratesId option
+    FirstName: string
+    LastName: string
+    Type: UserType
+}
+
+type ExistingUser = {
     Name: UserName
     SokratesId: SokratesId option
     FirstName: string
@@ -28,7 +36,7 @@ type GroupUpdate =
     | ChangeGroupName of GroupName
 
 type DirectoryModification =
-    | CreateUser of User * password: string
+    | CreateUser of NewUser * password: string
     | UpdateUser of UserName * UserType * UserUpdate
     | DeleteUser of UserName * UserType
     | CreateGroup of UserType
