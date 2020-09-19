@@ -51,6 +51,13 @@ let authTest : HttpHandler =
             |> String.concat Environment.NewLine
         return! Successful.ok (setBodyFromString result) next ctx
     }
+
+let logRequest : HttpHandler =
+    fun next ctx -> task {
+        let! content = ctx.ReadBodyFromRequestAsync()
+        printfn "Content: %s" content
+        return! Successful.OK () next ctx
+    }
 #endif
 
 let webApp =
@@ -74,6 +81,9 @@ let webApp =
                     route "/aad/increment-class-group-updates/apply" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADIncrementClassGroupUpdates
                 ]
             ])
+        #if DEBUG
+        route "/log" >=> logRequest
+        #endif
         setStatusCode 404 >=> text "Not Found" ]
 
 // ---------------------------------
