@@ -75,9 +75,9 @@ let rec private createOU path =
                 child
             )
 
-let private userRootEntry = userContainer >> adDirectoryEntry
+let internal userRootEntry = userContainer >> adDirectoryEntry
 
-let private user ctx (UserName userName) properties =
+let internal user ctx (UserName userName) properties =
     use searcher = new DirectorySearcher(ctx, sprintf "(&(objectCategory=person)(objectClass=user)(sAMAccountName=%s))" userName, properties)
     searcher.FindOne()
 
@@ -106,6 +106,12 @@ let private groupSid groupName =
     let searchResult = group adCtx groupName [| "objectSid" |]
     let data = searchResult.Properties.["objectSid"].[0] :?> byte array
     SecurityIdentifier(data, 0)
+
+let private updateUserByDistinguishedName (DistinguishedName userDistinguishedName) properties fn =
+    use adUser = adDirectoryEntry userDistinguishedName
+    adUser.RefreshCache(properties)
+    fn adUser
+    adUser.CommitChanges()
 
 let private updateUser userName userType properties fn =
     use adCtx = userRootEntry userType
@@ -356,12 +362,24 @@ let private changeGroupName userType (GroupName newGroupName) =
         Directory.Move(oldGroupHomePath, newGroupHomePath)
 
     let oldGroupName = groupNameFromUserType userType
-    updateGroup oldGroupName [||] (fun adGroup ->
+    updateGroup oldGroupName [| "member" |] (fun adGroup ->
         adGroup.Rename(sprintf "CN=%s" newGroupName)
         adGroup.Properties.["sAMAccountName"].Value <- newGroupName
         adGroup.Properties.["displayName"].Value <- newGroupName
         let mailDomain = Environment.getEnvVarOrFail "AD_MAIL_DOMAIN"
         adGroup.Properties.["mail"].Value <- sprintf "%s@%s" newGroupName mailDomain
+
+        adGroup.Properties.["member"]
+        |> Seq.cast<string>
+        |> Seq.map DistinguishedName
+        |> Seq.iter (fun userDn ->
+            updateUserByDistinguishedName userDn [| "sAMAccountName" |] (fun adUser ->
+                adUser.Properties.["department"].Value <- departmentFromUserType newUserType
+                let userName = adUser.Properties.["sAMAccountName"].[0] :?> string |> UserName
+                let userHomePath = homePath userName newUserType
+                adUser.Properties.["homeDirectory"].Value <- userHomePath
+            )
+        )
     )
 
 let private deleteGroup userType =
