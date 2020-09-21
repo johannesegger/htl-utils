@@ -91,7 +91,11 @@ let private groupNameFromUserType = function
 
 let private departmentFromUserType = function
     | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME"
-    | Student (GroupName className) -> sprintf "%s - %s" (Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME") className
+    | Student (GroupName className) -> className
+
+let private divisionFromUserType = function
+    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME"
+    | Student _ -> Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME"
 
 let private objectSid (directoryEntry: DirectoryEntry) =
     let data = directoryEntry.Properties.["objectSid"].[0] :?> byte array
@@ -133,6 +137,7 @@ let private createUser (newUser: NewUser) password =
     adUser.Properties.["displayName"].Value <- sprintf "%s %s" newUser.LastName newUser.FirstName
     adUser.Properties.["sAMAccountName"].Value <- userName
     adUser.Properties.["department"].Value <- departmentFromUserType newUser.Type
+    adUser.Properties.["division"].Value <- divisionFromUserType newUser.Type
     adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" newUser.LastName newUser.FirstName mailDomain
     adUser.Properties.["proxyAddresses"].Value <- proxyAddresses newUser.FirstName newUser.LastName mailDomain |> List.toArray
     let userHomePath = homePath newUser.Name newUser.Type
@@ -267,6 +272,7 @@ let private moveStudentToClass userName oldClassName newClassName =
         let targetOu = userRootEntry (Student newClassName)
         adUser.MoveTo(targetOu)
 
+        adUser.Properties.["division"].Value <- divisionFromUserType (Student newClassName)
         let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
         let newHomeDirectory = homePath userName (Student newClassName)
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
