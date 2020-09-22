@@ -2,7 +2,9 @@ module Directory
 
 open System.IO
 
-// see https://stackoverflow.com/a/16321356/1293659
 let delete path =
-    Directory.GetFiles(path, "*", SearchOption.AllDirectories) |> Seq.iter File.Delete
+    // Remove read-only attributes of files and folders
+    Directory.GetDirectories(path, "*", SearchOption.AllDirectories) |> Seq.iter (fun path -> File.SetAttributes(path, FileAttributes.Normal))
+    Directory.GetFiles(path, "*", SearchOption.AllDirectories) |> Seq.iter (fun path -> File.SetAttributes(path, FileAttributes.Normal))
+
     Directory.Delete(path, true)
