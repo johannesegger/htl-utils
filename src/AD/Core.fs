@@ -302,13 +302,13 @@ let private deleteUser userName userType =
 
     do
         use __ = NetworkConnection.create adUserName adPassword homeDirectory
-        Directory.Delete(homeDirectory, true)
+        Directory.deleteWithRetry homeDirectory |> Async.RunSynchronously
 
     match userType with
     | Teacher ->
         let exercisePath = teacherExercisePath userName
         use __ = NetworkConnection.create adUserName adPassword exercisePath
-        Directory.Delete(exercisePath, true)
+        Directory.deleteWithRetry exercisePath |> Async.RunSynchronously
     | Student _ -> ()
 
 let private createGroup userType =

@@ -13,6 +13,7 @@
     <Compile Include="List.fs" />
     <Compile Include="CIString.fs" />
     <Compile Include="Environment.fs" />
+    <Compile Include="Directory.fs" />
   </ItemGroup>
 
 </Project>
