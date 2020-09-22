@@ -7,4 +7,6 @@ let delete path =
     Directory.GetDirectories(path, "*", SearchOption.AllDirectories) |> Seq.iter (fun path -> File.SetAttributes(path, FileAttributes.Normal))
     Directory.GetFiles(path, "*", SearchOption.AllDirectories) |> Seq.iter (fun path -> File.SetAttributes(path, FileAttributes.Normal))
 
-    Directory.Delete(path, true)
+    try
+        Directory.Delete(path, true)
+    with :? DirectoryNotFoundException -> ()
