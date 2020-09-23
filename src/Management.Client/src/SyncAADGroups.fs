@@ -211,7 +211,7 @@ let view model dispatch =
                         Button.OnClick (fun e -> dispatch (ToggleEnableMemberUpdate (groupUpdateModel, memberUpdateModel)))
                     ]
                     [ Fa.i [ icon ] [] ]
-                str (sprintf "%s - %s %s" memberUpdateModel.User.UserName (memberUpdateModel.User.LastName.ToUpper()) memberUpdateModel.User.FirstName)
+                str (sprintf "%s %s (%s)" (memberUpdateModel.User.LastName.ToUpper()) memberUpdateModel.User.FirstName memberUpdateModel.User.UserName)
             ]
 
         let memberText i =
@@ -223,7 +223,10 @@ let view model dispatch =
             Panel.panel [ ] [
                 let title = sprintf "%s (+%s)" name (memberText memberUpdates.Length)
                 heading title Fa.Solid.Plus IsSuccess
-                yield! List.map (memberUpdate Fa.Solid.Plus IsSuccess) memberUpdates
+                yield!
+                    memberUpdates
+                    |> List.sortBy (fun memberUpdate -> memberUpdate.User.LastName, memberUpdate.User.FirstName)
+                    |> List.map (memberUpdate Fa.Solid.Plus IsSuccess)
             ]
         | UpdateGroup (group, memberUpdates) ->
             Panel.panel [ ] [

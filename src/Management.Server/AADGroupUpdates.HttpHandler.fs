@@ -96,6 +96,21 @@ let getAADGroupUpdates : HttpHandler =
                 | AD.Domain.Teacher -> None
             )
 
+        let studentsPerClass =
+            adUsers
+            |> List.choose (fun user ->
+                match user.Type with
+                | AD.Domain.Student (AD.Domain.GroupName className) ->
+                    let (AD.Domain.UserName userName) = user.Name
+                    match Map.tryFind userName aadUserLookupByUserName with
+                    | Some aadUser -> Some (className, aadUser)
+                    | None -> None
+                | AD.Domain.Teacher -> None
+            )
+            |> List.groupBy fst
+            |> List.map (Tuple.mapSnd (List.map snd))
+            |> List.sortBy fst
+
         let classGroupsWithTeachers nameFn =
             teachingData
             |> List.choose (function
@@ -187,6 +202,9 @@ let getAADGroupUpdates : HttpHandler =
                     |> professionalGroupsWithTeachers
                     |> Seq.toList
                 | "Students" -> [ (groupName, students) ]
+                | "ClassStudents" ->
+                    studentsPerClass
+                    |> List.map (fun (className, students) -> String.replace "<class>" className groupName, students)
                 | _ -> failwithf "Error in row \"%s\" of predefined groups settings: Unknown group id \"%s\"" row groupId
             )
             |> Seq.map (Tuple.mapFst (sprintf "%s%s" predefinedGroupPrefix))
