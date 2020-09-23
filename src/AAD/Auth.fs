@@ -59,13 +59,16 @@ let requiresRole role : HttpHandler =
     fun next ctx -> task {
         match tryGetBearerTokenFromHttpRequest ctx.Request with
         | Some authToken ->
-            try
-                let! userRoles = getUserRoles { Client = graphServiceClient; Authentication = OnBehalfOf authToken } (UserId (ctx.User.ToGraphUserAccount().ObjectId))
-                if List.contains role userRoles
-                then return! next ctx
-                else return! RequestErrors.forbidden HttpHandler.nil next ctx
-            with e ->
-                return! ServerErrors.internalError (text (sprintf "Error while getting user roles: %O" e)) next ctx
+            let! result = async {
+                try
+                    let! userRoles = getUserRoles { Client = graphServiceClient; Authentication = OnBehalfOf authToken } (UserId (ctx.User.ToGraphUserAccount().ObjectId))
+                    if List.contains role userRoles
+                    then return next ctx
+                    else return RequestErrors.forbidden HttpHandler.nil next ctx
+                with e ->
+                    return ServerErrors.internalError (text (sprintf "Error while getting user roles: %O" e)) next ctx
+            }
+            return! result
         | None -> return! RequestErrors.unauthorized "Bearer" "Access to HTL utils" HttpHandler.nil next ctx
     }
 
