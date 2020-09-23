@@ -348,7 +348,7 @@ let private moveStudentToClass userName oldClassName newClassName =
 let private deleteUser userName userType =
     use adCtx = userRootEntry userType
     let searchResult = user adCtx userName [| "homeDirectory" |]
-    let homeDirectory = searchResult.Properties.["homeDirectory"].[0] :?> string |> String.replace "schulserver" "192.168.168.10"
+    let homeDirectory = searchResult.Properties.["homeDirectory"].[0] :?> string
     use adUser = searchResult.GetDirectoryEntry()
     adUser.DeleteTree()
 
