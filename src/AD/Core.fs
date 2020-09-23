@@ -302,6 +302,7 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
         let newHomeDirectory = homePath (UserName newUserName) userType
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
+        // TODO handle if oldHomeDirectory doesn't exist
         if CIString oldHomeDirectory <> CIString newHomeDirectory then
             use __ = NetworkConnection.create adUserName adPassword oldHomeDirectory
             use __ = NetworkConnection.create adUserName adPassword newHomeDirectory
@@ -335,6 +336,7 @@ let private moveStudentToClass userName oldClassName newClassName =
         let newHomeDirectory = homePath userName newUserType
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
+        // TODO handle if oldHomeDirectory doesn't exist
         if CIString oldHomeDirectory <> CIString newHomeDirectory then
             use __ = NetworkConnection.create adUserName adPassword oldHomeDirectory
             use __ = NetworkConnection.create adUserName adPassword newHomeDirectory
