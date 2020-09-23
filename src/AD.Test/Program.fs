@@ -20,7 +20,41 @@ let password = "!A1b2C3#"
 
 let tests =
     testList "Modifications" [
-        testCase "Change group name" <| fun () ->
+        testCase "Moving user changes user properties" <| fun () ->
+            let group1Name = randomName "Group"
+            let group2Name = sprintf "%s-2" group1Name
+            let einstein = createUser (Student (GroupName group1Name))
+            applyDirectoryModifications [
+                CreateGroup (Student (GroupName group1Name))
+                CreateGroup (Student (GroupName group2Name))
+                CreateUser (einstein, password)
+                UpdateUser (einstein.Name, einstein.Type, (MoveStudentToClass (GroupName group2Name)))
+            ]
+
+            let (path, department, homePath, group1Members, group2Members) =
+                use adCtx = userRootEntry (Student (GroupName group2Name))
+                let adUser = user adCtx einstein.Name [| "department"; "homeDirectory" |]
+                use adGroup1 = groupPathFromUserType (Student (GroupName group1Name)) |> adDirectoryEntry [|"member"|]
+                use adGroup2 = groupPathFromUserType (Student (GroupName group2Name)) |> adDirectoryEntry [|"member"|]
+                Uri(adUser.Path).AbsolutePath.TrimStart('/'), // Trim server ip
+                adUser.Properties.["department"].[0] :?> string,
+                adUser.Properties.["homeDirectory"].[0] :?> string,
+                adGroup1.Properties.["member"] |> Seq.cast<string> |> Seq.map DistinguishedName |> Seq.toList,
+                adGroup2.Properties.["member"] |> Seq.cast<string> |> Seq.map DistinguishedName |> Seq.toList
+
+            applyDirectoryModifications [
+                DeleteUser (einstein.Name, (Student (GroupName group2Name)))
+                DeleteGroup (Student (GroupName group2Name))
+                DeleteGroup (Student (GroupName group1Name))
+            ]
+
+            Expect.stringContains path group2Name "User should be moved to new group container"
+            Expect.equal department group2Name "Department should be updated when user is moved"
+            Expect.stringContains homePath group2Name "Home path should be updated when user is moved"
+            Expect.all group1Members (fun groupMember -> groupMember <> DistinguishedName path) "User should not be member of old group"
+            Expect.contains group2Members (DistinguishedName path) "User should be member of new group"
+
+        testCase "Changing group name changes user properties" <| fun () ->
             let groupName = randomName "Group"
             let newGroupName = sprintf "%s-new" groupName
             let einstein = createUser (Student (GroupName groupName))
@@ -30,10 +64,11 @@ let tests =
                 UpdateGroup (Student (GroupName groupName), (ChangeGroupName (GroupName newGroupName)))
             ]
 
-            let department =
+            let (department, homePath) =
                 use adCtx = userRootEntry (Student (GroupName newGroupName))
-                let adUser = user adCtx einstein.Name [| "department" |]
-                adUser.Properties.["department"].[0] :?> string
+                let adUser = user adCtx einstein.Name [| "department"; "homeDirectory" |]
+                adUser.Properties.["department"].[0] :?> string,
+                adUser.Properties.["homeDirectory"].[0] :?> string
 
             applyDirectoryModifications [
                 DeleteUser (einstein.Name, (Student (GroupName newGroupName)))
@@ -41,6 +76,7 @@ let tests =
             ]
 
             Expect.equal department newGroupName "Department should be updated when group name is changed"
+            Expect.stringContains homePath newGroupName "Home path should be updated when group name is changed"
     ]
 
 [<EntryPoint>]

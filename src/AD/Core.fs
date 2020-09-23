@@ -1,16 +1,61 @@
 module AD.Core
 
 open AD.Domain
+open CPI.DirectoryServices
 open System
 open System.DirectoryServices
 open System.IO
 open System.Security.AccessControl
 open System.Security.Principal
-open System.Text.RegularExpressions
 
 // see http://www.gabescode.com/active-directory/2018/12/15/better-performance-activedirectory.html
 
-type DistinguishedName = DistinguishedName of string
+type internal DistinguishedName = DistinguishedName of string
+
+module private DN =
+    let private child name (DistinguishedName path) =
+        let dn = DN(path)
+        dn.GetChild(name).ToString() |> DistinguishedName
+
+    let childOU name = child (sprintf "OU=%s" name)
+    let childCN name = child (sprintf "CN=%s" name)
+
+    let parent (DistinguishedName path) =
+        DistinguishedName (DN(path).Parent.ToString())
+
+    let head (DistinguishedName path) =
+        DN(path).RDNs
+        |> Seq.tryHead
+        |> Option.bind (fun v -> v.Components |> Seq.tryExactlyOne)
+        |> Option.map (fun v -> v.ComponentType, v.ComponentValue)
+        |> Option.defaultWith (fun () -> failwithf "Can't get head from distinguished name \"\"")
+
+    let parentsAndSelf (DistinguishedName path) =
+        let rec fn (dn: DN) acc =
+            let acc' = DistinguishedName (dn.ToString()) :: acc
+            if Seq.isEmpty dn.RDNs
+            then List.rev acc'
+            else fn dn.Parent acc'
+
+        fn (DN(path)) []
+
+    let tryFindParent path filter =
+        parentsAndSelf path
+        |> Seq.tryFind (fun (DistinguishedName parentPath) -> DN(parentPath).RDNs |> Seq.head |> (fun v -> filter (v.ToString())))
+
+    let isOU (DistinguishedName path) =
+        let dn = DN(path)
+        dn.RDNs
+        |> Seq.tryHead
+        |> Option.bind (fun v -> v.Components |> Seq.tryExactlyOne)
+        |> Option.map (fun v -> CIString v.ComponentType = CIString "OU")
+        |> Option.defaultValue false
+
+    let tryCN (DistinguishedName path) =
+        DN(path).RDNs
+        |> Seq.tryItem 0
+        |> Option.bind (fun v -> v.Components |> Seq.tryExactlyOne)
+        |> Option.bind (fun v -> if CIString v.ComponentType = CIString "CN" then Some v.ComponentValue else None)
 
 let private sokratesIdAttributeName = Environment.getEnvVarOrFail "AD_SOKRATES_ID_ATTRIBUTE_NAME"
 
@@ -18,24 +63,18 @@ let private serverIpAddress = Environment.getEnvVarOrFail "AD_SERVER"
 let private adUserName = Environment.getEnvVarOrFail "AD_USER"
 let private adPassword = Environment.getEnvVarOrFail "AD_PASSWORD"
 
-let private adDirectoryEntry path =
-    new DirectoryEntry(sprintf "LDAP://%s/%s" serverIpAddress path, adUserName, adPassword)
+let internal adDirectoryEntry properties (DistinguishedName path) =
+    let entry = new DirectoryEntry(sprintf "LDAP://%s/%s" serverIpAddress path, adUserName, adPassword)
+    entry.RefreshCache(properties)
+    entry
 
 let private groupHomePath userType =
-    let basePath =
-        match userType with
-        | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_HOME_PATH"
-        | Student (GroupName className) -> Environment.getEnvVarOrFail "AD_STUDENT_HOME_PATH" |> String.replace "<class>" className
-    let rec parent (path: string) =
-        if Path.GetFileName(path).Contains("<username>")
-        then Path.GetDirectoryName(path)
-        else Path.GetDirectoryName(path) |> parent
-    parent basePath
+    match userType with
+    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_HOME_PATH"
+    | Student (GroupName className) -> Path.Combine(Environment.getEnvVarOrFail "AD_STUDENT_HOME_PATH", className)
 
 let private homePath (UserName userName) userType =
-    match userType with
-    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_HOME_PATH" |> String.replace "<username>" userName
-    | Student (GroupName className) -> Environment.getEnvVarOrFail "AD_STUDENT_HOME_PATH" |> String.replace "<username>" userName |> String.replace "<class>" className
+    Path.Combine(groupHomePath userType, userName)
 
 let private proxyAddresses firstName lastName mailDomain =
     [
@@ -43,75 +82,93 @@ let private proxyAddresses firstName lastName mailDomain =
     ]
 
 let private teacherExercisePath (UserName userName) =
-    Environment.getEnvVarOrFail "AD_TEACHER_EXERCISE_PATH" |> String.replace "<username>" userName
+    Path.Combine(Environment.getEnvVarOrFail "AD_TEACHER_EXERCISE_PATH", userName)
+
+let private createOU path =
+    path
+    |> DN.parentsAndSelf
+    |> Seq.rev
+    |> Seq.filter DN.isOU
+    |> Seq.map (fun path ->
+        try
+            let adCtx = adDirectoryEntry [||] path
+            adCtx.Guid |> ignore // Test if OU exists
+            adCtx
+        with e ->
+            let parentPath = DN.parent path
+            use parentCtx = adDirectoryEntry [||] parentPath
+            let child = parentCtx.Children.Add(uncurry (sprintf "%s=%s") (DN.head path), "organizationalUnit")
+            child.CommitChanges()
+            child
+    )
+    |> Seq.tryLast
+
+let private createCN path entryType =
+    let name = DN.tryCN path |> Option.defaultWith (fun () -> failwithf "Can't create CN entry: %A doesn't identify a CN entry" path)
+    use parentCtx = createOU (DN.parent path) |> Option.defaultWith (fun () -> failwithf "Error while creating %O" path)
+    let child = parentCtx.Children.Add(sprintf "CN=%s" name, entryType)
+    parentCtx.CommitChanges()
+    child
+
+let private createGroupEntry path = createCN path "group"
+
+let private teacherContainer = Environment.getEnvVarOrFail "AD_TEACHER_CONTAINER" |> DistinguishedName
+
+let private classContainer = Environment.getEnvVarOrFail "AD_CLASS_CONTAINER" |> DistinguishedName
 
 let private userContainer = function
-    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_CONTAINER"
-    | Student (GroupName className) -> Environment.getEnvVarOrFail "AD_STUDENT_CONTAINER" |> String.replace "<class>" className
+    | Teacher -> teacherContainer
+    | Student (GroupName className) -> classContainer |> DN.childOU className
 
-let rec tryFindOUInHierarchy path filter =
-    let adCtx = adDirectoryEntry path
-    if filter adCtx then Some adCtx
-    else
-        match path.IndexOf(",") with
-        | -1 -> None
-        | idx -> tryFindOUInHierarchy (path.Substring(idx + 1)) filter
-
-let rec private createOU path =
-    let adCtx = adDirectoryEntry path
-    try
-        adCtx.Guid |> ignore // Test if OU exists
-        Some adCtx
-    with _ ->
-        match path.IndexOf(",") with
-        | -1 -> None
-        | idx ->
-            createOU (path.Substring(idx + 1))
-            |> Option.map (fun parentCtx ->
-                use __ = parentCtx
-                let childName = path.Substring(0, idx)
-                let child = parentCtx.Children.Add(childName, "organizationalUnit")
-                child.CommitChanges()
-                child
-            )
-
-let internal userRootEntry = userContainer >> adDirectoryEntry
+let internal userRootEntry = userContainer >> adDirectoryEntry [||]
 
 let internal user ctx (UserName userName) properties =
     use searcher = new DirectorySearcher(ctx, sprintf "(&(objectCategory=person)(objectClass=user)(sAMAccountName=%s))" userName, properties)
     searcher.FindOne()
 
-let private group ctx (GroupName groupName) properties =
-    use searcher = new DirectorySearcher(ctx, sprintf "(&(objectCategory=group)(sAMAccountName=%s))" groupName, properties)
-    searcher.FindOne()
+let private teacherGroupPath = Environment.getEnvVarOrFail "AD_TEACHER_GROUP" |> DistinguishedName
+let private teacherGroupName =
+    DN.tryCN teacherGroupPath
+    |> Option.defaultWith (fun () -> failwith "Can't get teacher group name: AD_TEACHER_GROUP must be a distinguished name with CN at the beginning")
+    |> GroupName
 
-let private groupNameFromUserType = function
-    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME" |> GroupName
-    | Student className -> className
+let private studentGroupPath = Environment.getEnvVarOrFail "AD_STUDENT_GROUP" |> DistinguishedName
+let private studentGroupName =
+    DN.tryCN studentGroupPath
+    |> Option.defaultWith (fun () -> failwith "Can't get student group name: AD_STUDENT_GROUP must be a distinguished name with CN at the beginning")
+    |> GroupName
+
+let private classGroupPath (GroupName className) = Environment.getEnvVarOrFail "AD_CLASS_GROUPS_CONTAINER" |> DistinguishedName |> DN.childCN className
+
+let private testUserGroupPath = Environment.getEnvVarOrFail "AD_TEST_USER_GROUP" |> DistinguishedName
+
+let internal groupPathFromUserType = function
+    | Teacher -> teacherGroupPath
+    | Student className -> classGroupPath className
 
 let private departmentFromUserType = function
-    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME"
+    | Teacher -> let (GroupName name) = teacherGroupName in name
     | Student (GroupName className) -> className
 
 let private divisionFromUserType = function
-    | Teacher -> Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME"
-    | Student _ -> Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME"
+    | Teacher -> let (GroupName name) = teacherGroupName in name
+    | Student _ -> let (GroupName name) = studentGroupName in name
 
-let private objectSid (directoryEntry: DirectoryEntry) =
+let private sidFromDirectoryEntry (directoryEntry: DirectoryEntry) =
+    directoryEntry.RefreshCache([| "objectSid" |])
     let data = directoryEntry.Properties.["objectSid"].[0] :?> byte array
     SecurityIdentifier(data, 0)
 
-let private groupSid groupName =
-    use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
-    let searchResult = group adCtx groupName [| "objectSid" |]
-    let data = searchResult.Properties.["objectSid"].[0] :?> byte array
-    SecurityIdentifier(data, 0)
+let private sidFromDistinguishedName path =
+    use adCtx = adDirectoryEntry [||] path
+    sidFromDirectoryEntry adCtx
 
-let private updateUserByDistinguishedName (DistinguishedName userDistinguishedName) properties fn =
-    use adUser = adDirectoryEntry userDistinguishedName
-    adUser.RefreshCache(properties)
-    fn adUser
-    adUser.CommitChanges()
+let private updateDirectoryEntry path properties fn =
+    use adEntry = adDirectoryEntry properties path
+    fn adEntry
+    adEntry.CommitChanges()
+
+let private updateGroup userType = updateDirectoryEntry (groupPathFromUserType userType)
 
 let private updateUser userName userType properties fn =
     use adCtx = userRootEntry userType
@@ -120,13 +177,6 @@ let private updateUser userName userType properties fn =
     adUser.RefreshCache(properties)
     fn adUser
     adUser.CommitChanges()
-
-let private updateGroup groupName properties fn =
-    use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
-    let searchResult = group adCtx groupName properties
-    use adGroup = searchResult.GetDirectoryEntry()
-    fn adGroup
-    adGroup.CommitChanges()
 
 let private createUser (newUser: NewUser) password =
     use adCtx = userRootEntry newUser.Type
@@ -155,13 +205,13 @@ let private createUser (newUser: NewUser) password =
     adUser.Properties.["pwdLastSet"].Value <- 0 // Expire password
     adUser.CommitChanges()
 
-    updateGroup (groupNameFromUserType newUser.Type) [| "member" |] (fun group ->
+    updateGroup newUser.Type [| "member" |] (fun group ->
         group.Properties.["member"].Add(adUser.Properties.["distinguishedName"].Value) |> ignore
     )
 
     use __ = NetworkConnection.create adUserName adPassword userHomePath
 
-    let adUserSid = objectSid adUser
+    let adUserSid = sidFromDirectoryEntry adUser
 
     do
         let dir = Directory.CreateDirectory(userHomePath)
@@ -175,9 +225,9 @@ let private createUser (newUser: NewUser) password =
     | Teacher ->
         let exercisePath = teacherExercisePath newUser.Name
 
-        let teacherSid = groupSid (Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME" |> GroupName)
-        let studentSid = groupSid (Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME" |> GroupName)
-        let testUserSid = groupSid (Environment.getEnvVarOrFail "AD_TEST_USER_GROUP_NAME" |> GroupName)
+        let teacherSid = sidFromDistinguishedName teacherGroupPath
+        let studentSid = sidFromDistinguishedName studentGroupPath
+        let testUserSid = sidFromDistinguishedName testUserGroupPath
 
         let dir = Directory.CreateDirectory(exercisePath)
         let acl = dir.GetAccessControl()
@@ -274,13 +324,15 @@ let private setSokratesId userName userType (SokratesId sokratesId) =
     )
 
 let private moveStudentToClass userName oldClassName newClassName =
-    updateUser userName (Student oldClassName) [| "distinguishedName"; "homeDirectory" |] (fun adUser ->
-        let targetOu = userRootEntry (Student newClassName)
+    let oldUserType = Student oldClassName
+    let newUserType = Student newClassName
+    updateUser userName oldUserType [| "distinguishedName"; "homeDirectory" |] (fun adUser ->
+        let targetOu = userRootEntry newUserType
         adUser.MoveTo(targetOu)
 
-        adUser.Properties.["division"].Value <- divisionFromUserType (Student newClassName)
+        adUser.Properties.["department"].Value <- departmentFromUserType newUserType
         let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
-        let newHomeDirectory = homePath userName (Student newClassName)
+        let newHomeDirectory = homePath userName newUserType
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
         if CIString oldHomeDirectory <> CIString newHomeDirectory then
@@ -289,14 +341,14 @@ let private moveStudentToClass userName oldClassName newClassName =
             Directory.Move(oldHomeDirectory, newHomeDirectory)
 
         let distinguishedName = adUser.Properties.["distinguishedName"].Value :?> string
-        updateGroup oldClassName [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Remove(distinguishedName))
-        updateGroup newClassName [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Add(distinguishedName) |> ignore)
+        updateGroup oldUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Remove(distinguishedName))
+        updateGroup newUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Add(distinguishedName) |> ignore)
     )
 
 let private deleteUser userName userType =
     use adCtx = userRootEntry userType
     let searchResult = user adCtx userName [| "homeDirectory" |]
-    let homeDirectory = searchResult.Properties.["homeDirectory"].[0] :?> string
+    let homeDirectory = searchResult.Properties.["homeDirectory"].[0] :?> string |> String.replace "schulserver" "192.168.168.10"
     use adUser = searchResult.GetDirectoryEntry()
     adUser.DeleteTree()
 
@@ -321,11 +373,9 @@ let private createGroup userType =
         use __ = NetworkConnection.create adUserName adPassword groupHomePath
         Directory.CreateDirectory(groupHomePath) |> ignore
 
-    let (GroupName groupName) = groupNameFromUserType userType
-    use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
-    let adGroup = adCtx.Children.Add(sprintf "CN=%s" groupName, "group")
-    adCtx.CommitChanges()
-
+    let groupPath = groupPathFromUserType userType
+    let groupName = DN.head groupPath |> snd
+    use adGroup = createGroupEntry groupPath
     adGroup.Properties.["sAMAccountName"].Value <- groupName
     adGroup.Properties.["displayName"].Value <- groupName
     let mailDomain = Environment.getEnvVarOrFail "AD_MAIL_DOMAIN"
@@ -334,46 +384,39 @@ let private createGroup userType =
 
     match userType with
     | Student _ ->
-        let parentGroupName = Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME" |> GroupName
-        updateGroup parentGroupName [| "member" |] (fun parentGroup ->
+        updateDirectoryEntry studentGroupPath [| "member" |] (fun parentGroup ->
             parentGroup.Properties.["member"].Add(adGroup.Properties.["distinguishedName"].Value) |> ignore
         )
     | Teacher -> ()
 
-let private changeGroupName userType (GroupName newGroupName) =
-    let (GroupName oldGroupName, newUserType) =
-        match userType with
-        | Teacher -> failwith "Can't rename teacher group"
-        | Student groupName -> groupName, Student (GroupName newGroupName)
+let private changeStudentGroupName (GroupName oldClassName) (GroupName newClassName) =
+    let oldUserType = Student (GroupName oldClassName)
+    let newUserType = Student (GroupName newClassName)
 
     do
-        let path = userContainer userType
-        use adCtx =
-            tryFindOUInHierarchy path (fun adCtx -> Regex.IsMatch(adCtx.Name, sprintf "^OU=.*%s" (Regex.Escape(oldGroupName))))
-            |> Option.defaultWith (fun () -> failwithf "Can't rename OU: \"%s\" doesn't exist" path)
-        adCtx.Rename(sprintf "OU=%s" newGroupName)
+        use adCtx = userContainer oldUserType |> adDirectoryEntry [||]
+        adCtx.Rename(sprintf "OU=%s" newClassName)
         adCtx.CommitChanges()
 
     do
-        let oldGroupHomePath = groupHomePath userType
+        let oldGroupHomePath = groupHomePath oldUserType
         let newGroupHomePath = groupHomePath newUserType
         use __ = NetworkConnection.create adUserName adPassword oldGroupHomePath
         use __ = NetworkConnection.create adUserName adPassword newGroupHomePath
         Directory.Move(oldGroupHomePath, newGroupHomePath)
 
-    let oldGroupName = groupNameFromUserType userType
-    updateGroup oldGroupName [| "member" |] (fun adGroup ->
-        adGroup.Rename(sprintf "CN=%s" newGroupName)
-        adGroup.Properties.["sAMAccountName"].Value <- newGroupName
-        adGroup.Properties.["displayName"].Value <- newGroupName
+    updateGroup oldUserType [| "member" |] (fun adGroup ->
+        adGroup.Rename(sprintf "CN=%s" newClassName)
+        adGroup.Properties.["sAMAccountName"].Value <- newClassName
+        adGroup.Properties.["displayName"].Value <- newClassName
         let mailDomain = Environment.getEnvVarOrFail "AD_MAIL_DOMAIN"
-        adGroup.Properties.["mail"].Value <- sprintf "%s@%s" newGroupName mailDomain
+        adGroup.Properties.["mail"].Value <- sprintf "%s@%s" newClassName mailDomain
 
         adGroup.Properties.["member"]
         |> Seq.cast<string>
         |> Seq.map DistinguishedName
-        |> Seq.iter (fun userDn ->
-            updateUserByDistinguishedName userDn [| "sAMAccountName" |] (fun adUser ->
+        |> Seq.iter (fun userPath ->
+            updateDirectoryEntry userPath [| "sAMAccountName" |] (fun adUser ->
                 adUser.Properties.["department"].Value <- departmentFromUserType newUserType
                 let userName = adUser.Properties.["sAMAccountName"].[0] :?> string |> UserName
                 let userHomePath = homePath userName newUserType
@@ -393,11 +436,8 @@ let private deleteGroup userType =
         use __ = NetworkConnection.create adUserName adPassword groupHomePath
         try Directory.Delete(groupHomePath) with _ -> ()
     do
-        let groupName = groupNameFromUserType userType
-        use adCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
-        let searchResult = group adCtx groupName [||]
-        use adGroup = searchResult.GetDirectoryEntry()
-        adGroup.DeleteTree()
+        use adCtx = groupPathFromUserType userType |> adDirectoryEntry [||]
+        adCtx.DeleteTree()
 
 let private getUserType teachers classGroups userName =
     if teachers |> Seq.contains userName then Some Teacher
@@ -409,63 +449,55 @@ let private getUserType teachers classGroups userName =
         )
 
 let getUsers () =
-    use groupCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
     let teachers =
-        let groupName = Environment.getEnvVarOrFail "AD_TEACHER_GROUP_NAME" |> GroupName
-        let adGroup = group groupCtx groupName [| "member" |]
+        let adGroup = adDirectoryEntry [| "member" |] teacherGroupPath
         adGroup.Properties.["member"]
         |> Seq.cast<string>
         |> Seq.map DistinguishedName
         |> Seq.toList
-    let studentGroup =
-        let groupName = Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME" |> GroupName
-        group groupCtx groupName [| "member" |]
 
     let classGroups =
+        let studentGroup = adDirectoryEntry [| "member" |] studentGroupPath
         studentGroup.Properties.["member"]
         |> Seq.cast<string>
-        |> Seq.map (fun groupName ->
-            use group = adDirectoryEntry groupName
-            group.RefreshCache([| "sAMAccountName"; "member" |])
+        |> Seq.map (DistinguishedName >> fun groupName ->
+            use group = adDirectoryEntry [| "sAMAccountName"; "member" |] groupName
             let groupName = group.Properties.["sAMAccountName"].Value :?> string |> GroupName
             let members = group.Properties.["member"] |> Seq.cast<string> |> Seq.map DistinguishedName |> Seq.toList
             groupName, members
         )
         |> Seq.toList
 
-    use userCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_USER_CONTAINER")
-    use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", [| "distinguishedName"; "sAMAccountName"; "givenName"; "sn"; "whenCreated"; sokratesIdAttributeName |], PageSize = 1024)
-    use searchResults = searcher.FindAll()
-    searchResults
-    |> Seq.cast<SearchResult>
-    |> Seq.choose (fun adUser ->
-        let distinguishedName = DistinguishedName (adUser.Properties.["distinguishedName"].[0] :?> string)
-        getUserType teachers classGroups distinguishedName
-        |> Option.map (fun userType ->
-            {
-                Name = UserName (adUser.Properties.["sAMAccountName"].[0] :?> string)
-                SokratesId = adUser.Properties.[sokratesIdAttributeName] |> Seq.cast<string> |> Seq.tryHead |> Option.map SokratesId
-                FirstName = adUser.Properties.["givenName"].[0] :?> string
-                LastName = adUser.Properties.["sn"].[0] :?> string
-                Type = userType
-                CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
-            }
+    [ teacherContainer; classContainer ]
+    |> List.collect (fun userContainerPath ->
+        use userCtx = adDirectoryEntry [||] userContainerPath
+        use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", [| "distinguishedName"; "sAMAccountName"; "givenName"; "sn"; "whenCreated"; sokratesIdAttributeName |], PageSize = 1024)
+        use searchResults = searcher.FindAll()
+        searchResults
+        |> Seq.cast<SearchResult>
+        |> Seq.choose (fun adUser ->
+            let distinguishedName = DistinguishedName (adUser.Properties.["distinguishedName"].[0] :?> string)
+            getUserType teachers classGroups distinguishedName
+            |> Option.map (fun userType ->
+                {
+                    Name = UserName (adUser.Properties.["sAMAccountName"].[0] :?> string)
+                    SokratesId = adUser.Properties.[sokratesIdAttributeName] |> Seq.cast<string> |> Seq.tryHead |> Option.map SokratesId
+                    FirstName = adUser.Properties.["givenName"].[0] :?> string
+                    LastName = adUser.Properties.["sn"].[0] :?> string
+                    Type = userType
+                    CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
+                }
+            )
         )
+        |> Seq.toList
     )
-    |> Seq.toList
 
 let getClassGroups () =
-    use groupCtx = adDirectoryEntry (Environment.getEnvVarOrFail "AD_GROUP_CONTAINER")
-
-    let studentGroup =
-        let groupName = Environment.getEnvVarOrFail "AD_STUDENT_GROUP_NAME" |> GroupName
-        group groupCtx groupName [| "member" |]
-
+    use studentGroup = adDirectoryEntry [| "member" |] studentGroupPath
     studentGroup.Properties.["member"]
     |> Seq.cast<string>
-    |> Seq.map (fun groupName ->
-        use group = adDirectoryEntry groupName
-        group.RefreshCache([| "sAMAccountName" |])
+    |> Seq.map (DistinguishedName >> fun groupName ->
+        use group = adDirectoryEntry [| "sAMAccountName" |] groupName
         group.Properties.["sAMAccountName"].Value :?> string |> GroupName
     )
     |> Seq.toList
@@ -478,7 +510,8 @@ let applyDirectoryModification = function
     | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"
     | DeleteUser (userName, userType) -> deleteUser userName userType
     | CreateGroup (userType) -> createGroup userType
-    | UpdateGroup (userType, ChangeGroupName newGroupName) ->  changeGroupName userType newGroupName
+    | UpdateGroup (Teacher, ChangeGroupName _) -> failwith "Can't rename teacher group"
+    | UpdateGroup (Student oldClassName, ChangeGroupName newClassName) -> changeStudentGroupName oldClassName newClassName
     | DeleteGroup userType -> deleteGroup userType
 
 let applyDirectoryModifications =
