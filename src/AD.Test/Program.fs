@@ -33,10 +33,10 @@ let tests =
 
             let (path, department, homePath, group1Members, group2Members) =
                 use adCtx = userRootEntry (Student (GroupName group2Name))
-                let adUser = user adCtx einstein.Name [| "department"; "homeDirectory" |]
+                let adUser = user adCtx einstein.Name [| "distinguishedName"; "department"; "homeDirectory" |]
                 use adGroup1 = groupPathFromUserType (Student (GroupName group1Name)) |> adDirectoryEntry [|"member"|]
                 use adGroup2 = groupPathFromUserType (Student (GroupName group2Name)) |> adDirectoryEntry [|"member"|]
-                Uri(adUser.Path).AbsolutePath.TrimStart('/'), // Trim server ip
+                adUser.Properties.["distinguishedName"].[0] :?> string,
                 adUser.Properties.["department"].[0] :?> string,
                 adUser.Properties.["homeDirectory"].[0] :?> string,
                 adGroup1.Properties.["member"] |> Seq.cast<string> |> Seq.map DistinguishedName |> Seq.toList,
