@@ -348,13 +348,15 @@ let private moveStudentToClass userName oldClassName newClassName =
 let private deleteUser userName userType =
     use adCtx = userRootEntry userType
     let searchResult = user adCtx userName [| "homeDirectory" |]
-    let homeDirectory = searchResult.Properties.["homeDirectory"].[0] :?> string
+
     use adUser = searchResult.GetDirectoryEntry()
     adUser.DeleteTree()
 
-    do
+    match searchResult.Properties.["homeDirectory"] |> Seq.cast<string> |> Seq.tryItem 0 with
+    | Some homeDirectory ->
         use __ = NetworkConnection.create adUserName adPassword homeDirectory
         Directory.delete homeDirectory
+    | None -> ()
 
     match userType with
     | Teacher ->
