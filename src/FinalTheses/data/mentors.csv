@@ -1,2 +1,2 @@
-Benutzername;TitelVor;Vorname;Nachname;Email;Typ;Status
-betreuer_123456_78;DI;Alice;Henderson;alice.henderson@htlvb.at;betreuer;Aktiv
+Benutzername;TitelVor;Vorname;Nachname;TitelNach;Klasse;Email;Abteilung;Typ;Status
+betreuer_123456_78;DI;Alice;Henderson;MSc;1AHWII;alice.henderson@htlvb.at;WI;betreuer;Aktiv
