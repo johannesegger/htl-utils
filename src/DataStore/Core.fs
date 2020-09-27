@@ -46,4 +46,5 @@ let updateComputerInfo (computerInfo: ComputerInfo list) =
                 |> Option.defaultValue computerInfo
         )
     let text = JsonSerializer.Serialize(data, serializerOptions)
+    Directory.CreateDirectory(Path.GetDirectoryName(computerInfoDataPath)) |> ignore
     File.WriteAllText(computerInfoDataPath, text)
