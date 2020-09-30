@@ -1,8 +1,8 @@
-module ShowComputerInfo.HttpHandler
+module ComputerInfo.HttpHandler
 
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
-open ShowComputerInfo.Mapping
+open ComputerInfo.Mapping
 
 let getComputerInfo : HttpHandler =
     fun next ctx -> task {

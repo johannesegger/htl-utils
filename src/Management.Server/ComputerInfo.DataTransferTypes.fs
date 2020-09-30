@@ -1,4 +1,4 @@
-namespace ShowComputerInfo.DataTransferTypes
+namespace ComputerInfo.DataTransferTypes
 
 open System
 #if FABLE_COMPILER

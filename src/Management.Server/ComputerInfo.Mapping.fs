@@ -1,6 +1,6 @@
-namespace ShowComputerInfo.Mapping
+namespace ComputerInfo.Mapping
 
-open ShowComputerInfo.DataTransferTypes
+open ComputerInfo.DataTransferTypes
 
 module ComputerInfo =
     let fromDataStoreDto (computerInfo: DataStore.Domain.ComputerInfo) =

@@ -5,7 +5,7 @@ open Fable.React
 open Fable.React.Props
 open FSharp.Control
 open Fulma
-open ShowComputerInfo.DataTransferTypes
+open ComputerInfo.DataTransferTypes
 open Thoth.Fetch
 open Thoth.Json
 

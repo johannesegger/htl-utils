@@ -16,9 +16,9 @@
     <Compile Include="ADModifications.HttpHandler.fs" />
     <Compile Include="ConsultationHours.DataTransferTypes.fs" />
     <Compile Include="ConsultationHours.HttpHandler.fs" />
-    <Compile Include="ShowComputerInfo.DataTransferTypes.fs" />
-    <Compile Include="ShowComputerInfo.Mapping.fs" />
-    <Compile Include="ShowComputerInfo.HttpHandler.fs" />
+    <Compile Include="ComputerInfo.DataTransferTypes.fs" />
+    <Compile Include="ComputerInfo.Mapping.fs" />
+    <Compile Include="ComputerInfo.HttpHandler.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

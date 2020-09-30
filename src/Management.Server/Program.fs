@@ -70,7 +70,7 @@ let webApp =
                     route "/aad/group-updates" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates
                     route "/aad/increment-class-group-updates" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours
-                    route "/computer-info" >=> ShowComputerInfo.HttpHandler.getComputerInfo
+                    route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo
                     #if DEBUG
                     route "/auth-test" >=> authTest
                     #endif
@@ -120,7 +120,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom IncrementClassGroups.DataTransferTypes.ClassGroupModification.encode IncrementClassGroups.DataTransferTypes.ClassGroupModification.decoder
         |> Extra.withCustom AADGroupUpdates.DataTransferTypes.GroupUpdate.encode AADGroupUpdates.DataTransferTypes.GroupUpdate.decoder
         |> Extra.withCustom ConsultationHours.DataTransferTypes.ConsultationHourEntry.encode ConsultationHours.DataTransferTypes.ConsultationHourEntry.decoder
-        |> Extra.withCustom ShowComputerInfo.DataTransferTypes.ComputerInfo.encode ShowComputerInfo.DataTransferTypes.ComputerInfo.decoder
+        |> Extra.withCustom ComputerInfo.DataTransferTypes.ComputerInfo.encode ComputerInfo.DataTransferTypes.ComputerInfo.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
     let clientId = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID"
