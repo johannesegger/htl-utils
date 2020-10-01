@@ -84,7 +84,7 @@ module private User =
             (a, b)
         {
             Id = UserId user.Id
-            UserName = trimEMailAddressDomain user.UserPrincipalName
+            UserName = String.trySplitAt "@" user.UserPrincipalName |> Option.map fst |> Option.defaultValue user.UserPrincipalName
             FirstName = ifNullEmpty user.GivenName
             LastName = ifNullEmpty user.Surname
             MailAddresses =

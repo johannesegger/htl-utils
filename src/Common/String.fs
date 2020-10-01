@@ -10,6 +10,11 @@ let trySubstringFrom idx (text: string) =
     then text.Substring idx |> Some
     else None
 
+let trySplitAt (subString: string) (text: string) =
+    match text.IndexOf(subString) with
+    | -1 -> None
+    | idx -> Some (text.Substring(0, idx), text.Substring(idx + 1))
+
 let toLower (text: string) =
     text.ToLower()
 
