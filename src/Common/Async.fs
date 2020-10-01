@@ -1,6 +1,10 @@
 module Async
 
-let map fn a = async {
+let retn v = async { return v }
+
+let bind fn a = async {
     let! v = a
-    return fn v
+    return! fn v
 }
+
+let map fn = bind (fn >> retn)

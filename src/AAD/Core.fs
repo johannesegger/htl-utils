@@ -1,5 +1,6 @@
 module AAD.Core
 
+open AAD.Configuration
 open AAD.Domain
 open Microsoft.Graph
 open Microsoft.Graph.Auth
@@ -94,7 +95,7 @@ module private User =
                 |> Seq.toList
         }
 
-let getGroupsWithPrefix graphClient prefix = async {
+let private getGroupsWithPrefix graphClient prefix = async {
     let! graphGroups =
         readAll
             graphClient
@@ -125,6 +126,11 @@ let getGroupsWithPrefix graphClient prefix = async {
         })
         |> Async.Parallel
         |> Async.map Array.toList
+}
+
+let getPredefinedGroups graphClient = reader {
+    let! config = Reader.environment
+    return getGroupsWithPrefix graphClient config.PredefinedGroupPrefix
 }
 
 let getUsers graphClient = async {

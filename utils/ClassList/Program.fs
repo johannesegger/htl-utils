@@ -1,4 +1,4 @@
-﻿open System
+open System
 
 [<EntryPoint>]
 let main argv =
@@ -9,7 +9,8 @@ let main argv =
             printf "Class: "
             Console.ReadLine()
         )
-    let students = Sokrates.Core.getStudents (Some className) None |> Async.RunSynchronously
+    let sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
+    let students = Sokrates.Core.getStudents (Some className) None |> Reader.run sokratesConfig |> Async.RunSynchronously
     students
     |> List.sortBy (fun student -> student.LastName, student.FirstName1, student.FirstName2)
     |> List.iter (fun student ->

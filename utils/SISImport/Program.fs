@@ -1,4 +1,4 @@
-﻿open MySql.Data.MySqlClient
+open MySql.Data.MySqlClient
 open System
 open Dapper
 
@@ -37,8 +37,10 @@ type Address = {
 let syncStudents () =
     use connection = new MySqlConnection(connectionString)
     let sisStudents = connection.Query<Pupil>("SELECT * FROM pupil") |> Seq.toList
-    let adUsers = AD.Core.getUsers ()
-    let sokratesStudents = Sokrates.Core.getStudents None None |> Async.RunSynchronously
+    let adConfig = AD.Configuration.Config.fromEnvironment ()
+    let adUsers = AD.Core.getUsers |> Reader.run adConfig
+    let sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
+    let sokratesStudents = Sokrates.Core.getStudents None None |> Reader.run sokratesConfig |> Async.RunSynchronously
 
     let sisStudentsBySokratesId =
         sisStudents
@@ -105,8 +107,8 @@ let syncStudents () =
         | Some _ -> ()
     )
 
-let syncStudentAddresses () =
-    let addresses = Sokrates.Core.getStudentAddresses None |> Async.RunSynchronously
+let syncStudentAddresses sokratesConfig =
+    let addresses = Sokrates.Core.getStudentAddresses None |> Reader.run sokratesConfig |> Async.RunSynchronously
     use connection = new MySqlConnection(connectionString)
     connection.Open()
     let dbTransaction = connection.BeginTransaction()
@@ -134,11 +136,11 @@ let syncStudentAddresses () =
     connection.Execute("INSERT INTO address (addrType, personID, plz, city, street, phone1, phone2,  country, fromDate, fromSpecified, tillDate, tillSpecified, updateDate, updateDateSpecified) VALUES (@AddressType, @PersonId, @Zip, @City, @Street, @Phone1, @Phone2, @Country, @From, @FromSpecified, @Till, @TillSpecified, @UpdateDate, @UpdateDateSpecified)", updates) |> ignore
     dbTransaction.Commit()
 
-let syncStudentContactInfos () =
+let syncStudentContactInfos sokratesConfig =
     use connection = new MySqlConnection(connectionString)
     let studentIds = connection.Query<string>("SELECT DISTINCT personID FROM pupil") |> Seq.map Sokrates.Domain.SokratesId |> Seq.toList
 
-    let contactInfos = Sokrates.Core.getStudentContactInfos studentIds None |> Async.RunSynchronously
+    let contactInfos = Sokrates.Core.getStudentContactInfos studentIds None |> Reader.run sokratesConfig |> Async.RunSynchronously
     use connection = new MySqlConnection(connectionString)
     connection.Open()
     let dbTransaction = connection.BeginTransaction()
@@ -169,12 +171,14 @@ let syncStudentContactInfos () =
 
 [<EntryPoint>]
 let main argv =
-    // printfn "== Syncing students"
-    // syncStudents ()
+    let sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
 
-    // printfn "== Syncing student addresses"
-    // syncStudentAddresses ()
+    printfn "== Syncing students"
+    syncStudents ()
+
+    printfn "== Syncing student addresses"
+    syncStudentAddresses sokratesConfig
 
     printfn "== Syncing student contact infos"
-    syncStudentContactInfos ()
+    syncStudentContactInfos sokratesConfig
     0

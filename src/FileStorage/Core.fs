@@ -1,26 +1,21 @@
 module FileStorage.Core
 
+open FileStorage.Configuration
 open FileStorage.Domain
 open System
 open System.IO
 
-let private baseDirectories =
-    Environment.getEnvVarOrFail "FILE_STORAGE_BASE_DIRECTORIES"
-    |> String.split ";"
-    |> Seq.chunkBySize 2
-    |> Seq.map (fun s -> s.[0], s.[1])
-    |> Map.ofSeq
-
-let private virtualPathToRealPath (v: string) =
+let private virtualPathToRealPath (v: string) = reader {
     let path = v.Split('\\', '/') |> List.ofArray
     match path with
-    | [] | [""] -> Error EmptyPath
+    | [] | [""] -> return Error EmptyPath
     | baseDirectory :: pathTail ->
-        match baseDirectories |> Map.tryFind baseDirectory with
+        let! config = Reader.environment
+        match Map.tryFind baseDirectory config.BaseDirectories with
         | Some baseDirectory ->
-            Path.Combine([| baseDirectory; yield! pathTail |]) // TODO verify that absolute pathTail works as expected
-            |> Ok
-        | None -> Error (InvalidBaseDirectory baseDirectory)
+            return Path.Combine([| baseDirectory; yield! pathTail |]) |> Ok // TODO verify that absolute pathTail works as expected
+        | None -> return Error (InvalidBaseDirectory baseDirectory)
+}
 
 let private createStudentDirectories parentDirectory names =
     names
@@ -62,33 +57,47 @@ let rec private directoryInfo path =
         Files = childFiles
     }
 
-let getChildDirectories path =
-    match virtualPathToRealPath path with
+let getChildDirectories path = reader {
+    match! virtualPathToRealPath path with
     | Ok path ->
         try
-            path
-            |> Directory.GetDirectories
-            |> Seq.map Path.GetFileName
-            |> Seq.toList
-            |> Ok
+            return
+                path
+                |> Directory.GetDirectories
+                |> Seq.map Path.GetFileName
+                |> Seq.toList
+                |> Ok
         with
-            | :? DirectoryNotFoundException -> Ok []
-            | e -> Error (EnumeratingDirectoryFailed e.Message)
-    | Error EmptyPath -> baseDirectories |> Map.toList |> List.map fst |> Ok
-    | Error (InvalidBaseDirectory _ as e) -> Error (GetChildDirectoriesError.PathMappingFailed e)
+            | :? DirectoryNotFoundException -> return Ok []
+            | e -> return Error (EnumeratingDirectoryFailed e.Message)
+    | Error EmptyPath ->
+        let! config = Reader.environment
+        return
+            config.BaseDirectories
+            |> Map.toList
+            |> List.map fst
+            |> Ok
+    | Error (InvalidBaseDirectory _ as e) -> return Error (GetChildDirectoriesError.PathMappingFailed e)
+}
 
-let createExerciseDirectories path names =
-    virtualPathToRealPath path
-    |> Result.mapError PathMappingFailed
-    |> Result.bind (fun path -> createStudentDirectories path names)
+let createExerciseDirectories path names = reader {
+    let! realPath = virtualPathToRealPath path
+    return
+        realPath
+        |> Result.mapError PathMappingFailed
+        |> Result.bind (fun path -> createStudentDirectories path names)
+}
 
-let getDirectoryInfo path =
-    virtualPathToRealPath path
-    |> Result.mapError GetChildDirectoriesError.PathMappingFailed
-    |> Result.bind (fun realPath ->
-        try
-            let result = directoryInfo realPath
-            let dirName = Path.GetFileName path
-            Ok { result with Name = if dirName = String.Empty then path else dirName }
-        with e -> Error (EnumeratingDirectoryFailed e.Message)
-    )
+let getDirectoryInfo path = reader {
+    let! realPath = virtualPathToRealPath path
+    return
+        realPath
+        |> Result.mapError GetChildDirectoriesError.PathMappingFailed
+        |> Result.bind (fun realPath ->
+            try
+                let result = directoryInfo realPath
+                let dirName = Path.GetFileName path
+                Ok { result with Name = if dirName = String.Empty then path else dirName }
+            with e -> Error (EnumeratingDirectoryFailed e.Message)
+        )
+}

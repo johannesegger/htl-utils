@@ -1,4 +1,4 @@
-﻿module App
+module App
 
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
@@ -10,7 +10,6 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open System
-open System.Net
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
@@ -18,15 +17,15 @@ open Thoth.Json.Net
 // Web app
 // ---------------------------------
 
-let handleGetClasses : HttpHandler =
+let handleGetClasses sokratesConfig : HttpHandler =
     fun next ctx -> task {
-        let! list = Sokrates.Core.getClasses None
+        let! list = Sokrates.Core.getClasses None |> Reader.run sokratesConfig
         return! Successful.OK list next ctx
     }
 
-let handleGetClassStudents schoolClass : HttpHandler =
+let handleGetClassStudents sokratesConfig schoolClass : HttpHandler =
     fun next ctx -> task {
-        let! students = Sokrates.Core.getStudents (Some schoolClass) None
+        let! students = Sokrates.Core.getStudents (Some schoolClass) None |> Reader.run sokratesConfig
         let names =
             students
             |> List.map (fun student -> sprintf "%s %s" (student.LastName.ToUpper()) student.FirstName1)
@@ -42,11 +41,14 @@ let handlePostWakeUp macAddress : HttpHandler =
         | Error (WakeUpComputer.Core.InvalidMacAddress message) -> return! RequestErrors.BAD_REQUEST (sprintf "Invalid MAC address: %s" message) next ctx
     }
 
-let handleAddTeachersAsContacts : HttpHandler =
+let handleAddTeachersAsContacts aadConfig photoLibraryConfig sokratesConfig : HttpHandler =
     fun next ctx -> task {
-        let! aadUsers = AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getUsers |> Async.StartChild
-        let! sokratesTeachers = Sokrates.Core.getTeachers () |> Async.StartChild
-        let teacherPhotos = PhotoLibrary.Core.getTeacherPhotos (Some 200, Some 200)
+        let! aadUsers =
+            AAD.Auth.withAuthTokenFromHttpContext ctx (AAD.Core.getUsers >> Reader.retn)
+            |> Reader.run aadConfig
+            |> Async.StartChild
+        let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig |> Async.StartChild
+        let teacherPhotos = PhotoLibrary.Core.getTeacherPhotos (Some 200, Some 200) |> Reader.run photoLibraryConfig
 
         let! aadUsers = aadUsers
         let! sokratesTeachers = sokratesTeachers
@@ -94,14 +96,18 @@ let handleAddTeachersAsContacts : HttpHandler =
                 | None -> None
             )
 
-        AAD.Auth.withAuthenticationFromHttpContext ctx (fun authToken userId -> AAD.Core.updateAutoContacts authToken userId contacts) |> Async.Start
+        AAD.Auth.withAuthenticationFromHttpContext ctx (fun authToken userId -> AAD.Core.updateAutoContacts authToken userId contacts |> Reader.retn)
+        |> Reader.run aadConfig
+        |> Async.Start
         return! Successful.ACCEPTED () next ctx
     }
+
+let fileStorageConfig = FileStorage.Configuration.Config.fromEnvironment ()
 
 let handleGetChildDirectories : HttpHandler =
     fun next ctx -> task {
         let! path = ctx.BindJsonAsync<string>()
-        match FileStorage.Core.getChildDirectories path with
+        match FileStorage.Core.getChildDirectories path |> Reader.run fileStorageConfig with
         | Ok v -> return! Successful.OK v next ctx
         | Error (FileStorage.Domain.GetChildDirectoriesError.PathMappingFailed FileStorage.Domain.EmptyPath as e)
         | Error (FileStorage.Domain.GetChildDirectoriesError.PathMappingFailed (FileStorage.Domain.InvalidBaseDirectory _) as e) ->
@@ -110,14 +116,14 @@ let handleGetChildDirectories : HttpHandler =
             return! ServerErrors.INTERNAL_ERROR e next ctx
     }
 
-let handlePostStudentDirectories : HttpHandler =
+let handlePostStudentDirectories sokratesConfig : HttpHandler =
     fun next ctx -> task {
         let! body = ctx.BindJsonAsync<Shared.CreateStudentDirectories.CreateDirectoriesData>()
-        let! students = Sokrates.Core.getStudents (Some body.ClassName) None
+        let! students = Sokrates.Core.getStudents (Some body.ClassName) None |> Reader.run sokratesConfig
         let names =
             students
             |> List.map (fun student -> sprintf "%s_%s" student.LastName student.FirstName1)
-        match FileStorage.Core.createExerciseDirectories body.Path names with
+        match FileStorage.Core.createExerciseDirectories body.Path names |> Reader.run fileStorageConfig with
         | Ok _ -> return! Successful.OK () next ctx
         | Error (FileStorage.Domain.CreateStudentDirectoriesError.PathMappingFailed FileStorage.Domain.EmptyPath as e)
         | Error (FileStorage.Domain.CreateStudentDirectoriesError.PathMappingFailed (FileStorage.Domain.InvalidBaseDirectory _) as e) ->
@@ -129,7 +135,7 @@ let handlePostStudentDirectories : HttpHandler =
 let handleGetDirectoryInfo : HttpHandler =
     fun next ctx -> task {
         let! path = ctx.BindJsonAsync<string>()
-        match FileStorage.Core.getDirectoryInfo path with
+        match FileStorage.Core.getDirectoryInfo path |> Reader.run fileStorageConfig with
         | Ok directoryInfo ->
             // TODO mapping back from real to virtual path should be already done in `FileStorage.Core.getDirectoryInfo`
             let parentPath = path.Split('\\', '/') |> Seq.rev |> Seq.skip 1 |> Seq.rev |> Seq.toList
@@ -142,9 +148,9 @@ let handleGetDirectoryInfo : HttpHandler =
             return! ServerErrors.INTERNAL_ERROR e next ctx
     }
 
-let handleGetKnowNameGroups : HttpHandler =
+let handleGetKnowNameGroups sokratesConfig : HttpHandler =
     fun next ctx -> task {
-        let! classNames = Sokrates.Core.getClasses None
+        let! classNames = Sokrates.Core.getClasses None |> Reader.run sokratesConfig
         let groups = [
             Shared.KnowName.Teachers
             yield! classNames |> List.map Shared.KnowName.Students
@@ -152,10 +158,10 @@ let handleGetKnowNameGroups : HttpHandler =
         return! Successful.OK groups next ctx
     }
 
-let handleGetKnowNameTeachers : HttpHandler =
+let handleGetKnowNameTeachers photoLibraryConfig sokratesConfig : HttpHandler =
     fun next ctx -> task {
-        let! teachers = Sokrates.Core.getTeachers ()
-        let teachersWithPhotos = PhotoLibrary.Core.getTeachersWithPhotos ()
+        let! teachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig
+        let teachersWithPhotos = PhotoLibrary.Core.getTeachersWithPhotos |> Reader.run photoLibraryConfig
 
         let teachersWithPhoto =
             let teachersWithPhotos =
@@ -187,9 +193,9 @@ let private imageSizeFromRequest (request: HttpRequest) =
         |> Option.bind (tryDo Int32.TryParse)
     (width, height)
 
-let handleGetKnowNameTeacherPhoto shortName : HttpHandler =
+let handleGetKnowNameTeacherPhoto photoLibraryConfig shortName : HttpHandler =
     fun next ctx -> task {
-        match PhotoLibrary.Core.tryGetTeacherPhoto shortName (imageSizeFromRequest ctx.Request) with
+        match PhotoLibrary.Core.tryGetTeacherPhoto shortName (imageSizeFromRequest ctx.Request) |> Reader.run photoLibraryConfig with
         | Some teacherPhoto ->
             let (PhotoLibrary.Domain.Base64EncodedImage data) = teacherPhoto.Data
             let bytes = Convert.FromBase64String data
@@ -198,10 +204,10 @@ let handleGetKnowNameTeacherPhoto shortName : HttpHandler =
             return! RequestErrors.notFound HttpHandler.nil next ctx
     }
 
-let handleGetKnowNameStudentsFromClass className : HttpHandler =
+let handleGetKnowNameStudentsFromClass photoLibraryConfig sokratesConfig className : HttpHandler =
     fun next ctx -> task {
-        let! students = Sokrates.Core.getStudents (Some className) None
-        let studentsWithPhotos = PhotoLibrary.Core.getStudentsWithPhotos ()
+        let! students = Sokrates.Core.getStudents (Some className) None |> Reader.run sokratesConfig
+        let studentsWithPhotos = PhotoLibrary.Core.getStudentsWithPhotos |> Reader.run photoLibraryConfig
 
         let studentsWithPhoto =
             let studentsWithPhotos =
@@ -224,9 +230,9 @@ let handleGetKnowNameStudentsFromClass className : HttpHandler =
         return! Successful.OK studentsWithPhoto next ctx
     }
 
-let handleGetKnowNameStudentPhoto studentId : HttpHandler =
+let handleGetKnowNameStudentPhoto photoLibraryConfig studentId : HttpHandler =
     fun next ctx -> task {
-        match PhotoLibrary.Core.tryGetStudentPhoto studentId (imageSizeFromRequest ctx.Request) with
+        match PhotoLibrary.Core.tryGetStudentPhoto studentId (imageSizeFromRequest ctx.Request) |> Reader.run photoLibraryConfig with
         | Some studentPhoto ->
             let (PhotoLibrary.Domain.Base64EncodedImage data) = studentPhoto.Data
             let bytes = Convert.FromBase64String data
@@ -235,25 +241,31 @@ let handleGetKnowNameStudentPhoto studentId : HttpHandler =
             return! RequestErrors.notFound HttpHandler.nil next ctx
     }
 
+let private aadConfig = AAD.Configuration.Config.fromEnvironment ()
+let private photoLibraryConfig = PhotoLibrary.Configuration.Config.fromEnvironment ()
+let private sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
+
+let requiresTeacher = AAD.Auth.requiresTeacher aadConfig
+
 let webApp =
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/classes" >=> handleGetClasses
-                    routef "/classes/%s/students" (fun className -> AAD.Auth.requiresTeacher >=> handleGetClassStudents className)
-                    route "/know-name/groups" >=> handleGetKnowNameGroups
-                    route "/know-name/teachers" >=> AAD.Auth.requiresTeacher >=> handleGetKnowNameTeachers
-                    routef "/know-name/teachers/%s/photo" handleGetKnowNameTeacherPhoto // Can't check authorization if image is loaded from HTML img tag
-                    routef "/know-name/students/%s" (fun className -> AAD.Auth.requiresTeacher >=> handleGetKnowNameStudentsFromClass className)
-                    routef "/know-name/students/%s/photo" handleGetKnowNameStudentPhoto // Can't check authorization if image is loaded from HTML img tag
+                    route "/classes" >=> handleGetClasses sokratesConfig
+                    routef "/classes/%s/students" (fun className -> requiresTeacher >=> handleGetClassStudents sokratesConfig className)
+                    route "/know-name/groups" >=> handleGetKnowNameGroups sokratesConfig
+                    route "/know-name/teachers" >=> requiresTeacher >=> handleGetKnowNameTeachers photoLibraryConfig sokratesConfig
+                    routef "/know-name/teachers/%s/photo" (handleGetKnowNameTeacherPhoto photoLibraryConfig) // Can't check authorization if image is loaded from HTML img tag
+                    routef "/know-name/students/%s" (fun className -> requiresTeacher >=> handleGetKnowNameStudentsFromClass photoLibraryConfig sokratesConfig className)
+                    routef "/know-name/students/%s/photo" (handleGetKnowNameStudentPhoto photoLibraryConfig) // Can't check authorization if image is loaded from HTML img tag
                 ]
                 POST >=> choose [
-                    routef "/wake-up/%s" (fun macAddress -> AAD.Auth.requiresTeacher >=> handlePostWakeUp macAddress)
-                    route "/teachers/add-as-contacts" >=> AAD.Auth.requiresTeacher >=> handleAddTeachersAsContacts
-                    route "/child-directories" >=> AAD.Auth.requiresTeacher >=> handleGetChildDirectories
-                    route "/create-student-directories" >=> AAD.Auth.requiresTeacher >=> handlePostStudentDirectories
-                    route "/directory-info" >=> AAD.Auth.requiresTeacher >=> handleGetDirectoryInfo
+                    routef "/wake-up/%s" (fun macAddress -> requiresTeacher >=> handlePostWakeUp macAddress)
+                    route "/teachers/add-as-contacts" >=> requiresTeacher >=> handleAddTeachersAsContacts aadConfig photoLibraryConfig sokratesConfig
+                    route "/child-directories" >=> requiresTeacher >=> handleGetChildDirectories
+                    route "/create-student-directories" >=> requiresTeacher >=> handlePostStudentDirectories sokratesConfig
+                    route "/directory-info" >=> requiresTeacher >=> handleGetDirectoryInfo
                 ]
             ])
         setStatusCode 404 >=> text "Not Found" ]
@@ -293,9 +305,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom Shared.KnowName.Person.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-    let clientId = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID"
-    let authority = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_AUTHORITY"
-    Server.addAADAuth services clientId authority
+    Server.addAADAuth services aadConfig.GraphClientId aadConfig.GraphAuthority
 
 let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder

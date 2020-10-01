@@ -1,6 +1,7 @@
 module Sokrates.Core
 
 open FSharp.Data
+open Sokrates.Configuration
 open Sokrates.Domain
 open System
 open System.Net.Http
@@ -31,7 +32,7 @@ type ParameterType =
     | Simple of string
     | List of (string * string) list
 
-let private getRequestContent messageName parameters =
+let private getRequestContent messageName parameters = reader {
     let xmlParameters =
         parameters
         |> List.map (fun (key, value) ->
@@ -45,10 +46,8 @@ let private getRequestContent messageName parameters =
                 sprintf "<%s xmlns=\"\">%s</%s>" key children key
         )
         |> String.concat Environment.NewLine
-    let userName = Environment.getEnvVarOrFail "SOKRATES_USER_NAME"
-    let password = Environment.getEnvVarOrFail "SOKRATES_PASSWORD"
-    let schoolId = Environment.getEnvVarOrFail "SOKRATES_SCHOOL_ID"
-    sprintf """<?xml version="1.0" encoding="utf-8"?>
+    let! config = Reader.environment
+    return sprintf """<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:xsd="http://www.w3.org/2001/XMLSchema">
@@ -64,26 +63,28 @@ let private getRequestContent messageName parameters =
 %s
         </%s>
     </soap:Body>
-</soap:Envelope>""" userName password messageName schoolId xmlParameters messageName
+</soap:Envelope>""" config.UserName config.Password messageName config.SchoolId xmlParameters messageName
+}
 
-let private createHttpClient () =
-    let clientCertFile = Environment.getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PATH"
-    let clientCertPassphrase = Environment.getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE"
+let private createHttpClient = reader {
+    let! config = Reader.environment
     let httpClientHandler = new HttpClientHandler()
-    let cert = new X509Certificate2(clientCertFile, clientCertPassphrase)
+    let cert = new X509Certificate2(config.ClientCertificatePath, config.ClientCertificatePassphrase)
     httpClientHandler.ClientCertificates.Add(cert) |> ignore
-    new HttpClient(httpClientHandler)
+    return new HttpClient(httpClientHandler)
+}
 
-let private fetch requestContent = async {
-    use httpClient = createHttpClient ()
+let private fetch requestContent = asyncReader {
+    use! httpClient = createHttpClient |> AsyncReader.liftReader
     use! response =
         httpClient.PostAsync(
             "https://www.sokrates-bund.at/BRZPRODWS/ws/dataexchange",
             new StringContent(requestContent, Encoding.UTF8, "text/xml")
         )
         |> Async.AwaitTask
+        |> AsyncReader.liftAsync
     response.EnsureSuccessStatusCode() |> ignore
-    use! contentStream = response.Content.ReadAsStreamAsync() |> Async.AwaitTask
+    use! contentStream = response.Content.ReadAsStreamAsync() |> Async.AwaitTask |> AsyncReader.liftAsync
 
     let doc = XDocument.Load(contentStream)
     let namespaceManager = XmlNamespaceManager(NameTable())
@@ -157,8 +158,8 @@ let private parseTeachers (xmlElement: XElement) =
     )
     |> Seq.toList
 
-let getTeachers () = async {
-    let! xmlElement = fetch (getRequestContent "getTeacher" [])
+let getTeachers = asyncReader {
+    let! xmlElement = getRequestContent "getTeacher" [] |> Reader.bind fetch
     return parseTeachers xmlElement
 }
 
@@ -172,14 +173,14 @@ let private parseClasses (xmlElement: XElement) =
     |> Seq.distinct
     |> Seq.toList
 
-let getClasses schoolYear = async {
+let getClasses schoolYear = asyncReader {
     let schoolYear =
         schoolYear
         |> Option.defaultValue (
             if DateTime.Now.Month < 9 then DateTime.Now.Year - 1
             else DateTime.Now.Year
         )
-    let! xmlElement = fetch (getRequestContent "getTSNClasses" [ "schoolYear", Simple (string schoolYear) ])
+    let! xmlElement = getRequestContent "getTSNClasses" [ "schoolYear", Simple (string schoolYear) ] |> Reader.bind fetch
     return parseClasses xmlElement
 }
 
@@ -198,9 +199,9 @@ let private parseStudents (xmlElement: XElement) =
     )
     |> Seq.toList
 
-let getStudents className date = async {
+let getStudents className date = asyncReader {
     let date = date |> Option.defaultValue DateTime.Today
-    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ])
+    let! xmlElement = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ] |> Reader.bind fetch
     let students = parseStudents xmlElement
     match className with
     | Some className -> return students |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
@@ -227,9 +228,9 @@ let private parseStudentAddresses (xmlElement: XElement) =
     )
     |> Seq.toList
 
-let getStudentAddresses date = async {
+let getStudentAddresses date = asyncReader {
     let date = date |> Option.defaultValue DateTime.Today
-    let! xmlElement = fetch (getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ])
+    let! xmlElement = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ] |> Reader.bind fetch
     return parseStudentAddresses xmlElement
 }
 
@@ -260,12 +261,12 @@ let private parseContactInfos (xmlElement: XElement) =
     )
     |> Seq.toList
 
-let getStudentContactInfos studentIds date = async {
+let getStudentContactInfos studentIds date = asyncReader {
     let date = date |> Option.defaultValue DateTime.Today
     let personIdsParameter =
         studentIds
         |> List.map (fun (SokratesId sokratesId) -> "personIDEntry", sokratesId)
         |> List
-    let! xmlElement = fetch (getRequestContent "getContactInfos" [ "dateOfInterest", Simple (date.ToString("s")); "personIDs", personIdsParameter ])
+    let! xmlElement = getRequestContent "getContactInfos" [ "dateOfInterest", Simple (date.ToString("s")); "personIDs", personIdsParameter ] |> Reader.bind fetch
     return parseContactInfos xmlElement
 }

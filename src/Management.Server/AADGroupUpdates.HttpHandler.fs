@@ -40,15 +40,15 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
             )
     ]
 
-let predefinedGroupPrefix = Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUP_PREFIX"
-
-let getAADGroupUpdates : HttpHandler =
+let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThesesConfig untisConfig : HttpHandler =
     fun next ctx -> task {
-        let teachingData = Untis.Core.getTeachingData ()
-        let adUsers = AD.Core.getUsers ()
-        let finalThesesMentors = FinalTheses.Core.getMentors ()
+        let teachingData = Untis.Core.getTeachingData |> Reader.run untisConfig
+        let adUsers = AD.Core.getUsers |> Reader.run adConfig
+        let finalThesesMentors = FinalTheses.Core.getMentors |> Reader.run finalThesesConfig
         let! aadUsers = async {
-            let! users = AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getUsers
+            let! users =
+                AAD.Auth.withAuthTokenFromHttpContext ctx (AAD.Core.getUsers >> Reader.retn)
+                |> Reader.run aadConfig
             return
                 users
                 |> List.map (fun user ->
@@ -64,7 +64,9 @@ let getAADGroupUpdates : HttpHandler =
             |> List.map (fun (user, mailAddresses) -> user.UserName, user)
             |> Map.ofList
         let! aadPredefinedGroups = async {
-            let! predefinedGroups = AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.getGroupsWithPrefix predefinedGroupPrefix)
+            let! predefinedGroups =
+                AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getPredefinedGroups
+                |> Reader.run aadConfig
             return
                 predefinedGroups
                 |> List.map (fun predefinedGroup ->
@@ -111,7 +113,7 @@ let getAADGroupUpdates : HttpHandler =
             |> List.map (Tuple.mapSnd (List.map snd))
             |> List.sortBy fst
 
-        let classGroupsWithTeachers nameFn =
+        let classGroupsWithTeachers =
             teachingData
             |> List.choose (function
                 | Untis.Domain.NormalTeacher (schoolClass, teacherShortName, _)
@@ -126,7 +128,7 @@ let getAADGroupUpdates : HttpHandler =
                     teachers
                     |> List.choose (snd >> fun (Untis.Domain.TeacherShortName v) -> Map.tryFind v aadUserLookupByUserName)
                     |> List.distinct
-                (nameFn schoolClass, teacherIds)
+                (schoolClass, teacherIds)
             )
 
         let formTeachers =
@@ -152,62 +154,32 @@ let getAADGroupUpdates : HttpHandler =
             finalThesesMentors
             |> List.choose (fun m -> Map.tryFind (CIString m.MailAddress) aadUserLookupByMailAddress)
 
-        let professionalGroupsWithTeachers groupsWithSubjects =
-            groupsWithSubjects
-            |> Seq.map (Tuple.mapSnd (List.map CIString) >> fun (groupName, subjects) ->
-                let teacherIds =
-                    teachingData
-                    |> List.choose (function
-                        | Untis.Domain.NormalTeacher (_, Untis.Domain.TeacherShortName teacherShortName, subject) ->
-                            Some (teacherShortName, subject)
-                        | Untis.Domain.FormTeacher _
-                        | Untis.Domain.Custodian _
-                        | Untis.Domain.Informant _ -> None
-                    )
-                    |> List.filter (snd >> fun subject ->
-                        subjects |> List.contains (CIString subject.ShortName)
-                    )
-                    |> List.choose (fst >> flip Map.tryFind aadUserLookupByUserName)
-                    |> List.distinct
-                (groupName, teacherIds)
+        let teachersWithAnySubject subjects =
+            teachingData
+            |> List.choose (function
+                | Untis.Domain.NormalTeacher (_, Untis.Domain.TeacherShortName teacherShortName, subject) ->
+                    Some (teacherShortName, subject)
+                | Untis.Domain.FormTeacher _
+                | Untis.Domain.Custodian _
+                | Untis.Domain.Informant _ -> None
             )
+            |> List.filter (snd >> fun subject ->
+                subjects |> List.map CIString |> List.contains (CIString subject.ShortName)
+            )
+            |> List.choose (fst >> flip Map.tryFind aadUserLookupByUserName)
+            |> List.distinct
 
         let desiredGroups =
-            Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUPS"
-            |> String.split ";"
-            |> Seq.collect (fun row ->
-                let rowParts = String.split "," row
-                let groupId = Array.tryItem 0 rowParts |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of predefined groups settings: Can't get group id." row)
-                let groupName = Array.tryItem 1 rowParts |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of predefined groups settings: Can't get group name." row)
-                match groupId with
-                | "Teachers" -> [ (groupName, teachers) ]
-                | "FormTeachers" -> [ (groupName, formTeachers) ]
-                | "FinalThesesMentors" -> [ (groupName, finalThesesMentors) ]
-                | "ClassTeachers" -> classGroupsWithTeachers (fun name -> String.replace "<class>" name groupName)
-                | "ProfessionalGroups" ->
-                    Environment.getEnvVarOrFail "AAD_PROFESSIONAL_GROUPS_SUBJECTS"
-                    |> String.split ";"
-                    |> Seq.map (fun row ->
-                        let (rawGroupName, subjectString) =
-                            match row.IndexOf("-") with
-                            | idx when idx >= 0 -> (row.Substring(0, idx), row.Substring(idx + 1))
-                            | _ -> failwithf "Error in row \"%s\" of professional groups subjects settings: Can't find separator between group name and subjects" row
-                        let fullGroupName = String.replace "<subject>" rawGroupName groupName
-                        let subjects =
-                            subjectString
-                            |> String.split ","
-                            |> List.ofArray
-                        (fullGroupName, subjects)
-                    )
-                    |> professionalGroupsWithTeachers
-                    |> Seq.toList
-                | "Students" -> [ (groupName, students) ]
-                | "ClassStudents" ->
-                    studentsPerClass
-                    |> List.map (fun (className, students) -> String.replace "<class>" className groupName, students)
-                | _ -> failwithf "Error in row \"%s\" of predefined groups settings: Unknown group id \"%s\"" row groupId
+            aadConfig.PredefinedGroups
+            |> Seq.collect (function
+                | AAD.Configuration.Teachers groupName -> [ (groupName, teachers) ]
+                | AAD.Configuration.FormTeachers groupName -> [ (groupName, formTeachers) ]
+                | AAD.Configuration.FinalThesesMentors groupName -> [ (groupName, finalThesesMentors) ]
+                | AAD.Configuration.ClassTeachers classNameToGroupName -> classGroupsWithTeachers |> List.map (Tuple.mapFst classNameToGroupName)
+                | AAD.Configuration.ProfessionalGroup (groupName, subjects) -> [ (groupName, teachersWithAnySubject subjects) ]
+                | AAD.Configuration.Students groupName -> [ (groupName, students) ]
+                | AAD.Configuration.ClassStudents classNameToGroupName -> studentsPerClass |> List.map (Tuple.mapFst classNameToGroupName)
             )
-            |> Seq.map (Tuple.mapFst (sprintf "%s%s" predefinedGroupPrefix))
             |> Seq.toList
 
         let updates = calculateAll aadPredefinedGroups desiredGroups
@@ -215,33 +187,39 @@ let getAADGroupUpdates : HttpHandler =
         return! Successful.OK updates next ctx
     }
 
-let applyAADGroupUpdates : HttpHandler =
+let applyAADGroupUpdates aadConfig : HttpHandler =
     fun next ctx -> task {
         let! input = ctx.BindJsonAsync<GroupUpdate list>()
         let modifications =
             input
             |> List.map GroupModification.toAADDto
-        do! AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications)
+        do!
+            AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications >> Reader.retn)
+            |> Reader.run aadConfig
         return! Successful.OK () next ctx
     }
 
-let getAADIncrementClassGroupUpdates : HttpHandler =
+let getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig : HttpHandler =
     fun next ctx -> task {
         let! classGroups = async {
-            let! predefinedGroups = AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.getGroupsWithPrefix predefinedGroupPrefix)
+            let! predefinedGroups =
+                AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getPredefinedGroups
+                |> Reader.run aadConfig
             return
                 predefinedGroups
                 |> List.map (fun group -> group.Name)
         }
 
-        let modifications = IncrementClassGroups.Core.modifications classGroups
+        let modifications = IncrementClassGroups.Core.modifications classGroups |> Reader.run incrementClassGroupsConfig
         return! Successful.OK modifications next ctx
     }
 
-let applyAADIncrementClassGroupUpdates : HttpHandler =
+let applyAADIncrementClassGroupUpdates aadConfig : HttpHandler =
     fun next ctx -> task {
         let! aadGroupNameLookupByName = async {
-            let! predefinedGroups = AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.getGroupsWithPrefix predefinedGroupPrefix)
+            let! predefinedGroups =
+                AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getPredefinedGroups
+                |> Reader.run aadConfig
             return
                 predefinedGroups
                 |> List.map (fun autoGroup -> autoGroup.Name, autoGroup.Id)
@@ -251,6 +229,8 @@ let applyAADIncrementClassGroupUpdates : HttpHandler =
         let modifications =
             data
             |> List.map (ClassGroupModification.toAADGroupModification (flip Map.find aadGroupNameLookupByName))
-        do! AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications)
+        do!
+            AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications >> Reader.retn)
+            |> Reader.run aadConfig
         return! Successful.OK () next ctx
     }

@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Config.fs" />
     <Compile Include="Domain.fs" />
     <Compile Include="Core.fs" />
     <Compile Include="Auth.fs" />

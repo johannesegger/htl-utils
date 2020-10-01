@@ -1,5 +1,6 @@
-﻿module AAD.Auth
+module AAD.Auth
 
+open AAD.Configuration
 open AAD.Core
 open AAD.Domain
 open FSharp.Control.Tasks.V2.ContextInsensitive
@@ -9,16 +10,23 @@ open Microsoft.Graph
 open Microsoft.Graph.Auth
 open Microsoft.Identity.Client
 
-let private clientApp =
-    ConfidentialClientApplicationBuilder
-        .Create(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID")
-        .WithClientSecret(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_APP_KEY")
+let private clientApp = reader {
+    let! config = Reader.environment
+    return ConfidentialClientApplicationBuilder
+        .Create(config.GraphClientId)
+        .WithClientSecret(config.GraphClientSecret)
         .WithRedirectUri("https://localhost:8080")
         .Build()
+}
 
-let private authProvider = OnBehalfOfProvider(clientApp)
+let private authProvider = clientApp |> Reader.map OnBehalfOfProvider
 
-let private graphServiceClient = GraphServiceClient(authProvider)
+let private graphServiceClient = authProvider |> Reader.map GraphServiceClient
+
+let private graphClient authToken = reader {
+    let! graphServiceClient = graphServiceClient
+    return { Client = graphServiceClient; Authentication = OnBehalfOf authToken }
+}
 
 let tryGetBearerTokenFromHttpRequest (request: HttpRequest) =
     match request.Headers.TryGetValue "Authorization" with
@@ -31,37 +39,41 @@ let tryGetBearerTokenFromHttpRequest (request: HttpRequest) =
         )
     | _ -> None
 
-let withAuthenticationFromHttpContext (ctx: HttpContext) fn =
+let withAuthenticationFromHttpContext (ctx: HttpContext) fn = reader {
     match tryGetBearerTokenFromHttpRequest ctx.Request with
     | Some authToken ->
         let userId = UserId (ctx.User.ToGraphUserAccount().ObjectId)
-        fn { Client = graphServiceClient; Authentication = OnBehalfOf authToken } userId
-    | None -> failwith "Auth token not found."
+        let! graphClient = graphClient authToken
+        return! fn graphClient userId
+    | None -> return failwith "Auth token not found."
+}
 
 let withAuthTokenFromHttpContext (ctx: HttpContext) fn =
     withAuthenticationFromHttpContext ctx (fun graphClient _ -> fn graphClient)
 
 type Role = Admin | Teacher
 
-let getUserRoles graphClient userId = async {
-    let! groups = getUserGroups graphClient userId
+let getUserRoles graphClient userId = asyncReader {
+    let! config = Reader.environment |> AsyncReader.liftReader
+    let! groups = getUserGroups graphClient userId |> AsyncReader.liftAsync
     return
         groups
         |> List.choose (function
-            | :? DirectoryRole as role when CIString role.Id = CIString (Environment.getEnvVarOrFail "AAD_GLOBAL_ADMIN_ROLE_ID") -> Some Admin
-            | :? Group as group when CIString group.Id = CIString (Environment.getEnvVarOrFail "AAD_TEACHER_GROUP_ID") -> Some Teacher
+            | :? DirectoryRole as role when CIString role.Id = CIString config.GlobalAdminRoleId -> Some Admin
+            | :? Group as group when CIString group.Id = CIString config.TeacherGroupId -> Some Teacher
             | _ -> None
         )
         |> List.distinct
 }
 
-let requiresRole role : HttpHandler =
+let requiresRole config role : HttpHandler =
     fun next ctx -> task {
         match tryGetBearerTokenFromHttpRequest ctx.Request with
         | Some authToken ->
             let! result = async {
                 try
-                    let! userRoles = getUserRoles { Client = graphServiceClient; Authentication = OnBehalfOf authToken } (UserId (ctx.User.ToGraphUserAccount().ObjectId))
+                    let graphClient = Reader.run config (graphClient authToken)
+                    let! userRoles = Reader.run config (getUserRoles graphClient (UserId (ctx.User.ToGraphUserAccount().ObjectId)))
                     if List.contains role userRoles
                     then return next ctx
                     else return RequestErrors.forbidden HttpHandler.nil next ctx
@@ -72,5 +84,5 @@ let requiresRole role : HttpHandler =
         | None -> return! RequestErrors.unauthorized "Bearer" "Access to HTL utils" HttpHandler.nil next ctx
     }
 
-let requiresAdmin : HttpHandler = requiresRole Admin
-let requiresTeacher : HttpHandler = requiresRole Teacher
+let requiresAdmin config : HttpHandler = requiresRole config Admin
+let requiresTeacher config : HttpHandler = requiresRole config Teacher

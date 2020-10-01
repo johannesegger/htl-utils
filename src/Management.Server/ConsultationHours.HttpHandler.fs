@@ -4,10 +4,10 @@ open ConsultationHours.DataTransferTypes
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 
-let getConsultationHours : HttpHandler =
+let getConsultationHours sokratesConfig untisConfig : HttpHandler =
     fun next ctx -> task {
-        let untisTeachingData = Untis.Core.getTeachingData ()
-        let! sokratesTeachers = Sokrates.Core.getTeachers ()
+        let untisTeachingData = Untis.Core.getTeachingData |> Reader.run untisConfig
+        let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig
 
         let consultationHours =
             untisTeachingData

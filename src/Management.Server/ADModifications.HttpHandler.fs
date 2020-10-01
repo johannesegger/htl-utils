@@ -164,17 +164,17 @@ let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStud
     ]
     |> List.concat
 
-let getADModifications : HttpHandler =
+let getADModifications adConfig sokratesConfig : HttpHandler =
     fun next ctx -> task {
-        let! sokratesTeachers = Sokrates.Core.getTeachers () |> Async.StartChild
+        let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig |> Async.StartChild
         let timestamp =
             ctx.TryGetQueryStringValue "date"
             |> Option.map (fun date ->
                 tryDo (fun () -> (DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.CurrentCulture, DateTimeStyles.None))) ()
                 |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\"" date)
             )
-        let! sokratesStudents = Sokrates.Core.getStudents None timestamp |> Async.StartChild
-        let adUsers = AD.Core.getUsers ()
+        let! sokratesStudents = Sokrates.Core.getStudents None timestamp |> Reader.run sokratesConfig |> Async.StartChild
+        let adUsers = Reader.run adConfig AD.Core.getUsers
 
         let! sokratesTeachers = sokratesTeachers
         let! sokratesStudents = sokratesStudents
@@ -183,30 +183,32 @@ let getADModifications : HttpHandler =
         return! Successful.OK modifications next ctx
     }
 
-let applyADModifications : HttpHandler =
+let applyADModifications adConfig : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<DirectoryModification list>()
         data
         |> List.map DirectoryModification.toADDto
         |> AD.Core.applyDirectoryModifications
+        |> Reader.run adConfig
         return! Successful.OK () next ctx
     }
 
-let getADIncrementClassGroupUpdates : HttpHandler =
+let getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig : HttpHandler =
     fun next ctx -> task {
         let classGroups =
-            AD.Core.getClassGroups ()
+            Reader.run adConfig AD.Core.getClassGroups
             |> List.map (GroupName.fromADDto >> (fun (GroupName groupName) -> groupName))
 
-        let modifications = IncrementClassGroups.Core.modifications classGroups
+        let modifications = IncrementClassGroups.Core.modifications classGroups |> Reader.run incrementClassGroupsConfig
         return! Successful.OK modifications next ctx
     }
 
-let applyADIncrementClassGroupUpdates : HttpHandler =
+let applyADIncrementClassGroupUpdates adConfig : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<IncrementClassGroups.DataTransferTypes.ClassGroupModification list>()
         data
         |> List.map (ClassGroupModification.toDirectoryModification >> DirectoryModification.toADDto)
         |> AD.Core.applyDirectoryModifications
+        |> Reader.run adConfig
         return! Successful.OK () next ctx
     }

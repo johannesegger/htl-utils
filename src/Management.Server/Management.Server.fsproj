@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="IncrementClassGroups.Configuration.fs" />
     <Compile Include="IncrementClassGroups.DataTransferTypes.fs" />
     <Compile Include="IncrementClassGroups.Core.fs" />
     <Compile Include="AADGroupUpdates.DataTransferTypes.fs" />

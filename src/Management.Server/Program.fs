@@ -1,4 +1,4 @@
-﻿module App
+module App
 
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
@@ -17,10 +17,10 @@ open Thoth.Json.Net
 // ---------------------------------
 
 #if DEBUG
-let authTest : HttpHandler =
+let authTest aadConfig : HttpHandler =
     fun next ctx -> task {
         let! groups = async {
-            let! groups = AAD.Auth.withAuthenticationFromHttpContext ctx AAD.Core.getUserGroups
+            let! groups = AAD.Auth.withAuthenticationFromHttpContext ctx (fun graphClient userId -> AAD.Core.getUserGroups graphClient userId |> Reader.retn) |> Reader.run aadConfig
             return
                 groups
                 |> Seq.map (function
@@ -60,26 +60,36 @@ let logRequest : HttpHandler =
     }
 #endif
 
+let private adConfig = AD.Configuration.Config.fromEnvironment ()
+let private aadConfig = AAD.Configuration.Config.fromEnvironment ()
+let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
+let private finalThesesConfig = FinalTheses.Configuration.Config.fromEnvironment ()
+let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Config.fromEnvironment ()
+let private sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
+let private untisConfig = Untis.Configuration.Config.fromEnvironment ()
+
+let private requiresAdmin = AAD.Auth.requiresAdmin aadConfig
+
 let webApp =
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/ad/updates" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.getADModifications
-                    route "/ad/increment-class-group-updates" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates
-                    route "/aad/group-updates" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates
-                    route "/aad/increment-class-group-updates" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates
-                    route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours
-                    route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo
+                    route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adConfig sokratesConfig
+                    route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig
+                    route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adConfig aadConfig finalThesesConfig untisConfig
+                    route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig
+                    route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesConfig untisConfig
+                    route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreConfig
                     #if DEBUG
-                    route "/auth-test" >=> authTest
+                    route "/auth-test" >=> authTest aadConfig
                     #endif
                 ]
                 POST >=> choose [
-                    route "/ad/updates/apply" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.applyADModifications
-                    route "/ad/increment-class-group-updates/apply" >=> AAD.Auth.requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates
-                    route "/aad/group-updates/apply" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates
-                    route "/aad/increment-class-group-updates/apply" >=> AAD.Auth.requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADIncrementClassGroupUpdates
+                    route "/ad/updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADModifications adConfig
+                    route "/ad/increment-class-group-updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates adConfig
+                    route "/aad/group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates aadConfig
+                    route "/aad/increment-class-group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADIncrementClassGroupUpdates aadConfig
                 ]
             ])
         #if DEBUG
@@ -123,9 +133,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom ComputerInfo.DataTransferTypes.ComputerInfo.encode ComputerInfo.DataTransferTypes.ComputerInfo.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-    let clientId = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID"
-    let authority = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_AUTHORITY"
-    Server.addAADAuth services clientId authority
+    Server.addAADAuth services aadConfig.GraphClientId aadConfig.GraphAuthority
 
 let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder

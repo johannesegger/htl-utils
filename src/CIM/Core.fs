@@ -1,17 +1,11 @@
 ﻿module CIM.Core
 
+open CIM.Configuration
 open CIM.Domain
 open Microsoft.Management.Infrastructure
 open Microsoft.Management.Infrastructure.Options
 open System
 open System.Net
-
-let (private adDomain, private adUserName) =
-    let fullUserName = Environment.getEnvVarOrFail "AD_USER"
-    match fullUserName.IndexOf("\\") with
-    | -1 -> failwith "AD_USER is missing domain information"
-    | idx -> fullUserName.Substring(0, idx), fullUserName.Substring(idx + 1)
-let private adPassword = Environment.getEnvVarOrFail "AD_PASSWORD"
 
 let private awaitObservableList (obs: IObservable<_>) =
     Async.FromContinuations (fun (cont, econt, ccont) ->
@@ -32,39 +26,40 @@ let private awaitObservable (obs: IObservable<_>) = async {
     return List.exactlyOne list
 }
 
-let private runInSession computerName fn = async {
-    try
-        let credentials =
-            let credentials = NetworkCredential(adUserName, adPassword, adDomain)
-            CimCredential(PasswordAuthenticationMechanism.Default, credentials.Domain, credentials.UserName, credentials.SecurePassword)
+let private runInSession computerName fn = reader {
+    let! config = Reader.environment
+    let credentials = NetworkCredential(config.UserName, config.Password, config.Domain)
+    return async {
+        try
+            let credentials = CimCredential(PasswordAuthenticationMechanism.Default, credentials.Domain, credentials.UserName, credentials.SecurePassword)
+            use sessionOptions = new WSManSessionOptions()
+            sessionOptions.AddDestinationCredentials(credentials)
 
-        use sessionOptions = new WSManSessionOptions()
-        sessionOptions.AddDestinationCredentials(credentials)
+            use! cimSession = CimSession.CreateAsync(computerName, sessionOptions) |> awaitObservable
+            do! cimSession.TestConnectionAsync () |> awaitObservableList |> Async.Ignore
 
-        use! cimSession = CimSession.CreateAsync(computerName, sessionOptions) |> awaitObservable
-        do! cimSession.TestConnectionAsync () |> awaitObservableList |> Async.Ignore
-
-        let! ct = Async.CancellationToken
-        use queryOptions = new CimOperationOptions(Timeout = TimeSpan.FromMinutes(1.), CancellationToken = Nullable ct)
-        let query namespaceName queryString = async {
-            try
-                let! queryInstances = cimSession.QueryInstancesAsync(namespaceName, "WQL", queryString, queryOptions) |> awaitObservableList
-                return
-                    queryInstances
-                    |> List.map (fun instance ->
-                        instance.CimInstanceProperties
-                        |> Seq.map (fun property -> property.Name, property.Value)
-                        |> Map.ofSeq
-                    )
-                    |> Ok
-            with e -> return Error (SendQueryError e)
-        }
-        let! result = fn query
-        return Ok result
-    with e -> return Error (ConnectionError e)
+            let! ct = Async.CancellationToken
+            use queryOptions = new CimOperationOptions(Timeout = TimeSpan.FromMinutes(1.), CancellationToken = Nullable ct)
+            let query namespaceName queryString = async {
+                try
+                    let! queryInstances = cimSession.QueryInstancesAsync(namespaceName, "WQL", queryString, queryOptions) |> awaitObservableList
+                    return
+                        queryInstances
+                        |> List.map (fun instance ->
+                            instance.CimInstanceProperties
+                            |> Seq.map (fun property -> property.Name, property.Value)
+                            |> Map.ofSeq
+                        )
+                        |> Ok
+                with e -> return Error (SendQueryError e)
+            }
+            let! result = fn query
+            return Ok result
+        with e -> return Error (ConnectionError e)
+    }
 }
 
-let getComputerInfo computerName = async {
+let getComputerInfo computerName = reader {
     let timestamp = DateTimeOffset.Now
     let! properties = runInSession computerName (fun query -> async {
         let! bios = query @"root\cimv2" "SELECT * FROM Win32_BIOS"
@@ -92,9 +87,13 @@ let getComputerInfo computerName = async {
             ]
             |> Map.ofList
     })
-    return {
-        ComputerName = computerName
-        Timestamp = timestamp
-        Properties = properties
-    }
+    return
+        properties
+        |> Async.map (fun properties ->
+            {
+                ComputerName = computerName
+                Timestamp = timestamp
+                Properties = properties
+            }
+        )
 }

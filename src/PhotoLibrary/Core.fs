@@ -1,5 +1,6 @@
 module PhotoLibrary.Core
 
+open PhotoLibrary.Configuration
 open PhotoLibrary.Domain
 open SixLabors.ImageSharp
 open SixLabors.ImageSharp.Processing
@@ -62,34 +63,44 @@ let private resize (width, height) =
     | None, Some height -> resizePhoto (Size (0, height))
     | None, None -> File.ReadAllBytes
 
-let getTeachersWithPhotos () =
-    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY"
-    Directory.GetFiles baseDir
-    |> Seq.choose TeacherPhoto.tryGetShortName
-    |> Seq.toList
+let getTeachersWithPhotos = reader {
+    let! config = Reader.environment
+    return
+        Directory.GetFiles config.TeacherPhotosDirectory
+        |> Seq.choose TeacherPhoto.tryGetShortName
+        |> Seq.toList
+}
 
-let getStudentsWithPhotos () =
-    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_STUDENT_PHOTOS_DIRECTORY"
-    Directory.GetFiles baseDir
-    |> Seq.choose StudentPhoto.tryGetStudentId
-    |> Seq.toList
+let getStudentsWithPhotos = reader {
+    let! config = Reader.environment
+    return
+        Directory.GetFiles config.StudentPhotosDirectory
+        |> Seq.choose StudentPhoto.tryGetStudentId
+        |> Seq.toList
+}
 
 let private tryGetFile baseDir fileName =
     Directory.GetFiles(baseDir, sprintf "%s.*" fileName, EnumerationOptions(MatchCasing = MatchCasing.CaseInsensitive))
     |> Array.tryHead
 
-let getTeacherPhotos size =
-    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY"
-    Directory.GetFiles baseDir
-    |> Seq.choose (TeacherPhoto.tryGetShortName >> Option.bind (tryGetFile baseDir) >> Option.bind (TeacherPhoto.tryParse (resize size)))
-    |> Seq.toList
+let tryGetTeacherPhoto shortName size = reader {
+    let! config = Reader.environment
+    return
+        tryGetFile config.TeacherPhotosDirectory shortName
+        |> Option.bind (TeacherPhoto.tryParse (resize size))
+}
 
-let tryGetTeacherPhoto shortName size =
-    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY"
-    tryGetFile baseDir shortName
-    |> Option.bind (TeacherPhoto.tryParse (resize size))
+let tryGetStudentPhoto studentId size = reader {
+    let! config = Reader.environment
+    return
+        tryGetFile config.StudentPhotosDirectory studentId
+        |> Option.bind (StudentPhoto.tryParse (resize size))
+}
 
-let tryGetStudentPhoto studentId size =
-    let baseDir = Environment.getEnvVarOrFail "PHOTO_LIBRARY_STUDENT_PHOTOS_DIRECTORY"
-    tryGetFile baseDir studentId
-    |> Option.bind (StudentPhoto.tryParse (resize size))
+let getTeacherPhotos size = reader {
+    let! config = Reader.environment
+    return
+        Directory.GetFiles config.TeacherPhotosDirectory
+        |> Seq.choose (TeacherPhoto.tryGetShortName >> Option.bind (tryGetFile config.TeacherPhotosDirectory) >> Option.bind (TeacherPhoto.tryParse (resize size)))
+        |> Seq.toList
+}

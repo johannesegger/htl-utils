@@ -1,11 +1,10 @@
 ﻿module DataStore.Core
 
+open DataStore.Configuration
 open DataStore.Domain
 open System.IO
 open System.Text.Json
 open System.Text.Json.Serialization
-
-let private computerInfoDataPath = Environment.getEnvVarOrFail "DATA_STORE_COMPUTER_INFO_FILE_PATH"
 
 let private serializerOptions =
     let options = JsonSerializerOptions()
@@ -21,19 +20,23 @@ let toUInt32 (v: obj) = (v :?> JsonElement).GetUInt32()
 let toUInt64 (v: obj) = (v :?> JsonElement).GetUInt64()
 let toList map (v: obj) = (v :?> JsonElement).EnumerateArray() |> Seq.map map |> Seq.toList
 
-let readComputerInfo () =
+let readComputerInfo = reader {
+    let! config = Reader.environment
     try
-        JsonSerializer.Deserialize<ComputerInfo array>(File.ReadAllText computerInfoDataPath, serializerOptions)
-        |> Array.toList
+        return
+            JsonSerializer.Deserialize<ComputerInfo array>(File.ReadAllText config.ComputerInfoFilePath, serializerOptions)
+            |> Array.toList
     with e ->
         #if DEBUG
         printfn "Can't read computer info: %O" e
         #endif
-        []
+        return []
+}
 
-let updateComputerInfo (computerInfo: ComputerInfo list) =
-    let oldData =
-        readComputerInfo ()
+let updateComputerInfo (computerInfo: ComputerInfo list) = reader {
+    let! oldData = readComputerInfo
+    let oldDataMap =
+        oldData
         |> List.map (fun computerInfo -> computerInfo.ComputerName, computerInfo)
         |> Map.ofList
     let data =
@@ -42,9 +45,11 @@ let updateComputerInfo (computerInfo: ComputerInfo list) =
             match computerInfo.Properties with
             | Ok _ -> computerInfo
             | Error _ ->
-                Map.tryFind computerInfo.ComputerName oldData
+                Map.tryFind computerInfo.ComputerName oldDataMap
                 |> Option.defaultValue computerInfo
         )
     let text = JsonSerializer.Serialize(data, serializerOptions)
-    Directory.CreateDirectory(Path.GetDirectoryName(computerInfoDataPath)) |> ignore
-    File.WriteAllText(computerInfoDataPath, text)
+    let! config = Reader.environment
+    Directory.CreateDirectory(Path.GetDirectoryName(config.ComputerInfoFilePath)) |> ignore
+    File.WriteAllText(config.ComputerInfoFilePath, text)
+}

@@ -1,4 +1,4 @@
-﻿open System.IO
+open System.IO
 open System.Net
 open System.Net.Http
 open Thoth.Json.Net
@@ -22,8 +22,8 @@ module Http =
                 |> Result.mapError (fun message -> DecodeError(url, message))
     }
 
-let prepareTeacherPhotos baseDir = async {
-    let! teachers = Sokrates.Core.getTeachers ()
+let prepareTeacherPhotos baseDir = asyncReader {
+    let! teachers = Sokrates.Core.getTeachers
     let teacherMap = teachers |> List.map (fun t -> sprintf "%s_%s" t.LastName t.FirstName |> CIString, t.ShortName) |> Map.ofList
     Directory.GetFiles baseDir
     |> Seq.choose (fun file ->
@@ -39,7 +39,7 @@ let prepareTeacherPhotos baseDir = async {
     )
 }
 
-let prepareStudentPhotos baseDir = async {
+let prepareStudentPhotos baseDir = asyncReader {
     let! students = Sokrates.Core.getStudents None None
     let studentMap =
         students
@@ -67,9 +67,7 @@ let prepareStudentPhotos baseDir = async {
 
 [<EntryPoint>]
 let main argv =
-    async {
-        do! prepareTeacherPhotos @"..\data\photo-library\teacher-photos"
-        do! prepareStudentPhotos @"..\data\photo-library\student-photos"
-        return 0
-    }
-    |> Async.RunSynchronously
+    let config = Sokrates.Configuration.Config.fromEnvironment ()
+    prepareTeacherPhotos @"..\data\photo-library\teacher-photos" |> Reader.run config |> Async.RunSynchronously
+    prepareStudentPhotos @"..\data\photo-library\student-photos" |> Reader.run config |> Async.RunSynchronously
+    0

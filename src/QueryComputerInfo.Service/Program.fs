@@ -8,11 +8,17 @@ open System
 open System.Threading
 open System.Threading.Tasks
 
-let queryComputerInfo =
-    AD.Core.getComputers ()
-    |> List.map CIM.Core.getComputerInfo
-    |> Async.Parallel
-    |> Async.map List.ofArray
+let private adConfig = AD.Configuration.Config.fromEnvironment ()
+let private cimConfig = CIM.Configuration.Config.fromEnvironment ()
+let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
+
+let queryComputerInfo = async {
+    return!
+        Reader.run adConfig AD.Core.getComputers
+        |> List.map (CIM.Core.getComputerInfo >> Reader.run cimConfig)
+        |> Async.Parallel
+        |> Async.map List.ofArray
+}
 
 let computerInfoToDbDto (computerInfo: CIM.Domain.ComputerInfo) =
     {
@@ -41,7 +47,10 @@ type Worker(logger: ILogger<Worker>) =
                     logger.LogInformation("{time}: Querying computer info.", DateTimeOffset.Now)
                     let! computerInfo = queryComputerInfo
                     logger.LogInformation("{time}: Storing computer info.", DateTimeOffset.Now)
-                    computerInfo |> List.map computerInfoToDbDto |> DataStore.Core.updateComputerInfo
+                    computerInfo
+                    |> List.map computerInfoToDbDto
+                    |> DataStore.Core.updateComputerInfo
+                    |> Reader.run dataStoreConfig
                     logger.LogInformation("{time}: Done.", DateTimeOffset.Now)
                 with e ->
                     logger.LogError("{time}: Unhandled exception: {exception}", DateTimeOffset.Now, e)
