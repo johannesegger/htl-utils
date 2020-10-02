@@ -9,10 +9,12 @@ open Microsoft.Identity.Client
 open System
 open System.Net
 
+let config = AAD.Configuration.Config.fromEnvironment ()
+
 let clientApp =
     PublicClientApplicationBuilder
-        .Create(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID")
-        .WithTenantId(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_TENANT_ID")
+        .Create(config.GraphClientId)
+        .WithTenantId(config.GraphTenantId)
         .Build()
 
 let authProvider = UsernamePasswordProvider(clientApp)

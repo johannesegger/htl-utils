@@ -13,6 +13,7 @@ type Config = {
     GraphClientId: string
     GraphClientSecret: string
     GraphAuthority: string
+    GraphTenantId: string
     GlobalAdminRoleId: string
     TeacherGroupId: string
     PredefinedGroupPrefix: string
@@ -24,6 +25,7 @@ module Config =
             GraphClientId = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID"
             GraphClientSecret = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_APP_KEY"
             GraphAuthority = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_AUTHORITY"
+            GraphTenantId = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_TENANT_ID"
             GlobalAdminRoleId = Environment.getEnvVarOrFail "AAD_GLOBAL_ADMIN_ROLE_ID"
             TeacherGroupId = Environment.getEnvVarOrFail "AAD_TEACHER_GROUP_ID"
             PredefinedGroupPrefix = Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUP_PREFIX"
