@@ -17,7 +17,7 @@ module Reader =
     let sequence list =
         Reader (fun env ->
             list
-            |> Seq.map (run env)
+            |> List.map (run env)
         )
     let ignore r = map ignore r
 type ReaderBuilder() =

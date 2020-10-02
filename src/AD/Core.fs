@@ -207,8 +207,10 @@ let private createUser (newUser: NewUser) password = reader {
     adUser.Properties.["sn"].Value <- newUser.LastName
     adUser.Properties.["displayName"].Value <- sprintf "%s %s" newUser.LastName newUser.FirstName
     adUser.Properties.["sAMAccountName"].Value <- userName
-    adUser.Properties.["department"].Value <- departmentFromUserType newUser.Type
-    adUser.Properties.["division"].Value <- divisionFromUserType newUser.Type
+    let! department = departmentFromUserType newUser.Type
+    adUser.Properties.["department"].Value <- department
+    let! division = divisionFromUserType newUser.Type
+    adUser.Properties.["division"].Value <- division
     adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" newUser.LastName newUser.FirstName config.MailDomain
     adUser.Properties.["proxyAddresses"].Value <- proxyAddresses newUser.FirstName newUser.LastName config.MailDomain |> List.toArray
     let! userHomePath = homePath newUser.Name newUser.Type
@@ -348,7 +350,8 @@ let private moveStudentToClass userName oldClassName newClassName =
         let! targetOu = userRootEntry newUserType
         adUser.MoveTo(targetOu)
 
-        adUser.Properties.["department"].Value <- departmentFromUserType newUserType
+        let! department = departmentFromUserType newUserType
+        adUser.Properties.["department"].Value <- department
         let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
         let! newHomeDirectory = homePath userName newUserType
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
@@ -444,12 +447,14 @@ let private changeStudentGroupName (GroupName oldClassName) (GroupName newClassN
             |> Seq.cast<string>
             |> Seq.map (DistinguishedName >> fun userPath ->
                 updateDirectoryEntry userPath [| "sAMAccountName" |] (fun adUser -> reader {
-                    adUser.Properties.["department"].Value <- departmentFromUserType newUserType
+                    let! department = departmentFromUserType newUserType
+                    adUser.Properties.["department"].Value <- department
                     let userName = adUser.Properties.["sAMAccountName"].[0] :?> string |> UserName
-                    let userHomePath = homePath userName newUserType
+                    let! userHomePath = homePath userName newUserType
                     adUser.Properties.["homeDirectory"].Value <- userHomePath
                 })
             )
+            |> Seq.toList
             |> Reader.sequence
             |> Reader.ignore
     })
@@ -505,6 +510,7 @@ let getUsers = reader {
                 let members = group.Properties.["member"] |> Seq.cast<string> |> Seq.map DistinguishedName |> Seq.toList
                 return groupName, members
             })
+            |> Seq.toList
             |> Reader.sequence
             |> Reader.map Seq.toList
     }
@@ -536,7 +542,7 @@ let getUsers = reader {
                 |> Seq.toList
         })
         |> Reader.sequence
-        |> Reader.map (Seq.concat >> Seq.toList)
+        |> Reader.map List.concat
 }
 
 let getClassGroups = reader {
@@ -549,6 +555,7 @@ let getClassGroups = reader {
             use! group = adDirectoryEntry [| "sAMAccountName" |] groupName
             return group.Properties.["sAMAccountName"].Value :?> string |> GroupName
         })
+        |> Seq.toList
         |> Reader.sequence
         |> Reader.map Seq.toList
 }
