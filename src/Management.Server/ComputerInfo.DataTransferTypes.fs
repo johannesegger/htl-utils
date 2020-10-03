@@ -52,7 +52,7 @@ module PhysicalMemoryType =
         | PhysicalMemoryTypeDDR2 -> "DDR2"
         | PhysicalMemoryTypeDDR3 -> "DDR3"
         | PhysicalMemoryTypeDDR4 -> "DDR4"
-        | UnknownPhysicalMemoryType number -> sprintf "Memory type \"0x%x\"" number
+        | UnknownPhysicalMemoryType number -> sprintf "Memory type \"0x%02x\"" number
 
 type PhysicalMemory = {
     Capacity: Bytes option
