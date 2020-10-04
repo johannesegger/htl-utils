@@ -185,12 +185,71 @@ module ComputerModel =
             }
         )
 
+type AfterPowerLossBehavior = Off | On | PreviousState
+module AfterPowerLossBehavior =
+    let encode = function
+        | Off -> Encode.string "off"
+        | On -> Encode.string "on"
+        | PreviousState -> Encode.string "previousState"
+    let decoder : Decoder<_> =
+            Decode.string
+            |> Decode.andThen (function
+                | "off" -> Decode.succeed Off
+                | "on" -> Decode.succeed On
+                | "previousState" -> Decode.succeed PreviousState
+                | v -> Decode.fail (sprintf "Invalid value for AfterPowerLossBehavior: \"%s\"" v)
+            )
+
+type BIOSSettings = {
+    BootOrder: string list option
+    NetworkServiceBootEnabled: bool option
+    VTxEnabled: bool option
+    AfterPowerLossBehavior: AfterPowerLossBehavior option
+    WakeOnLanEnabled: bool option
+}
+module BIOSSettings =
+    let encode v =
+        Encode.object [
+            "bootOrder", Encode.option (List.map Encode.string >> Encode.list) v.BootOrder
+            "networkServiceBootEnabled", Encode.option Encode.bool v.NetworkServiceBootEnabled
+            "vtxEnabled", Encode.option Encode.bool v.VTxEnabled
+            "afterPowerLossBehavior", Encode.option AfterPowerLossBehavior.encode v.AfterPowerLossBehavior
+            "wakeOnLanEnabled", Encode.option Encode.bool v.WakeOnLanEnabled
+        ]
+    let decoder : Decoder<_> =
+        Decode.object (fun get ->
+            {
+                BootOrder = get.Required.Field "bootOrder" (Decode.option (Decode.list Decode.string))
+                NetworkServiceBootEnabled = get.Required.Field "networkServiceBootEnabled" (Decode.option Decode.bool)
+                VTxEnabled = get.Required.Field "vtxEnabled" (Decode.option Decode.bool)
+                AfterPowerLossBehavior = get.Required.Field "afterPowerLossBehavior" (Decode.option AfterPowerLossBehavior.decoder)
+                WakeOnLanEnabled = get.Required.Field "wakeOnLanEnabled" (Decode.option Decode.bool)
+            }
+        )
+
+type BIOSSettingsQueryError =
+    | QueryError of QueryError
+    | UnknownManufacturer of string
+    | ManufacturerNotFound
+module BIOSSettingsQueryError =
+    let encode = function
+        | QueryError v -> QueryError.encode v
+        | UnknownManufacturer v -> Encode.object [ "unknownManufacturer", Encode.string v ]
+        | ManufacturerNotFound -> Encode.object [ "manufacturerNotFound", Encode.nil ]
+    let decoder : Decoder<_> =
+        Decode.oneOf [
+            QueryError.decoder |> Decode.map QueryError
+            Decode.field "unknownManufacturer" Decode.string |> Decode.map UnknownManufacturer
+            Decode.field "manufacturerNotFound" (Decode.nil ManufacturerNotFound)
+        ]
+
 type ComputerInfoData = {
     NetworkInformation: Result<NetworkInformation list, QueryError>
     Model: Result<ComputerModel, QueryError>
     PhysicalMemory: Result<PhysicalMemory list, QueryError>
     Processors: Result<Processor list, QueryError>
     GraphicsCards: Result<GraphicsCard list, QueryError>
+    BIOSSettings: Result<BIOSSettings, BIOSSettingsQueryError>
 }
 module ComputerInfoData =
     let encode v =
@@ -200,6 +259,7 @@ module ComputerInfoData =
             "physicalMemory", Result.encode (List.map PhysicalMemory.encode >> Encode.list) QueryError.encode v.PhysicalMemory
             "processors", Result.encode (List.map Processor.encode >> Encode.list) QueryError.encode v.Processors
             "graphicsCards", Result.encode (List.map GraphicsCard.encode >> Encode.list) QueryError.encode v.GraphicsCards
+            "biosSettings", Result.encode BIOSSettings.encode BIOSSettingsQueryError.encode v.BIOSSettings
         ]
     let decoder : Decoder<_> =
         Decode.object (fun get ->
@@ -209,6 +269,7 @@ module ComputerInfoData =
                 PhysicalMemory = get.Required.Field "physicalMemory" (Result.decoder (Decode.list PhysicalMemory.decoder) QueryError.decoder)
                 Processors = get.Required.Field "processors" (Result.decoder (Decode.list Processor.decoder) QueryError.decoder)
                 GraphicsCards = get.Required.Field "graphicsCards" (Result.decoder (Decode.list GraphicsCard.decoder) QueryError.decoder)
+                BIOSSettings = get.Required.Field "biosSettings" (Result.decoder BIOSSettings.decoder BIOSSettingsQueryError.decoder)
             }
         )
 

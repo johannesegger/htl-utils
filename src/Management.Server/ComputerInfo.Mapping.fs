@@ -4,11 +4,11 @@ open ComputerInfo.DataTransferTypes
 
 module ComputerInfo =
     let fromDataStoreDto (computerInfo: DataStore.Domain.ComputerInfo) =
-        let lookup propertyName properties fn =
+        let lookup propertyName properties mapError fn =
             match Map.tryFind propertyName properties with
             | Some (Ok entries) -> fn entries
-            | Some (Error e) -> Error (SendQueryError e)
-            | None -> Error InformationNotQueried
+            | Some (Error e) -> Error (SendQueryError e |> mapError)
+            | None -> Error (mapError InformationNotQueried)
 
         let tryFindOptional key = Map.tryFind key >> Option.bind Option.ofObj
 
@@ -26,8 +26,8 @@ module ComputerInfo =
                 | Ok properties ->
                     Ok {
                         NetworkInformation =
-                            lookup "NetAdapter" properties (fun adapterEntries ->
-                                lookup "NetworkAdapterConfiguration" properties (fun adapterConfigEntries ->
+                            lookup "NetAdapter" properties id (fun adapterEntries ->
+                                lookup "NetworkAdapterConfiguration" properties id (fun adapterConfigEntries ->
                                     adapterEntries
                                     |> List.filter (fun entry -> tryFindOptional "ConnectorPresent" entry |> Option.map DataStore.Core.toBool |> Option.defaultValue false)
                                     |> List.choose (fun entry -> tryFindOptional "InterfaceIndex" entry |> Option.map (DataStore.Core.toUInt32 >> int))
@@ -45,7 +45,7 @@ module ComputerInfo =
                                 )
                             )
                         Model =
-                            lookup "ComputerSystem" properties (fun entries ->
+                            lookup "ComputerSystem" properties id (fun entries ->
                                 let list =
                                     entries
                                     |> List.map (fun entry ->
@@ -59,7 +59,7 @@ module ComputerInfo =
                                 }
                             )
                         PhysicalMemory =
-                            lookup "PhysicalMemory" properties (fun entries ->
+                            lookup "PhysicalMemory" properties id (fun entries ->
                                 entries
                                 |> List.map (fun entry ->
                                     // see https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/win32-physicalmemory
@@ -81,7 +81,7 @@ module ComputerInfo =
                                 |> Ok
                             )
                         Processors =
-                            lookup "Processor" properties (fun entries ->
+                            lookup "Processor" properties id (fun entries ->
                                 entries
                                 |> List.map (fun entry ->
                                     let name = tryFindOptional "Name" entry |> Option.map DataStore.Core.toString
@@ -96,7 +96,7 @@ module ComputerInfo =
                                 |> Ok
                             )
                         GraphicsCards =
-                            lookup "VideoController" properties (fun entries ->
+                            lookup "VideoController" properties id (fun entries ->
                                 entries
                                 |> List.map (fun entry ->
                                     let name = tryFindOptional "Name" entry |> Option.map DataStore.Core.toString
@@ -107,6 +107,40 @@ module ComputerInfo =
                                     }
                                 )
                                 |> Ok
+                            )
+                        BIOSSettings =
+                            lookup "BIOS" properties QueryError (fun entries ->
+                                let manufacturer = entries |> List.tryPick (tryFindOptional "Manufacturer" >> Option.map DataStore.Core.toString)
+                                match manufacturer with
+                                | Some "Hewlett-Packard" ->
+                                    lookup "HP_BIOSSetting" properties QueryError (fun entries ->
+                                        let tryParseEnabledDisable = function
+                                            | "Disable,*Enable" | "*Enable,Disable" -> Some true
+                                            | "*Disable,Enable" | "Enable,*Disable" -> Some false
+                                            | _ -> None
+                                        let tryParseAfterPowerLossBehavior = function
+                                            | "*Off,On,Previous State" -> Some Off
+                                            | "Off,*On,Previous State" -> Some On
+                                            | "Off,On,*Previous State" -> Some PreviousState
+                                            | _ -> None
+                                        match List.tryHead entries with
+                                        | Some entry ->
+                                            let bootOrder = tryFindOptional "Boot Order" entry |> Option.map (DataStore.Core.toString >> String.split "," >> Array.toList)
+                                            let networkServiceBootEnabled = tryFindOptional "Network Service Boot" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseEnabledDisable
+                                            let vtxEnabled = tryFindOptional "Virtualization Technology (VTx)" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseEnabledDisable
+                                            let afterPowerLossBehavior = tryFindOptional "After Power Loss" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseAfterPowerLossBehavior
+                                            let wakeOnLanEnabled = tryFindOptional "S5 Wake on LAN" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseEnabledDisable
+                                            Ok {
+                                                BootOrder = bootOrder
+                                                NetworkServiceBootEnabled = networkServiceBootEnabled
+                                                VTxEnabled = vtxEnabled
+                                                AfterPowerLossBehavior = afterPowerLossBehavior
+                                                WakeOnLanEnabled = wakeOnLanEnabled
+                                            }
+                                        | None -> Error (QueryError InformationNotPresent)
+                                    )
+                                | Some v -> Error (UnknownManufacturer v)
+                                | None -> Error ManufacturerNotFound
                             )
                     }
                 | Error e -> Error (QueryConnectionError e)

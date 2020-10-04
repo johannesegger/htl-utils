@@ -61,6 +61,7 @@ let getComputerInfo computerName = asyncReader {
     let timestamp = DateTimeOffset.Now
     let! properties = runInSession computerName (fun query -> async {
         let! bios = query @"root\cimv2" "SELECT * FROM Win32_BIOS"
+        let! hpBiosSetting = query @"root\HP\InstrumentedBIOS" "SELECT * FROM HP_BIOSSetting"
         let! computerSystem = query @"root\cimv2" "SELECT * FROM CIM_ComputerSystem"
         let! diskDrive = query @"root\cimv2" "SELECT * FROM CIM_DiskDrive"
         let! logicalLocalDisk = query @"root\cimv2" "SELECT * FROM Win32_LogicalDisk WHERE DriveType = 3"
@@ -73,6 +74,7 @@ let getComputerInfo computerName = asyncReader {
         return
             [
                 "BIOS", bios
+                "HP_BIOSSetting", hpBiosSetting
                 "ComputerSystem", computerSystem
                 "DiskDrive", diskDrive
                 "LogicalLocalDisk", logicalLocalDisk

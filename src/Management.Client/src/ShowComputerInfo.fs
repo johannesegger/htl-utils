@@ -33,8 +33,11 @@ let update msg model =
 let init = LoadingComputerInfo
 
 let view model dispatch =
-    let errorText text =
-        span [ Class (Modifier.parseModifiers [ Modifier.TextColor IsDanger ] |> String.concat " ") ] [ str text ]
+    let coloredText color text =
+        span [ Class (Modifier.parseModifiers [ Modifier.TextColor color ] |> String.concat " ") ] [ str text ]
+    let errorText = coloredText IsDanger
+    let successText = coloredText IsSuccess
+    let warningText = coloredText IsWarning
 
     let queryErrorView = function
         | InformationNotPresent -> errorText "Information not present"
@@ -151,6 +154,34 @@ let view model dispatch =
             )
         | Error e -> [ queryErrorView e ]
 
+    let biosSettingsView = function
+        | Ok data ->
+            [
+                div [] [
+                    str "Boot order: "
+                    data.BootOrder |> Option.map (String.concat ", ") |> Option.map str |> Option.defaultValue (errorText "Not found")
+                ]
+                div [] [
+                    str "Network boot enabled: "
+                    data.NetworkServiceBootEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "❌") |> Option.defaultValue (errorText "Not found")
+                ]
+                div [] [
+                    str "VTx enabled: "
+                    data.VTxEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "❌") |> Option.defaultValue (errorText "Not found")
+                ]
+                div [] [
+                    str "After power loss behavior: "
+                    data.AfterPowerLossBehavior |> Option.map (function | Off -> errorText "Off" | On -> successText "On" | PreviousState -> warningText "Previous state") |> Option.defaultValue (errorText "Not found")
+                ]
+                div [] [
+                    str "Wake-On-LAN enabled: "
+                    data.WakeOnLanEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "❌") |> Option.defaultValue (errorText "Not found")
+                ]
+            ]
+        | Error (QueryError e) -> [ queryErrorView e ]
+        | Error (UnknownManufacturer v) -> [ errorText (sprintf "Unknown manufacturer: \"%s\"" v) ]
+        | Error ManufacturerNotFound -> [ errorText "Manufacturer not found" ]
+
     match model with
     | LoadingComputerInfo ->
         Section.section [] [
@@ -170,6 +201,7 @@ let view model dispatch =
                     th [] [ str "Physical memory" ]
                     th [] [ str "Processors" ]
                     th [] [ str "Graphics cards" ]
+                    th [] [ str "BIOS settings" ]
                 ]
             ]
             tbody [] [
@@ -184,8 +216,9 @@ let view model dispatch =
                             td [] (physicalMemoryView computerInfoData.PhysicalMemory)
                             td [] (processorView computerInfoData.Processors)
                             td [] (graphicsCardsView computerInfoData.GraphicsCards)
+                            td [] (biosSettingsView computerInfoData.BIOSSettings)
                         | Error (QueryConnectionError e) ->
-                            td [ ColSpan 5 ] [ errorText e ]
+                            td [ ColSpan 6 ] [ errorText e ]
                     ]
             ]
         ]
