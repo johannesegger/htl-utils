@@ -114,30 +114,32 @@ module ComputerInfo =
                                 match manufacturer with
                                 | Some "Hewlett-Packard" ->
                                     lookup "HP_BIOSSetting" properties QueryError (fun entries ->
-                                        let tryParseEnabledDisable = function
-                                            | "Disable,*Enable" | "*Enable,Disable" -> Some true
-                                            | "*Disable,Enable" | "Enable,*Disable" -> Some false
+                                        let tryParseEnableDisable = function
+                                            | "Enable" -> Some true
+                                            | "Disable" -> Some false
                                             | _ -> None
                                         let tryParseAfterPowerLossBehavior = function
-                                            | "*Off,On,Previous State" -> Some Off
-                                            | "Off,*On,Previous State" -> Some On
-                                            | "Off,On,*Previous State" -> Some PreviousState
+                                            | "Off" -> Some Off
+                                            | "On" -> Some On
+                                            | "Previous State" -> Some PreviousState
                                             | _ -> None
-                                        match List.tryHead entries with
-                                        | Some entry ->
-                                            let bootOrder = tryFindOptional "Boot Order" entry |> Option.map (DataStore.Core.toString >> String.split "," >> Array.toList)
-                                            let networkServiceBootEnabled = tryFindOptional "Network Service Boot" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseEnabledDisable
-                                            let vtxEnabled = tryFindOptional "Virtualization Technology (VTx)" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseEnabledDisable
-                                            let afterPowerLossBehavior = tryFindOptional "After Power Loss" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseAfterPowerLossBehavior
-                                            let wakeOnLanEnabled = tryFindOptional "S5 Wake on LAN" entry |> Option.map DataStore.Core.toString |> Option.bind tryParseEnabledDisable
-                                            Ok {
-                                                BootOrder = bootOrder
-                                                NetworkServiceBootEnabled = networkServiceBootEnabled
-                                                VTxEnabled = vtxEnabled
-                                                AfterPowerLossBehavior = afterPowerLossBehavior
-                                                WakeOnLanEnabled = wakeOnLanEnabled
-                                            }
-                                        | None -> Error (QueryError InformationNotPresent)
+                                        let tryFindEntry name valueKey tryParse =
+                                            entries
+                                            |> List.tryFind (fun entry -> tryFindOptional "Name" entry |> Option.map DataStore.Core.toString = Some name)
+                                            |> Option.bind (fun entry -> tryFindOptional valueKey entry)
+                                            |> Option.bind tryParse
+                                        let bootOrder = tryFindEntry "Boot Order" "Elements" (DataStore.Core.toList DataStore.Core.toString >> Some)
+                                        let networkServiceBootEnabled = tryFindEntry "Network Service Boot" "CurrentValue" (DataStore.Core.toString >> tryParseEnableDisable)
+                                        let vtxEnabled = tryFindEntry "Virtualization Technology (VTx)" "CurrentValue" (DataStore.Core.toString >> tryParseEnableDisable)
+                                        let afterPowerLossBehavior = tryFindEntry "After Power Loss" "CurrentValue" (DataStore.Core.toString >> tryParseAfterPowerLossBehavior)
+                                        let wakeOnLanEnabled = tryFindEntry "S5 Wake on LAN" "CurrentValue" (DataStore.Core.toString >> tryParseEnableDisable)
+                                        Ok {
+                                            BootOrder = bootOrder
+                                            NetworkServiceBootEnabled = networkServiceBootEnabled
+                                            VTxEnabled = vtxEnabled
+                                            AfterPowerLossBehavior = afterPowerLossBehavior
+                                            WakeOnLanEnabled = wakeOnLanEnabled
+                                        }
                                     )
                                 | Some v -> Error (UnknownManufacturer v)
                                 | None -> Error ManufacturerNotFound
