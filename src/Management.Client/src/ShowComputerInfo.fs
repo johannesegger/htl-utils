@@ -163,11 +163,11 @@ let view model dispatch =
                 ]
                 div [] [
                     str "Network boot enabled: "
-                    data.NetworkServiceBootEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "❌") |> Option.defaultValue (errorText "Not found")
+                    data.NetworkServiceBootEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "✗") |> Option.defaultValue (errorText "Not found")
                 ]
                 div [] [
                     str "VTx enabled: "
-                    data.VTxEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "❌") |> Option.defaultValue (errorText "Not found")
+                    data.VTxEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "✗") |> Option.defaultValue (errorText "Not found")
                 ]
                 div [] [
                     str "After power loss behavior: "
@@ -175,7 +175,7 @@ let view model dispatch =
                 ]
                 div [] [
                     str "Wake-On-LAN enabled: "
-                    data.WakeOnLanEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "❌") |> Option.defaultValue (errorText "Not found")
+                    data.WakeOnLanEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "✗") |> Option.defaultValue (errorText "Not found")
                 ]
             ]
         | Error (QueryError e) -> [ queryErrorView e ]
