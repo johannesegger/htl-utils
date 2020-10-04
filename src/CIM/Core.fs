@@ -26,40 +26,38 @@ let private awaitObservable (obs: IObservable<_>) = async {
     return List.exactlyOne list
 }
 
-let private runInSession computerName fn = reader {
-    let! config = Reader.environment
+let private runInSession computerName fn = asyncReader {
+    let! config = Reader.environment |> AsyncReader.liftReader
     let credentials = NetworkCredential(config.UserName, config.Password, config.Domain)
-    return async {
-        try
-            let credentials = CimCredential(PasswordAuthenticationMechanism.Default, credentials.Domain, credentials.UserName, credentials.SecurePassword)
-            use sessionOptions = new WSManSessionOptions()
-            sessionOptions.AddDestinationCredentials(credentials)
+    try
+        let credentials = CimCredential(PasswordAuthenticationMechanism.Default, credentials.Domain, credentials.UserName, credentials.SecurePassword)
+        use sessionOptions = new WSManSessionOptions()
+        sessionOptions.AddDestinationCredentials(credentials)
 
-            use! cimSession = CimSession.CreateAsync(computerName, sessionOptions) |> awaitObservable
-            do! cimSession.TestConnectionAsync () |> awaitObservableList |> Async.Ignore
+        use! cimSession = CimSession.CreateAsync(computerName, sessionOptions) |> awaitObservable |> AsyncReader.liftAsync
+        do! cimSession.TestConnectionAsync () |> awaitObservableList |> Async.Ignore |> AsyncReader.liftAsync
 
-            let! ct = Async.CancellationToken
-            use queryOptions = new CimOperationOptions(Timeout = TimeSpan.FromMinutes(1.), CancellationToken = Nullable ct)
-            let query namespaceName queryString = async {
-                try
-                    let! queryInstances = cimSession.QueryInstancesAsync(namespaceName, "WQL", queryString, queryOptions) |> awaitObservableList
-                    return
-                        queryInstances
-                        |> List.map (fun instance ->
-                            instance.CimInstanceProperties
-                            |> Seq.map (fun property -> property.Name, property.Value)
-                            |> Map.ofSeq
-                        )
-                        |> Ok
-                with e -> return Error (SendQueryError e)
-            }
-            let! result = fn query
-            return Ok result
-        with e -> return Error (ConnectionError e)
-    }
+        let! ct = Async.CancellationToken |> AsyncReader.liftAsync
+        use queryOptions = new CimOperationOptions(Timeout = TimeSpan.FromMinutes(1.), CancellationToken = Nullable ct)
+        let query namespaceName queryString = async {
+            try
+                let! queryInstances = cimSession.QueryInstancesAsync(namespaceName, "WQL", queryString, queryOptions) |> awaitObservableList
+                return
+                    queryInstances
+                    |> List.map (fun instance ->
+                        instance.CimInstanceProperties
+                        |> Seq.map (fun property -> property.Name, property.Value)
+                        |> Map.ofSeq
+                    )
+                    |> Ok
+            with e -> return Error (SendQueryError e)
+        }
+        let! result = fn query |> AsyncReader.liftAsync
+        return Ok result
+    with e -> return Error (ConnectionError e)
 }
 
-let getComputerInfo computerName = reader {
+let getComputerInfo computerName = asyncReader {
     let timestamp = DateTimeOffset.Now
     let! properties = runInSession computerName (fun query -> async {
         let! bios = query @"root\cimv2" "SELECT * FROM Win32_BIOS"
@@ -87,13 +85,9 @@ let getComputerInfo computerName = reader {
             ]
             |> Map.ofList
     })
-    return
-        properties
-        |> Async.map (fun properties ->
-            {
-                ComputerName = computerName
-                Timestamp = timestamp
-                Properties = properties
-            }
-        )
+    return {
+        ComputerName = computerName
+        Timestamp = timestamp
+        Properties = properties
+    }
 }
