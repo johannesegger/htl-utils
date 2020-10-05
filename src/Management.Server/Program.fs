@@ -130,7 +130,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom IncrementClassGroups.DataTransferTypes.ClassGroupModification.encode IncrementClassGroups.DataTransferTypes.ClassGroupModification.decoder
         |> Extra.withCustom AADGroupUpdates.DataTransferTypes.GroupUpdate.encode AADGroupUpdates.DataTransferTypes.GroupUpdate.decoder
         |> Extra.withCustom ConsultationHours.DataTransferTypes.ConsultationHourEntry.encode ConsultationHours.DataTransferTypes.ConsultationHourEntry.decoder
-        |> Extra.withCustom ComputerInfo.DataTransferTypes.ComputerInfo.encode ComputerInfo.DataTransferTypes.ComputerInfo.decoder
+        |> Extra.withCustom ComputerInfo.DataTransferTypes.QueryResult.encode ComputerInfo.DataTransferTypes.QueryResult.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
     Server.addAADAuth services aadConfig.GraphClientId aadConfig.GraphAuthority

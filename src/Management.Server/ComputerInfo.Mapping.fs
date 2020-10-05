@@ -147,3 +147,10 @@ module ComputerInfo =
                     }
                 | Error e -> Error (QueryConnectionError e)
         }
+
+module QueryResult =
+    let fromDataStoreDto (queryResult: DataStore.Domain.QueryResult) =
+        {
+            Timestamp = queryResult.Timestamp
+            ComputerInfo = queryResult.ComputerInfo |> List.map ComputerInfo.fromDataStoreDto
+        }

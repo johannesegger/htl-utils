@@ -11,21 +11,24 @@ open Thoth.Json
 
 type LoadableComputerInfo =
     | LoadingComputerInfo
-    | LoadedComputerInfo of ComputerInfo list
+    | LoadedComputerInfo of QueryResult
     | FailedToLoadComputerInfo
 
 type Model = LoadableComputerInfo
 
 type Msg =
     | LoadComputerInfo
-    | LoadComputerInfoResponse of Result<ComputerInfo list, exn>
+    | LoadComputerInfoResponse of Result<QueryResult, exn>
 
 let update msg model =
     match msg with
     | LoadComputerInfo -> LoadingComputerInfo
-    | LoadComputerInfoResponse (Ok computerInfo) ->
-        computerInfo
-        |> List.sortBy (fun computerInfo -> computerInfo.ComputerName)
+    | LoadComputerInfoResponse (Ok queryResult) ->
+        { queryResult with
+            ComputerInfo =
+                queryResult.ComputerInfo
+                |> List.sortBy (fun computerInfo -> computerInfo.ComputerName)
+        }
         |> LoadedComputerInfo
     | LoadComputerInfoResponse (Error e) ->
         FailedToLoadComputerInfo
@@ -189,39 +192,48 @@ let view model dispatch =
         ]
     | FailedToLoadComputerInfo ->
         Section.section [] [ Views.errorWithRetryButton "Error while loading computer info" (fun () -> dispatch LoadComputerInfo) ]
-    | LoadedComputerInfo computerInfo ->
+    | LoadedComputerInfo queryResult ->
         Section.section [] [
-        Table.table [] [
-            thead [] [
-                tr [] [
-                    th [] [ str "Computer name" ]
-                    th [] [ str "Query timestamp" ]
-                    th [] [ str "Manufacturer - Model" ]
-                    th [] [ str "NetworkInformation" ]
-                    th [] [ str "Physical memory" ]
-                    th [] [ str "Processors" ]
-                    th [] [ str "Graphics cards" ]
-                    th [] [ str "BIOS settings" ]
+            Heading.h5 [] [
+                str "Last query time: "
+                let diff = System.DateTimeOffset.Now - queryResult.Timestamp
+                let color =
+                    if diff < System.TimeSpan.FromDays(1.) then IsSuccess
+                    elif diff < System.TimeSpan.FromDays(7.) then IsWarning
+                    else IsDanger
+                coloredText color ((sprintf "%s %s" (queryResult.Timestamp.ToString("D")) (queryResult.Timestamp.ToString("t"))))
+            ]
+            Table.table [] [
+                thead [] [
+                    tr [] [
+                        th [] [ str "Computer name" ]
+                        th [] [ str "Query timestamp" ]
+                        th [] [ str "Manufacturer - Model" ]
+                        th [] [ str "NetworkInformation" ]
+                        th [] [ str "Physical memory" ]
+                        th [] [ str "Processors" ]
+                        th [] [ str "Graphics cards" ]
+                        th [] [ str "BIOS settings" ]
+                    ]
+                ]
+                tbody [] [
+                    for entry in queryResult.ComputerInfo ->
+                        tr [] [
+                            td [] [ str entry.ComputerName ]
+                            td [] [ str (sprintf "%s %s" (entry.Timestamp.ToString("D")) (entry.Timestamp.ToString("t"))) ]
+                            match entry.Data with
+                            | Ok computerInfoData ->
+                                td [] (computerModelView computerInfoData.Model)
+                                td [] (networkInformationView computerInfoData.NetworkInformation)
+                                td [] (physicalMemoryView computerInfoData.PhysicalMemory)
+                                td [] (processorView computerInfoData.Processors)
+                                td [] (graphicsCardsView computerInfoData.GraphicsCards)
+                                td [] (biosSettingsView computerInfoData.BIOSSettings)
+                            | Error (QueryConnectionError e) ->
+                                td [ ColSpan 6 ] [ errorText e ]
+                        ]
                 ]
             ]
-            tbody [] [
-                for entry in computerInfo ->
-                    tr [] [
-                        td [] [ str entry.ComputerName ]
-                        td [] [ str (sprintf "%s %s" (entry.Timestamp.ToString("D")) (entry.Timestamp.ToString("t"))) ]
-                        match entry.Data with
-                        | Ok computerInfoData ->
-                            td [] (computerModelView computerInfoData.Model)
-                            td [] (networkInformationView computerInfoData.NetworkInformation)
-                            td [] (physicalMemoryView computerInfoData.PhysicalMemory)
-                            td [] (processorView computerInfoData.Processors)
-                            td [] (graphicsCardsView computerInfoData.GraphicsCards)
-                            td [] (biosSettingsView computerInfoData.BIOSSettings)
-                        | Error (QueryConnectionError e) ->
-                            td [ ColSpan 6 ] [ errorText e ]
-                    ]
-            ]
-        ]
     ]
 
 let stream (pageActive: IAsyncObservable<bool>) (states: IAsyncObservable<Msg option * Model>) (msgs: IAsyncObservable<Msg>) =
@@ -234,7 +246,7 @@ let stream (pageActive: IAsyncObservable<bool>) (states: IAsyncObservable<Msg op
                 let loadComputerInfo =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
-                            return! Fetch.``get``("/api/computer-info", Decode.list ComputerInfo.decoder) |> Async.AwaitPromise
+                            return! Fetch.``get``("/api/computer-info", QueryResult.decoder) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

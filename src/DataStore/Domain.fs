@@ -8,3 +8,9 @@ type ComputerInfo = {
     Timestamp: DateTimeOffset
     Properties: Result<Map<string, Result<list<Map<string, obj>>, string>>, string>
 }
+
+[<CLIMutable>]
+type QueryResult = {
+    Timestamp: DateTimeOffset
+    ComputerInfo: ComputerInfo list
+}

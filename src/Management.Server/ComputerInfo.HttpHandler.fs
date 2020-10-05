@@ -9,6 +9,6 @@ let getComputerInfo dataStoreConfig : HttpHandler =
         let computerInfo =
             DataStore.Core.readComputerInfo
             |> Reader.run dataStoreConfig
-            |> List.map ComputerInfo.fromDataStoreDto
+            |> QueryResult.fromDataStoreDto
         return! Successful.OK computerInfo next ctx
     }

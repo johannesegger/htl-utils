@@ -294,3 +294,21 @@ module ComputerInfo =
                 Data = get.Required.Field "data" (Result.decoder ComputerInfoData.decoder QueryConnectionError.decoder)
             }
         )
+
+type QueryResult = {
+    Timestamp: DateTimeOffset
+    ComputerInfo: ComputerInfo list
+}
+module QueryResult =
+    let encode v =
+        Encode.object [
+            "timestamp", Encode.datetimeOffset v.Timestamp
+            "computerInfo", (List.map ComputerInfo.encode >> Encode.list) v.ComputerInfo
+        ]
+    let decoder : Decoder<_> =
+        Decode.object (fun get ->
+            {
+                Timestamp = get.Required.Field "timestamp" Decode.datetimeOffset
+                ComputerInfo = get.Required.Field "computerInfo" (Decode.list ComputerInfo.decoder)
+            }
+        )

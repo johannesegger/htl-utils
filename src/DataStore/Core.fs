@@ -2,6 +2,7 @@
 
 open DataStore.Configuration
 open DataStore.Domain
+open System
 open System.IO
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -23,31 +24,33 @@ let toList map (v: obj) = (v :?> JsonElement).EnumerateArray() |> Seq.map map |>
 let readComputerInfo = reader {
     let! config = Reader.environment
     try
-        return
-            JsonSerializer.Deserialize<ComputerInfo array>(File.ReadAllText config.ComputerInfoFilePath, serializerOptions)
-            |> Array.toList
+        return JsonSerializer.Deserialize<QueryResult>(File.ReadAllText config.ComputerInfoFilePath, serializerOptions)
     with e ->
         #if DEBUG
         printfn "Can't read computer info: %O" e
         #endif
-        return []
+        return { Timestamp = DateTimeOffset.Now; ComputerInfo = [] }
 }
 
-let updateComputerInfo (computerInfo: ComputerInfo list) = reader {
+let updateComputerInfo (queryResult: QueryResult) = reader {
     let! oldData = readComputerInfo
     let oldDataMap =
-        oldData
+        oldData.ComputerInfo
         |> List.map (fun computerInfo -> computerInfo.ComputerName, computerInfo)
         |> Map.ofList
     let data =
-        computerInfo
-        |> List.map (fun computerInfo ->
-            match computerInfo.Properties with
-            | Ok _ -> computerInfo
-            | Error _ ->
-                Map.tryFind computerInfo.ComputerName oldDataMap
-                |> Option.defaultValue computerInfo
-        )
+        { queryResult with
+            ComputerInfo =
+                queryResult.ComputerInfo
+                |> List.map (fun computerInfo ->
+                    let oldComputerInfo = Map.tryFind computerInfo.ComputerName oldDataMap
+                    match computerInfo.Properties, oldComputerInfo with
+                    | Ok _, _
+                    | _, None
+                    | Error _, Some { Properties = Error _ } -> computerInfo
+                    | Error _, Some ({ Properties = Ok _ } as v) -> v
+                )
+        }
     let text = JsonSerializer.Serialize(data, serializerOptions)
     let! config = Reader.environment
     Directory.CreateDirectory(Path.GetDirectoryName(config.ComputerInfoFilePath)) |> ignore
