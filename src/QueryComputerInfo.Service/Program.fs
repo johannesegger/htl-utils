@@ -19,8 +19,7 @@ type QueryResult = {
 let queryComputerInfo = async {
     let timestamp = DateTimeOffset.Now
     let! computerInfo =
-        // Reader.run adConfig AD.Core.getComputers
-        [ "HannesPC" ]
+        Reader.run adConfig AD.Core.getComputers
         |> List.map (CIM.Core.getComputerInfo >> Reader.run cimConfig)
         |> Async.Parallel
     return {
