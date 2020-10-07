@@ -73,10 +73,10 @@ let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStud
                 [ CreateUser (user, teacher.DateOfBirth.ToString("dd.MM.yyyy")) ]
             | Some adUser ->
                 [
+                    if adUser.SokratesId |> Option.map SokratesId.fromADDto <> Some (SokratesId.fromSokratesDto teacher.Id) then
+                        UpdateUser (User.fromADDto adUser, SetSokratesId (SokratesId.fromSokratesDto teacher.Id))
                     if adUser.FirstName <> teacher.FirstName || adUser.LastName <> teacher.LastName then
                         UpdateUser (User.fromADDto adUser, ChangeUserName (UserName teacher.ShortName, teacher.FirstName, teacher.LastName))
-                    elif adUser.SokratesId |> Option.map SokratesId.fromADDto <> Some (SokratesId.fromSokratesDto teacher.Id) then
-                        UpdateUser (User.fromADDto adUser, SetSokratesId (SokratesId.fromSokratesDto teacher.Id))
                 ]
         )
     let createOrUpdateStudentModifications =
