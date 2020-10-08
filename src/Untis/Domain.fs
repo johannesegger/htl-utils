@@ -13,7 +13,7 @@ type Subject = {
 
 type Room = {
     ShortName: string
-    FullName: string
+    FullName: string option
 }
 
 type WorkingDay = Monday | Tuesday | Wednesday | Thursday | Friday

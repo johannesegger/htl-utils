@@ -82,8 +82,10 @@ let getTeachingData = reader {
                 |> Option.map (fun timetableEntry ->
                     let room =
                         rooms
-                        |> Seq.find (fun r -> CIString r.ShortName = CIString timetableEntry.Room)
-                        |> fun r -> { ShortName = r.ShortName; FullName = r.FullName }
+                        |> Seq.tryFind (fun r -> CIString r.ShortName = CIString timetableEntry.Room)
+                        |> function
+                        | Some r -> { ShortName = r.ShortName; FullName = Some r.FullName }
+                        | None -> { ShortName = timetableEntry.Room; FullName = None }
                     Informant (TeacherShortName row.Teacher, room, WorkingDay.tryFromOrdinal timetableEntry.Day |> Option.get, tryGetTimeFrameFromPeriodNumber timetableEntry.Period |> Option.get)
                 )
             elif String.IsNullOrEmpty row.Class then

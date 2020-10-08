@@ -102,7 +102,7 @@ let view model dispatch =
                                             | Some details ->
                                                 td [] [ str details.DayOfWeek ]
                                                 td [] [ str (sprintf "%02d:%02d - %02d:%02d" details.BeginTime.Hours details.BeginTime.Minutes details.EndTime.Hours details.EndTime.Minutes) ]
-                                                td [] [ str (sprintf "%s - %s" details.Location.ShortName details.Location.FullName) ]
+                                                td [] [ str (Room.toString details.Location) ]
                                             | None -> td [ ColSpan 3 ] [ str "Nach telefonischer Terminvereinbarung" ]
                                         ]
                                     )

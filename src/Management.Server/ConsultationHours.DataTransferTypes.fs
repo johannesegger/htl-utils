@@ -68,20 +68,24 @@ module TeacherSubject =
 
 type Room = {
     ShortName: string
-    FullName: string
+    FullName: string option
 }
 module Room =
     let encode v = Encode.object [
         "shortName", Encode.string v.ShortName
-        "fullName", Encode.string v.FullName
+        "fullName", Encode.option Encode.string v.FullName
     ]
     let decoder : Decoder<_> =
         Decode.object (fun get ->
             {
                 ShortName = get.Required.Field "shortName" Decode.string
-                FullName = get.Required.Field "fullName" Decode.string
+                FullName = get.Required.Field "fullName" (Decode.option Decode.string)
             }
         )
+    let toString v =
+        match v.FullName with
+        | Some fullName -> sprintf "%s - %s" v.ShortName fullName
+        | None -> v.ShortName
 
 type ConsultationHourDetails = {
     DayOfWeek: string
