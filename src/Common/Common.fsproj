@@ -17,4 +17,8 @@
     <Compile Include="Directory.fs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Unidecode.NET" Version="2.0.0" />
+  </ItemGroup>
+
 </Project>

@@ -9,15 +9,7 @@ open System.Globalization
 
 let userNameFromName (firstName: string) (lastName: string) =
     [String.cut 1 firstName; lastName]
-    |> List.map (
-        String.replace "Ä" "Ae"
-        >> String.replace "Ö" "Oe"
-        >> String.replace "Ü" "Ue"
-        >> String.replace "ä" "ae"
-        >> String.replace "ö" "oe"
-        >> String.replace "ü" "ue"
-        >> Unidecode.NET.Unidecoder.Unidecode
-    )
+    |> List.map String.asAlphaNumeric
     |> String.concat "."
     |> UserName
 

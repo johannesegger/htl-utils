@@ -211,8 +211,8 @@ let private createUser (newUser: NewUser) password = reader {
     adUser.Properties.["department"].Value <- department
     let! division = divisionFromUserType newUser.Type
     adUser.Properties.["division"].Value <- division
-    adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" newUser.LastName newUser.FirstName config.MailDomain
-    adUser.Properties.["proxyAddresses"].Value <- proxyAddresses newUser.FirstName newUser.LastName config.MailDomain |> List.toArray
+    adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" (String.asAlphaNumeric newUser.LastName) (String.asAlphaNumeric newUser.FirstName) config.MailDomain
+    adUser.Properties.["proxyAddresses"].Value <- proxyAddresses (String.asAlphaNumeric newUser.FirstName) (String.asAlphaNumeric newUser.LastName) config.MailDomain |> List.toArray
     let! userHomePath = homePath newUser.Name newUser.Type
     adUser.Properties.["homeDirectory"].Value <- userHomePath
     adUser.Properties.["homeDrive"].Value <- config.HomeDrive
@@ -315,8 +315,8 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
         adUser.Properties.["sn"].Value <- newLastName
         adUser.Properties.["displayName"].Value <- sprintf "%s %s" newLastName newFirstName
         adUser.Properties.["sAMAccountName"].Value <- newUserName
-        adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" newLastName newFirstName config.MailDomain
-        adUser.Properties.["proxyAddresses"].Value <- [ oldEMailAddress ] @ oldProxyAddresses @ proxyAddresses newFirstName newLastName config.MailDomain |> List.toArray
+        adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" (String.asAlphaNumeric newLastName) (String.asAlphaNumeric newFirstName) config.MailDomain
+        adUser.Properties.["proxyAddresses"].Value <- [ oldEMailAddress ] @ oldProxyAddresses @ proxyAddresses (String.asAlphaNumeric newFirstName) (String.asAlphaNumeric newLastName) config.MailDomain |> List.toArray
         let! newHomeDirectory = homePath (UserName newUserName) userType
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
