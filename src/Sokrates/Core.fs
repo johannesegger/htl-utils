@@ -168,7 +168,7 @@ let private parseClassName text =
 
 let private parseClasses (xmlElement: XElement) =
     SokratesApi.TsnClassList(xmlElement).TsnClassEntries
-    |> Seq.filter (fun n -> n.ClassName |> String.startsWithCaseInsensitive "AP_" |> not) // looks like final classes
+    |> Seq.filter (fun n -> Regex.IsMatch(n.ClassName, "^\d")) // AP_, VT
     |> Seq.map (fun n -> parseClassName n.ClassName)
     |> Seq.distinct
     |> Seq.toList
