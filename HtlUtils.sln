@@ -45,7 +45,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "utils", "utils", "{4261B5F1
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SISImport", "utils\SISImport\SISImport.fsproj", "{208B33C8-6DFA-4C39-956C-300F34FFF2E2}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "PreparePhotos", "utils\PreparePhotos\PreparePhotos.fsproj", "{74CFEF8B-6963-4028-9FD2-6C912C2A8CE8}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "UpdatePhotos", "utils\UpdatePhotos\UpdatePhotos.fsproj", "{74CFEF8B-6963-4028-9FD2-6C912C2A8CE8}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ClassList", "utils\ClassList\ClassList.fsproj", "{77F42546-7CCC-420F-9E0F-88BCAAD19DF5}"
 EndProject
