@@ -9,6 +9,11 @@ open ComputerInfo.DataTransferTypes
 open Thoth.Fetch
 open Thoth.Json
 
+module BootOrderType =
+    let toString = function
+        | Legacy -> "Legacy"
+        | UEFI -> "UEFI"
+
 type LoadableComputerInfo =
     | LoadingComputerInfo
     | LoadedComputerInfo of QueryResult
@@ -160,23 +165,31 @@ let view model dispatch =
     let biosSettingsView = function
         | Ok data ->
             [
-                div [] [
-                    str "Boot order: "
-                    data.BootOrder |> Option.map (String.concat ", ") |> Option.map str |> Option.defaultValue (errorText "Not found")
-                ]
-                div [] [
+                match data.BootOrder with
+                | [] ->
+                    yield div [] [
+                        str "Boot order: "
+                        errorText "Not found"
+                    ]
+                | x ->
+                    for bootOrder in x ->
+                        div [] [
+                            str (sprintf "Boot order (%s): " (BootOrderType.toString bootOrder.Type))
+                            bootOrder.Devices |> String.concat ", " |> str
+                        ]
+                yield div [] [
                     str "Network boot enabled: "
                     data.NetworkServiceBootEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "✗") |> Option.defaultValue (errorText "Not found")
                 ]
-                div [] [
+                yield div [] [
                     str "VTx enabled: "
                     data.VTxEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "✗") |> Option.defaultValue (errorText "Not found")
                 ]
-                div [] [
+                yield div [] [
                     str "After power loss behavior: "
                     data.AfterPowerLossBehavior |> Option.map (function | Off -> errorText "Off" | On -> successText "On" | PreviousState -> warningText "Previous state") |> Option.defaultValue (errorText "Not found")
                 ]
-                div [] [
+                yield div [] [
                     str "Wake-On-LAN enabled: "
                     data.WakeOnLanEnabled |> Option.map (function | true -> successText "✔" | false -> errorText "✗") |> Option.defaultValue (errorText "Not found")
                 ]

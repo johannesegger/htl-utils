@@ -192,16 +192,49 @@ module AfterPowerLossBehavior =
         | On -> Encode.string "on"
         | PreviousState -> Encode.string "previousState"
     let decoder : Decoder<_> =
-            Decode.string
-            |> Decode.andThen (function
-                | "off" -> Decode.succeed Off
-                | "on" -> Decode.succeed On
-                | "previousState" -> Decode.succeed PreviousState
-                | v -> Decode.fail (sprintf "Invalid value for AfterPowerLossBehavior: \"%s\"" v)
-            )
+        Decode.string
+        |> Decode.andThen (function
+            | "off" -> Decode.succeed Off
+            | "on" -> Decode.succeed On
+            | "previousState" -> Decode.succeed PreviousState
+            | v -> Decode.fail (sprintf "Invalid value for AfterPowerLossBehavior: \"%s\"" v)
+        )
+
+type BootOrderType =
+    | Legacy
+    | UEFI
+module BootOrderType =
+    let encode = function
+        | Legacy -> Encode.string "legacy"
+        | UEFI -> Encode.string "uefi"
+    let decoder : Decoder<_> =
+        Decode.string
+        |> Decode.andThen (function
+            | "legacy" -> Decode.succeed Legacy
+            | "uefi" -> Decode.succeed UEFI
+            | v -> Decode.fail (sprintf "Invalid value for BootOrderType: \"%s\"" v)
+        )
+
+type BootOrder = {
+    Type: BootOrderType
+    Devices: string list
+}
+module BootOrder =
+    let encode v =
+        Encode.object [
+            "type", BootOrderType.encode v.Type
+            "devices", v.Devices |> List.map Encode.string |> Encode.list
+        ]
+    let decoder : Decoder<_> =
+        Decode.object (fun get ->
+            {
+                Type = get.Required.Field "type" BootOrderType.decoder
+                Devices = get.Required.Field "devices" (Decode.list Decode.string)
+            }
+        )
 
 type BIOSSettings = {
-    BootOrder: string list option
+    BootOrder: BootOrder list
     NetworkServiceBootEnabled: bool option
     VTxEnabled: bool option
     AfterPowerLossBehavior: AfterPowerLossBehavior option
@@ -210,7 +243,7 @@ type BIOSSettings = {
 module BIOSSettings =
     let encode v =
         Encode.object [
-            "bootOrder", Encode.option (List.map Encode.string >> Encode.list) v.BootOrder
+            "bootOrder", v.BootOrder |> List.map BootOrder.encode |> Encode.list
             "networkServiceBootEnabled", Encode.option Encode.bool v.NetworkServiceBootEnabled
             "vtxEnabled", Encode.option Encode.bool v.VTxEnabled
             "afterPowerLossBehavior", Encode.option AfterPowerLossBehavior.encode v.AfterPowerLossBehavior
@@ -219,7 +252,7 @@ module BIOSSettings =
     let decoder : Decoder<_> =
         Decode.object (fun get ->
             {
-                BootOrder = get.Required.Field "bootOrder" (Decode.option (Decode.list Decode.string))
+                BootOrder = get.Required.Field "bootOrder" (Decode.list BootOrder.decoder)
                 NetworkServiceBootEnabled = get.Required.Field "networkServiceBootEnabled" (Decode.option Decode.bool)
                 VTxEnabled = get.Required.Field "vtxEnabled" (Decode.option Decode.bool)
                 AfterPowerLossBehavior = get.Required.Field "afterPowerLossBehavior" (Decode.option AfterPowerLossBehavior.decoder)
