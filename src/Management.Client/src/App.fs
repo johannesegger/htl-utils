@@ -25,6 +25,7 @@ type Msg =
     | ModifyADMsg of ModifyAD.Msg
     | IncrementAADClassGroupsMsg of IncrementAADClassGroups.Msg
     | SyncAADGroupsMsg of SyncAADGroups.Msg
+    | GenerateITInformationSheetMsg of GenerateITInformationSheet.Msg
     | ListConsultationHoursMsg of ListConsultationHours.Msg
     | ShowComputerInfoMsg of ShowComputerInfo.Msg
 
@@ -37,6 +38,7 @@ type Model =
         ModifyAD: ModifyAD.Model
         IncrementAADClassGroups: IncrementAADClassGroups.Model
         SyncAADGroups: SyncAADGroups.Model
+        GenerateITInformationSheet: GenerateITInformationSheet.Model
         ListConsultationHours: ListConsultationHours.Model
         ShowComputerInfo: ShowComputerInfo.Model
     }
@@ -58,6 +60,7 @@ let init page =
         ModifyAD = ModifyAD.init
         IncrementAADClassGroups = IncrementAADClassGroups.init
         SyncAADGroups = SyncAADGroups.init
+        GenerateITInformationSheet = GenerateITInformationSheet.init
         ListConsultationHours = ListConsultationHours.init
         ShowComputerInfo = ShowComputerInfo.init
     }
@@ -76,6 +79,8 @@ let update msg model =
         { model with IncrementAADClassGroups = IncrementAADClassGroups.update msg model.IncrementAADClassGroups }
     | SyncAADGroupsMsg msg ->
         { model with SyncAADGroups = SyncAADGroups.update msg model.SyncAADGroups }
+    | GenerateITInformationSheetMsg msg ->
+        { model with GenerateITInformationSheet = GenerateITInformationSheet.update msg model.GenerateITInformationSheet }
     | ListConsultationHoursMsg msg ->
         { model with ListConsultationHours = ListConsultationHours.update msg model.ListConsultationHours }
     | ShowComputerInfoMsg msg ->
@@ -89,6 +94,7 @@ let root model dispatch =
         | ModifyAD -> ModifyAD.view model.ModifyAD (ModifyADMsg >> dispatch)
         | IncrementAADClassGroups -> IncrementAADClassGroups.view model.IncrementAADClassGroups (IncrementAADClassGroupsMsg >> dispatch)
         | SyncAADGroups -> SyncAADGroups.view model.SyncAADGroups (SyncAADGroupsMsg >> dispatch)
+        | GenerateITInformationSheet -> GenerateITInformationSheet.view model.GenerateITInformationSheet (GenerateITInformationSheetMsg >> dispatch)
         | ListConsultationHours -> ListConsultationHours.view model.ListConsultationHours (ListConsultationHoursMsg >> dispatch)
         | ShowComputerInfo -> ShowComputerInfo.view model.ShowComputerInfo (ShowComputerInfoMsg >> dispatch)
 
@@ -178,6 +184,13 @@ let stream states msgs =
             (subStates (function SyncAADGroupsMsg msg -> Some msg | _ -> None) (fun m -> m.SyncAADGroups))
             (msgs |> AsyncRx.choose (function UserMsg (SyncAADGroupsMsg msg) -> Some msg | _ -> None))
         |> AsyncRx.map SyncAADGroupsMsg
+
+        GenerateITInformationSheet.stream
+            login
+            (pageActivated ((=) GenerateITInformationSheet))
+            (subStates (function GenerateITInformationSheetMsg msg -> Some msg | _ -> None) (fun m -> m.GenerateITInformationSheet))
+            (msgs |> AsyncRx.choose (function UserMsg (GenerateITInformationSheetMsg msg) -> Some msg | _ -> None))
+        |> AsyncRx.map GenerateITInformationSheetMsg
 
         ListConsultationHours.stream
             (pageActivated ((=) ListConsultationHours))

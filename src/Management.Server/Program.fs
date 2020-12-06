@@ -64,6 +64,7 @@ let private adConfig = AD.Configuration.Config.fromEnvironment ()
 let private aadConfig = AAD.Configuration.Config.fromEnvironment ()
 let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
 let private finalThesesConfig = FinalTheses.Configuration.Config.fromEnvironment ()
+let private generateItInformationSheetConfig = GenerateITInformationSheet.Configuration.Config.fromEnvironment ()
 let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Config.fromEnvironment ()
 let private sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
 let private untisConfig = Untis.Configuration.Config.fromEnvironment ()
@@ -79,6 +80,7 @@ let webApp =
                     route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig
                     route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adConfig aadConfig finalThesesConfig untisConfig
                     route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig
+                    route "/it-information/users" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.getUsers adConfig
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesConfig untisConfig
                     route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreConfig
                     #if DEBUG
@@ -90,6 +92,7 @@ let webApp =
                     route "/ad/increment-class-group-updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates adConfig
                     route "/aad/group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates aadConfig
                     route "/aad/increment-class-group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADIncrementClassGroupUpdates aadConfig
+                    route "/it-information/generate-sheet" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.generateSheet adConfig generateItInformationSheetConfig
                 ]
             ])
         #if DEBUG
@@ -131,6 +134,8 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom AADGroupUpdates.DataTransferTypes.GroupUpdate.encode AADGroupUpdates.DataTransferTypes.GroupUpdate.decoder
         |> Extra.withCustom ConsultationHours.DataTransferTypes.ConsultationHourEntry.encode ConsultationHours.DataTransferTypes.ConsultationHourEntry.decoder
         |> Extra.withCustom ComputerInfo.DataTransferTypes.QueryResult.encode ComputerInfo.DataTransferTypes.QueryResult.decoder
+        |> Extra.withCustom GenerateITInformationSheet.DataTransferTypes.User.encode GenerateITInformationSheet.DataTransferTypes.User.decoder
+        |> Extra.withCustom GenerateITInformationSheet.DataTransferTypes.InformationSheet.encode GenerateITInformationSheet.DataTransferTypes.InformationSheet.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
     Server.addAADAuth services aadConfig.GraphClientId aadConfig.GraphAuthority

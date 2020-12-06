@@ -8,6 +8,7 @@ open System.DirectoryServices
 open System.IO
 open System.Security.AccessControl
 open System.Security.Principal
+open System.Text.RegularExpressions
 
 // see http://www.gabescode.com/active-directory/2018/12/15/better-performance-activedirectory.html
 
@@ -487,6 +488,35 @@ let private getUserType teachers classGroups userName =
             else None
         )
 
+let private userProperties = reader {
+    let! config = Reader.environment
+    return [|
+        "distinguishedName"
+        "sAMAccountName"
+        "givenName"
+        "sn"
+        "whenCreated"
+        "mail"
+        "proxyAddresses"
+        "userPrincipalName"
+        config.SokratesIdAttributeName
+    |]
+}
+let private userFromADUserSearchResult userType sokratesIdAttributeName (adUser: SearchResult) =
+    {
+        Name = UserName (adUser.Properties.["sAMAccountName"].[0] :?> string)
+        SokratesId = adUser.Properties.[sokratesIdAttributeName] |> Seq.cast<string> |> Seq.tryHead |> Option.map SokratesId
+        FirstName = adUser.Properties.["givenName"].[0] :?> string
+        LastName = adUser.Properties.["sn"].[0] :?> string
+        Type = userType
+        CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
+        Mail = adUser.Properties.["mail"] |> Seq.cast<string> |> Seq.tryHead
+        ProxyAddresses =
+            let trimProtocolFromMailAddress text = Regex.Replace(text, "^[^:]*:", "")
+            adUser.Properties.["proxyAddresses"] |> Seq.cast<string> |> Seq.map trimProtocolFromMailAddress |> Seq.toList
+        UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string
+    }
+
 let getUsers = reader {
     let! config = Reader.environment
 
@@ -519,8 +549,8 @@ let getUsers = reader {
         [ config.TeacherContainer; config.ClassContainer ]
         |> List.map (fun userContainerPath -> reader {
             use! userCtx = adDirectoryEntry [||] userContainerPath
-            let! config = Reader.environment
-            use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", [| "distinguishedName"; "sAMAccountName"; "givenName"; "sn"; "whenCreated"; config.SokratesIdAttributeName |], PageSize = 1024)
+            let! userProperties = userProperties
+            use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", userProperties, PageSize = 1024)
             use searchResults = searcher.FindAll()
             return
                 searchResults
@@ -529,20 +559,21 @@ let getUsers = reader {
                     let distinguishedName = DistinguishedName (adUser.Properties.["distinguishedName"].[0] :?> string)
                     getUserType teachers classGroups distinguishedName
                     |> Option.map (fun userType ->
-                        {
-                            Name = UserName (adUser.Properties.["sAMAccountName"].[0] :?> string)
-                            SokratesId = adUser.Properties.[config.SokratesIdAttributeName] |> Seq.cast<string> |> Seq.tryHead |> Option.map SokratesId
-                            FirstName = adUser.Properties.["givenName"].[0] :?> string
-                            LastName = adUser.Properties.["sn"].[0] :?> string
-                            Type = userType
-                            CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
-                        }
+                        userFromADUserSearchResult userType config.SokratesIdAttributeName adUser
                     )
                 )
                 |> Seq.toList
         })
         |> Reader.sequence
         |> Reader.map List.concat
+}
+
+let getUser userName userType = reader {
+    let! config = Reader.environment
+    use! adCtx = userRootEntry userType
+    let! userProperties = userProperties
+    let adUser = user adCtx userName userProperties
+    return userFromADUserSearchResult userType config.SokratesIdAttributeName adUser
 }
 
 let getClassGroups = reader {
