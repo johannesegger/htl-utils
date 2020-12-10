@@ -6,3 +6,4 @@ deploy/
 /src/Management.Client/src/Client.Shared
 /src/Teaching.Client/src/Client.Shared
 /local
+*.fs.js

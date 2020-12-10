@@ -53,10 +53,12 @@ let private authenticateUser = async {
         let! authResponse = async {
             let authParams = createEmpty<Msal.AuthenticationParameters>
             authParams.scopes <- Some !![| appId |]
-            try
-                return! userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise
-            with e when isInteractionRequiredAuthError e ->
+            match! Async.Catch (userAgentApplication.acquireTokenSilent authParams |> Async.AwaitPromise) with
+            | Choice1Of2 v -> return v
+            | Choice2Of2 e when isInteractionRequiredAuthError e ->
                 return! userAgentApplication.acquireTokenPopup authParams |> Async.AwaitPromise
+            | Choice2Of2 e ->
+                return raise e
         }
         return { Name = account.name; AccessToken = authResponse.idToken.rawIdToken }
     | None ->
