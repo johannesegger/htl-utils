@@ -1,4 +1,4 @@
-module GenerateITInformationSheet
+module ITInformationSheet
 
 open Fable.Core
 open Fable.Core.JS

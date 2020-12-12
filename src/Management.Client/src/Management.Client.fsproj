@@ -24,7 +24,7 @@
     <Compile Include="ModifyAD.fs" />
     <Compile Include="IncrementAADClassGroups.fs" />
     <Compile Include="SyncAADGroups.fs" />
-    <Compile Include="GenerateITInformationSheet.fs" />
+    <Compile Include="ITInformationSheet.fs" />
     <Compile Include="ListConsultationHours.fs" />
     <Compile Include="ShowComputerInfo.fs" />
     <Compile Include="App.fs" />
