@@ -55,6 +55,9 @@ module private AD =
     open ADModifications.Mapping
 
     let toExistingADUser (user: AD.Domain.NewUser) =
+        let mail =
+            let (AD.Domain.UserName userName) = user.Name
+            sprintf "%s@x.y" userName
         {
             AD.Domain.ExistingUser.Name = user.Name
             AD.Domain.ExistingUser.SokratesId = user.SokratesId
@@ -62,6 +65,9 @@ module private AD =
             AD.Domain.ExistingUser.LastName = user.LastName
             AD.Domain.ExistingUser.Type = user.Type
             AD.Domain.ExistingUser.CreatedAt = System.DateTime.Today
+            AD.Domain.ExistingUser.Mail = Some mail
+            AD.Domain.ExistingUser.ProxyAddresses = []
+            AD.Domain.ExistingUser.UserPrincipalName = mail
         }
 
     let toExistingDomainUser = User.toADDto >> toExistingADUser
