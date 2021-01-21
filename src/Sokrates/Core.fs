@@ -76,9 +76,10 @@ let private createHttpClient = reader {
 
 let private fetch requestContent = asyncReader {
     use! httpClient = createHttpClient |> AsyncReader.liftReader
+    let! config = Reader.environment |> AsyncReader.liftReader
     use! response =
         httpClient.PostAsync(
-            "https://www.sokrates-bund.at/BRZPRODWS/ws/dataexchange",
+            config.WebServiceUrl,
             new StringContent(requestContent, Encoding.UTF8, "text/xml")
         )
         |> Async.AwaitTask
