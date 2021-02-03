@@ -9,21 +9,27 @@ let modifications classGroups = reader {
     return
         classGroups
         |> Seq.choose (fun groupName ->
-            config.MaxClassLevels
+            config.IncrementRuleGroups
             |> List.indexed
-            |> List.choose (fun (index, classMaxLevelSetting) ->
-                let m = classMaxLevelSetting.Pattern.Match(groupName)
-                if m.Success then
-                    let classLevel =
-                        m.Value
-                        |> tryDo Int32.TryParse
-                        |> Option.defaultWith (fun () -> failwithf "Pattern \"%O\" doesn't match class level of \"%s\" as number" classMaxLevelSetting.Pattern groupName)
-                    if classLevel < classMaxLevelSetting.MaxLevel then
-                        let newName = classMaxLevelSetting.Pattern.Replace(groupName, string (classLevel + 1))
-                        Some ((index, classMaxLevelSetting.Title), classLevel, ChangeClassGroupName (groupName, newName))
-                    else
-                        Some ((index, classMaxLevelSetting.Title), classLevel, DeleteClassGroup groupName)
-                else None
+            |> List.choose (fun (index, ruleGroup) ->
+                ruleGroup.Rules
+                |> List.tryPick (fun rule ->
+                    let m = rule.Pattern.Match(groupName)
+                    if m.Success then
+                        match rule.Strategy with
+                        | Increment ->
+                            let classLevel =
+                                m.Value
+                                |> tryDo Int32.TryParse
+                                |> Option.defaultWith (fun () -> failwithf "Pattern \"%O\" doesn't match class level of \"%s\" as number" rule.Pattern groupName)
+                            let newName = rule.Pattern.Replace(groupName, string (classLevel + 1))
+                            Some ((index, ruleGroup.Title), (0, classLevel), ChangeClassGroupName (groupName, newName))
+                        | Rename v ->
+                            Some ((index, ruleGroup.Title), (1, 0), ChangeClassGroupName (groupName, v))
+                        | Delete ->
+                            Some ((index, ruleGroup.Title), (2, 0), DeleteClassGroup groupName)
+                    else None
+                )
             )
             |> function
             | [] -> None
