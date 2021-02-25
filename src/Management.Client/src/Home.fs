@@ -21,7 +21,7 @@ let view =
             Tile.ancestor [] [
                 item IncrementADClassGroups "Increment AD class groups" "Increment the class number of Active Directory class groups." 5
                 item SyncAD "Sync AD" "Sync Active Directory users and groups based on data from Sokrates." 3
-                item SyncAD "Manually modify AD" "Manually modify Active Directory users and groups." 4
+                item ModifyAD "Manually modify AD" "Manually modify Active Directory users and groups." 4
             ]
             Tile.ancestor [] [
                 item ITInformationSheet "Generate IT information sheet" "Generate information sheet for new teachers about IT systems used within the school." 5
