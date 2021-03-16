@@ -138,11 +138,12 @@ module PlayModel =
     let nextPerson model =
         let remainingPersons =
             match model.RemainingPersons with
-            | _ :: xs -> xs
-            | [] ->
+            | []
+            | [ _ ] ->
                 model.AllPersons
                 |> choosePersonsWithImage
                 |> List.shuffle
+            | _ :: xs -> xs
         { model with
             RemainingPersons = remainingPersons
             Suggestions = { model.Suggestions with Highlighted = None }
