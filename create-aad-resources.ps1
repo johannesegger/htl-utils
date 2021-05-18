@@ -104,7 +104,7 @@ ClearOAuth2Permissions $clientApp
 Start-Sleep -Seconds 10
 $clientSettings = @{
     spa = @{
-        redirectUris = @("http://localhost:9000")
+        redirectUris = @("http://localhost:9000", "https://bro", "https://htlvb-htlutils")
     }
 }
 ConvertTo-Json -Compress -Depth 10 $clientSettings | az rest --method patch --uri "https://graph.microsoft.com/v1.0/applications/$($clientApp.objectId)" --body "@-" --headers "Content-Type=application/json" --output none
