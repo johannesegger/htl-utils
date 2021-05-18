@@ -25,7 +25,8 @@ let modifications classGroups = reader {
                             let newName = rule.Pattern.Replace(groupName, string (classLevel + 1))
                             Some ((index, ruleGroup.Title), (0, classLevel), ChangeClassGroupName (groupName, newName))
                         | Rename v ->
-                            Some ((index, ruleGroup.Title), (1, 0), ChangeClassGroupName (groupName, v))
+                            let newName = rule.Pattern.Replace(groupName, v)
+                            Some ((index, ruleGroup.Title), (1, 0), ChangeClassGroupName (groupName, newName))
                         | Delete ->
                             Some ((index, ruleGroup.Title), (2, 0), DeleteClassGroup groupName)
                     else None
