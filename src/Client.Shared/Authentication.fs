@@ -59,22 +59,16 @@ let private authenticateUser = async {
         | Some accountInfo ->
             match! Async.Catch (clientApplication.acquireTokenSilent !!tokenRequest |> Async.AwaitPromise) with
             | Choice1Of2 v ->
-                printfn "Acquired token silently"
                 return v
             | Choice2Of2 (:? InteractionRequiredAuthError as e) ->
-                printfn "Error while acquiring token silently. Showing popup."
                 return! clientApplication.acquireTokenPopup !!tokenRequest |> Async.AwaitPromise
             | Choice2Of2 e ->
-                printfn "Error while acquiring token silently: %O" e
                 return raise e
         | None ->
             let! authResult = clientApplication.loginPopup !!tokenRequest |> Async.AwaitPromise
             clientApplication.setActiveAccount(authResult.account)
             return! clientApplication.acquireTokenSilent !!tokenRequest |> Async.AwaitPromise
     }
-    Browser.Dom.console.log("accessToken", loginResponse.accessToken)
-    Browser.Dom.console.log("idToken", loginResponse.idToken)
-    Browser.Dom.console.log("idTokenClaims", loginResponse.idTokenClaims)
     return { Name = loginResponse.account |> Option.bind (fun v -> v.name) |> Option.defaultValue ""; AccessToken = loginResponse.accessToken }
 }
 
