@@ -9,6 +9,7 @@ open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open Microsoft.Graph.Auth
 open System
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
@@ -41,11 +42,11 @@ let handlePostWakeUp macAddress : HttpHandler =
         | Error (WakeUpComputer.Core.InvalidMacAddress message) -> return! RequestErrors.BAD_REQUEST (sprintf "Invalid MAC address: %s" message) next ctx
     }
 
-let handleAddTeachersAsContacts aadConfig photoLibraryConfig sokratesConfig : HttpHandler =
+let handleAddTeachersAsContacts photoLibraryConfig sokratesConfig : HttpHandler =
     fun next ctx -> task {
+        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let! aadUsers =
-            AAD.Auth.withAuthTokenFromHttpContext ctx (AAD.Core.getUsers >> Reader.retn)
-            |> Reader.run aadConfig
+            AAD.Core.getUsers graphServiceClient
             |> Async.StartChild
         let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig |> Async.StartChild
         let teacherPhotos = PhotoLibrary.Core.getTeacherPhotos (Some 200, Some 200) |> Reader.run photoLibraryConfig
@@ -96,8 +97,7 @@ let handleAddTeachersAsContacts aadConfig photoLibraryConfig sokratesConfig : Ht
                 | None -> None
             )
 
-        AAD.Auth.withAuthenticationFromHttpContext ctx (fun authToken userId -> AAD.Core.updateAutoContacts authToken userId contacts |> Reader.retn)
-        |> Reader.run aadConfig
+        AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId (ctx.User.ToGraphUserAccount().ObjectId)) contacts
         |> Async.Start
         return! Successful.ACCEPTED () next ctx
     }
@@ -245,7 +245,7 @@ let private aadConfig = AAD.Configuration.Config.fromEnvironment ()
 let private photoLibraryConfig = PhotoLibrary.Configuration.Config.fromEnvironment ()
 let private sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
 
-let requiresTeacher = AAD.Auth.requiresTeacher aadConfig
+let requiresTeacher = AAD.Auth.requiresTeacher
 
 let webApp =
     choose [
@@ -262,7 +262,7 @@ let webApp =
                 ]
                 POST >=> choose [
                     routef "/wake-up/%s" (fun macAddress -> requiresTeacher >=> handlePostWakeUp macAddress)
-                    route "/teachers/add-as-contacts" >=> requiresTeacher >=> handleAddTeachersAsContacts aadConfig photoLibraryConfig sokratesConfig
+                    route "/teachers/add-as-contacts" >=> requiresTeacher >=> handleAddTeachersAsContacts photoLibraryConfig sokratesConfig
                     route "/child-directories" >=> requiresTeacher >=> handleGetChildDirectories
                     route "/create-student-directories" >=> requiresTeacher >=> handlePostStudentDirectories sokratesConfig
                     route "/directory-info" >=> requiresTeacher >=> handleGetDirectoryInfo
@@ -294,7 +294,7 @@ let configureApp (app : IApplicationBuilder) =
         .UseAuthentication()
         .UseGiraffe(webApp)
 
-let configureServices (services : IServiceCollection) =
+let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =
@@ -305,7 +305,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom Shared.KnowName.Person.encode (Decode.fail "Not implemented")
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-    Server.addAADAuth services aadConfig.GraphClientId aadConfig.GraphAuthority
+    Server.addAADAuth services hostBuilderContext.Configuration
 
 let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
@@ -12,8 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="Giraffe" Version="4.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="3.0.0" />
+    <PackageReference Include="Microsoft.Identity.Web.MicrosoftGraph" Version="1.9.2" />
     <PackageReference Include="Thoth.Json.Giraffe" Version="2.2.0" />
   </ItemGroup>
 

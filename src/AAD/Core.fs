@@ -3,8 +3,6 @@ module AAD.Core
 open AAD.Configuration
 open AAD.Domain
 open Microsoft.Graph
-open Microsoft.Graph.Auth
-open Microsoft.Identity.Client
 open Polly
 open System
 open System.IO
@@ -13,22 +11,7 @@ open System.Threading.Tasks
 
 type Regex = System.Text.RegularExpressions.Regex
 
-type GraphClientAuthentication =
-    | OnBehalfOf of UserAssertion
-    | UserNamePassword of mailAddress: string * password: SecureString
-
-type GraphClient = {
-    Client: GraphServiceClient
-    Authentication: GraphClientAuthentication
-}
-
-let private configureRequest graphClient (request: #IBaseRequest) =
-    match graphClient.Authentication with
-    | OnBehalfOf userAssertion -> request.WithUserAssertion(userAssertion)
-    | UserNamePassword (userName, password) -> request.WithUsernamePassword(userName, password)
-
-let private retryRequest graphClient (getRequest: GraphServiceClient -> #IBaseRequest) (send: #IBaseRequest -> Task<_>) = async {
-    let request = getRequest graphClient.Client |> configureRequest graphClient
+let private retryRequest (request: #IBaseRequest) (send: #IBaseRequest -> Task<_>) = async {
     let retryCount = 5
     return!
         Policy
@@ -50,11 +33,11 @@ let private retryRequest graphClient (getRequest: GraphServiceClient -> #IBaseRe
         |> Async.AwaitTask
 }
 
-let rec private readRemaining graphClient initialItems getNextRequest getItems =
+let rec private readRemaining initialItems getNextRequest getItems =
     let rec fetchNextItems currentItems allItems = async {
         match getNextRequest currentItems |> Option.ofObj with
         | Some request ->
-            let! nextItems = retryRequest graphClient (fun _ -> request) getItems
+            let! nextItems = retryRequest request getItems
             return!
                 nextItems
                 |> Seq.toList
@@ -65,9 +48,9 @@ let rec private readRemaining graphClient initialItems getNextRequest getItems =
 
     fetchNextItems initialItems (Seq.toList initialItems)
 
-let rec private readAll graphClient getInitialRequest send getNextRequest = async {
-    let! initialItems = retryRequest graphClient getInitialRequest send
-    return! readRemaining graphClient initialItems getNextRequest send
+let rec private readAll initialRequest send getNextRequest = async {
+    let! initialItems = retryRequest initialRequest send
+    return! readRemaining initialItems getNextRequest send
 }
 
 module private User =
@@ -95,14 +78,12 @@ module private User =
                 |> Seq.toList
         }
 
-let private getGroupsWithPrefix graphClient prefix = async {
+let private getGroupsWithPrefix (graphServiceClient: GraphServiceClient) prefix = async {
     let! graphGroups =
         readAll
-            graphClient
-            (fun graph ->
-                graph.Groups.Request()
-                    .Filter(sprintf "startsWith(displayName,'%s')" prefix)
-                    .Select("id,displayName,mail"))
+            (graphServiceClient.Groups.Request()
+                .Filter(sprintf "startsWith(displayName,'%s')" prefix)
+                .Select("id,displayName,mail"))
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
     return!
@@ -110,8 +91,7 @@ let private getGroupsWithPrefix graphClient prefix = async {
         |> Seq.map (fun (g: Microsoft.Graph.Group) -> async {
             let! members =
                 readAll
-                    graphClient
-                    (fun graph -> graph.Groups.[g.Id].Members.Request().Select(User.fields))
+                    (graphServiceClient.Groups.[g.Id].Members.Request().Select(User.fields))
                     (fun r -> r.GetAsync())
                     (fun items -> items.NextPageRequest)
             return
@@ -128,16 +108,15 @@ let private getGroupsWithPrefix graphClient prefix = async {
         |> Async.map Array.toList
 }
 
-let getPredefinedGroups graphClient = reader {
+let getPredefinedGroups (graphServiceClient: GraphServiceClient) = reader {
     let! config = Reader.environment
-    return getGroupsWithPrefix graphClient config.PredefinedGroupPrefix
+    return getGroupsWithPrefix graphServiceClient config.PredefinedGroupPrefix
 }
 
-let getUsers graphClient = async {
+let getUsers (graphServiceClient: GraphServiceClient) = async {
     let! users =
         readAll
-            graphClient
-            (fun graph -> graph.Users.Request().Select(User.fields))
+            (graphServiceClient.Users.Request().Select(User.fields))
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
     return users |> List.map User.toDomain
@@ -149,7 +128,7 @@ type private ExtendedGroup() =
         [<Newtonsoft.Json.JsonProperty(DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore, PropertyName = "resourceBehaviorOptions")>]
         member val ResourceBehaviorOptions = [||] with get, set
 
-let private createGroup graphClient name = async {
+let private createGroup (graphServiceClient: GraphServiceClient) name = async {
     let group =
         ExtendedGroup(
             DisplayName = name,
@@ -160,45 +139,41 @@ let private createGroup graphClient name = async {
             Visibility = "Private",
             ResourceBehaviorOptions = [| "WelcomeEmailDisabled" |]
         )
-    let! group = retryRequest graphClient (fun graph -> graph.Groups.Request()) (fun request -> request.AddAsync group)
+    let! group = retryRequest (graphServiceClient.Groups.Request()) (fun request -> request.AddAsync group)
 
     // `AutoSubscribeNewMembers` must be set separately, see https://docs.microsoft.com/en-us/graph/api/resources/group#properties
     let groupUpdate = Group(AutoSubscribeNewMembers = Nullable true)
-    return! retryRequest graphClient (fun graph -> graph.Groups.[group.Id].Request()) (fun request -> request.UpdateAsync groupUpdate)
+    return! retryRequest (graphServiceClient.Groups.[group.Id].Request()) (fun request -> request.UpdateAsync groupUpdate)
 }
 
-let private deleteGroup graphClient (GroupId groupId) =
+let private deleteGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) =
     retryRequest
-        graphClient
-        (fun graph -> graph.Groups.[groupId].Request())
+        (graphServiceClient.Groups.[groupId].Request())
         (fun request -> request.DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
 
-let private addGroupMember graphClient (GroupId groupId) (UserId userId) =
+let private addGroupMember (graphServiceClient: GraphServiceClient) (GroupId groupId) (UserId userId) =
     retryRequest
-        graphClient
-        (fun graph -> graph.Groups.[groupId].Members.References.Request())
+        (graphServiceClient.Groups.[groupId].Members.References.Request())
         (fun request -> request.AddAsync (User(Id = userId)) |> Async.AwaitTask |> Async.StartAsTask)
 
-let private removeGroupMember graphClient (GroupId groupId) (UserId userId) =
+let private removeGroupMember (graphServiceClient: GraphServiceClient) (GroupId groupId) (UserId userId) =
     retryRequest
-        graphClient
-        (fun graph -> graph.Groups.[groupId].Members.[userId].Reference.Request())
+        (graphServiceClient.Groups.[groupId].Members.[userId].Reference.Request())
         (fun request -> request.DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
 
-let private applyMemberModifications graphClient groupId memberModifications =
+let private applyMemberModifications (graphServiceClient: GraphServiceClient) groupId memberModifications =
     memberModifications
     |> List.map (function
-        | AddMember userId -> addGroupMember graphClient groupId userId
-        | RemoveMember userId -> removeGroupMember graphClient groupId userId
+        | AddMember userId -> addGroupMember graphServiceClient groupId userId
+        | RemoveMember userId -> removeGroupMember graphServiceClient groupId userId
     )
     |> Async.Parallel
     |> Async.Ignore
 
-let private changeGroupName graphClient (GroupId groupId) newName = async {
+let private changeGroupName (graphServiceClient: GraphServiceClient) (GroupId groupId) newName = async {
     let! group =
         retryRequest
-            graphClient
-            (fun graph -> graph.Groups.[groupId].Request())
+            (graphServiceClient.Groups.[groupId].Request())
             (fun request -> request.GetAsync())
     let update =
         Group(
@@ -209,50 +184,40 @@ let private changeGroupName graphClient (GroupId groupId) newName = async {
         )
     do!
         retryRequest
-            graphClient
-            (fun graph -> graph.Groups.[groupId].Request())
+            (graphServiceClient.Groups.[groupId].Request())
             (fun request -> request.UpdateAsync(update) |> Async.AwaitTask |> Async.StartAsTask)
         |> Async.Ignore
 }
 
-let private applySingleGroupModifications graphClient modifications = async {
+let private applySingleGroupModifications (graphServiceClient: GraphServiceClient) modifications = async {
     match modifications with
     | CreateGroup (name, memberIds) ->
-        let! group = createGroup graphClient name
+        let! group = createGroup graphServiceClient name
         let groupId = GroupId group.Id
         do!
             memberIds
             |> List.map AddMember
-            |> applyMemberModifications graphClient groupId
+            |> applyMemberModifications graphServiceClient groupId
     | UpdateGroup (groupId, memberModifications) ->
-        do! applyMemberModifications graphClient groupId memberModifications
+        do! applyMemberModifications graphServiceClient groupId memberModifications
     | ChangeGroupName (groupId, newName) ->
-        do! changeGroupName graphClient groupId newName
+        do! changeGroupName graphServiceClient groupId newName
     | DeleteGroup groupId ->
-        do! deleteGroup graphClient groupId
+        do! deleteGroup graphServiceClient groupId
 }
 
-let applyGroupsModifications graphClient modifications = async {
+let applyGroupsModifications (graphServiceClient: GraphServiceClient) modifications = async {
     do!
         modifications
-        |> List.map (applySingleGroupModifications graphClient)
+        |> List.map (applySingleGroupModifications graphServiceClient)
         |> Async.Parallel
         |> Async.Ignore
 }
 
-let getUserGroups graphClient (UserId userId) = async {
-    return! readAll
-        graphClient
-        (fun graph -> graph.Users.[userId].MemberOf.Request())
-        (fun request -> request.GetAsync())
-        (fun items -> items.NextPageRequest)
-}
-
-let private getAutoContactIds graphClient (UserId userId) = async {
+let private getAutoContactIds (graphServiceClient: GraphServiceClient) (UserId userId) = async {
     let! contacts =
         readAll
-            graphClient
-            (fun graph -> graph.Users.[userId].Contacts.Request().Select("id").Filter("categories/any(category: category eq 'htl-utils-auto-generated')"))
+            (graphServiceClient.Users.[userId].Contacts.Request().Select("id").Filter("categories/any(category: category eq 'htl-utils-auto-generated')"))
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
     return
@@ -261,28 +226,25 @@ let private getAutoContactIds graphClient (UserId userId) = async {
         |> Seq.toList
 }
 
-let private removeContact graphClient (UserId userId) contactId =
+let private removeContact (graphServiceClient: GraphServiceClient) (UserId userId) contactId =
     retryRequest
-        graphClient
-        (fun graph -> graph.Users.[userId].Contacts.[contactId].Request())
+        (graphServiceClient.Users.[userId].Contacts.[contactId].Request())
         (fun request -> request.DeleteAsync() |> Async.AwaitTask |> Async.StartAsTask)
 
-let private removeAutoContacts graphClient userId contactIds =
+let private removeAutoContacts (graphServiceClient: GraphServiceClient) userId contactIds =
     contactIds
-    |> Seq.map (removeContact graphClient userId)
+    |> Seq.map (removeContact graphServiceClient userId)
     |> Async.Sequential
     |> Async.Ignore
 
-let private addContact graphClient (UserId userId) contact =
+let private addContact (graphServiceClient: GraphServiceClient) (UserId userId) contact =
     retryRequest
-        graphClient
-        (fun graph -> graph.Users.[userId].Contacts.Request())
+        (graphServiceClient.Users.[userId].Contacts.Request())
         (fun request -> request.AddAsync contact)
 
-let private setContactPhoto graphClient (UserId userId) contactId (Base64EncodedImage photo) =
+let private setContactPhoto (graphServiceClient: GraphServiceClient) (UserId userId) contactId (Base64EncodedImage photo) =
     retryRequest
-        graphClient
-        (fun graph -> graph.Users.[userId].Contacts.[contactId].Photo.Content.Request())
+        (graphServiceClient.Users.[userId].Contacts.[contactId].Photo.Content.Request())
         (fun request ->
             async {
                 use stream = new MemoryStream(Convert.FromBase64String photo)
@@ -291,7 +253,7 @@ let private setContactPhoto graphClient (UserId userId) contactId (Base64Encoded
             |> Async.StartAsTask
         )
 
-let private addAutoContact graphClient userId contact = async {
+let private addAutoContact (graphServiceClient: GraphServiceClient) userId contact = async {
     let! newContact =
         let birthday =
             contact.Birthday
@@ -311,17 +273,17 @@ let private addAutoContact graphClient userId contact = async {
             EmailAddresses = mailAddresses,
             Categories = [ "htl-utils-auto-generated" ]
         )
-        |> addContact graphClient userId
+        |> addContact graphServiceClient userId
 
     match contact.Photo with
     | Some photo ->
-        do! setContactPhoto graphClient userId newContact.Id photo |> Async.Ignore
+        do! setContactPhoto graphServiceClient userId newContact.Id photo |> Async.Ignore
     | None -> ()
 }
 
-let private addAutoContacts graphClient userId contacts =
+let private addAutoContacts (graphServiceClient: GraphServiceClient) userId contacts =
     contacts
-    |> List.map (addAutoContact graphClient userId)
+    |> List.map (addAutoContact graphServiceClient userId)
     |> Async.Sequential
     |> Async.Ignore
 
@@ -330,11 +292,10 @@ type private Calendar = {
     Name: string
 }
 
-let private getCalendars graphClient = async {
+let private getCalendars (graphServiceClient: GraphServiceClient) = async {
     let! calendars =
         retryRequest
-            graphClient
-            (fun graph -> graph.Me.Calendars.Request().Select("id,name"))
+            (graphServiceClient.Me.Calendars.Request().Select("id,name"))
             (fun request -> request.GetAsync())
     return
         calendars
@@ -342,8 +303,8 @@ let private getCalendars graphClient = async {
         |> Seq.toList
 }
 
-let private getBirthdayCalendarId graphClient = async {
-    let! calendars = getCalendars graphClient
+let private getBirthdayCalendarId (graphServiceClient: GraphServiceClient) = async {
+    let! calendars = getCalendars graphServiceClient
 
     return
         calendars
@@ -358,11 +319,10 @@ let private getBirthdayCalendarId graphClient = async {
         )
 }
 
-let private getCalendarEventIds graphClient calendarId = async {
+let private getCalendarEventIds (graphServiceClient: GraphServiceClient) calendarId = async {
     let! events =
         readAll
-            graphClient
-            (fun graph -> graph.Me.Calendars.[calendarId].Events.Request())
+            (graphServiceClient.Me.Calendars.[calendarId].Events.Request())
             (fun r -> r.GetAsync())
             (fun items -> items.NextPageRequest)
     return
@@ -371,27 +331,26 @@ let private getCalendarEventIds graphClient calendarId = async {
         |> Seq.toList
 }
 
-let private updateCalendarEvent graphClient calendarId eventId updatedEvent =
+let private updateCalendarEvent (graphServiceClient: GraphServiceClient) calendarId eventId updatedEvent =
     retryRequest
-        graphClient
-        (fun graph -> graph.Me.Calendars.[calendarId].Events.[eventId].Request())
+        (graphServiceClient.Me.Calendars.[calendarId].Events.[eventId].Request())
         (fun request -> request.UpdateAsync updatedEvent)
 
-let private getBirthdayCalendarEventCount graphClient = async {
-    let! birthdayCalendarId = getBirthdayCalendarId graphClient
-    let! birthdayEventIds = getCalendarEventIds graphClient birthdayCalendarId
+let private getBirthdayCalendarEventCount (graphServiceClient: GraphServiceClient) = async {
+    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient
+    let! birthdayEventIds = getCalendarEventIds graphServiceClient birthdayCalendarId
     return List.length birthdayEventIds
 }
 
-let private configureBirthdayReminders graphClient = async {
-    let! birthdayCalendarId = getBirthdayCalendarId graphClient
-    let! birthdayEventIds = getCalendarEventIds graphClient birthdayCalendarId
+let private configureBirthdayReminders (graphServiceClient: GraphServiceClient) = async {
+    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient
+    let! birthdayEventIds = getCalendarEventIds graphServiceClient birthdayCalendarId
 
     do!
         birthdayEventIds
         |> Seq.map (fun eventId -> async {
             let event' = Event(IsReminderOn = Nullable<_> true, ReminderMinutesBeforeStart = Nullable 0)
-            return! updateCalendarEvent graphClient birthdayCalendarId eventId event'
+            return! updateCalendarEvent graphServiceClient birthdayCalendarId eventId event'
         })
         |> Async.Sequential
         |> Async.Ignore
@@ -405,31 +364,31 @@ let rec private waitUntil workflow = async {
         return! waitUntil workflow
 }
 
-let updateAutoContacts graphClient userId contacts = async {
-    let! birthdayEventCount = getBirthdayCalendarEventCount graphClient
+let updateAutoContacts (graphServiceClient: GraphServiceClient) userId contacts = async {
+    let! birthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
 
     printfn "%O: Removing existing contacts" DateTime.Now
-    let! autoContactIds = getAutoContactIds graphClient userId
-    do! removeAutoContacts graphClient userId autoContactIds
+    let! autoContactIds = getAutoContactIds graphServiceClient userId
+    do! removeAutoContacts graphServiceClient userId autoContactIds
 
     printfn "%O: Waiting until birthday calendar is cleared" DateTime.Now
     do! waitUntil (async {
-        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphClient
+        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
         return newBirthdayEventCount = birthdayEventCount - (List.length autoContactIds)
     })
-    let! birthdayEventCount = getBirthdayCalendarEventCount graphClient
+    let! birthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
 
     printfn "%O: Adding new contacts" DateTime.Now
-    do! addAutoContacts graphClient userId contacts
+    do! addAutoContacts graphServiceClient userId contacts
 
     printfn "%O: Waiting until birthday calendar is filled" DateTime.Now
     do! waitUntil (async {
-        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphClient
+        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
         return newBirthdayEventCount = birthdayEventCount + (List.length contacts)
     })
 
     printfn "%O: Configuring birthday events" DateTime.Now
-    do! configureBirthdayReminders graphClient
+    do! configureBirthdayReminders graphServiceClient
 
     printfn "%O: Finished" DateTime.Now
 }

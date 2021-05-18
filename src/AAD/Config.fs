@@ -9,25 +9,29 @@ type PredefinedGroup =
     | Students of string
     | ClassStudents of classNameToGroupName: (string -> string)
 
+type OidcConfig = {
+    AppId: string
+    AppSecret: string
+    Instance: string
+    Domain: string
+    TenantId: string
+}
+
 type Config = {
-    GraphClientId: string
-    GraphClientSecret: string
-    GraphAuthority: string
-    GraphTenantId: string
-    GlobalAdminRoleId: string
-    TeacherGroupId: string
+    OidcConfig: OidcConfig
     PredefinedGroupPrefix: string
     PredefinedGroups: PredefinedGroup list
 }
 module Config =
     let fromEnvironment () =
         {
-            GraphClientId = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_CLIENT_ID"
-            GraphClientSecret = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_APP_KEY"
-            GraphAuthority = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_AUTHORITY"
-            GraphTenantId = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_TENANT_ID"
-            GlobalAdminRoleId = Environment.getEnvVarOrFail "AAD_GLOBAL_ADMIN_ROLE_ID"
-            TeacherGroupId = Environment.getEnvVarOrFail "AAD_TEACHER_GROUP_ID"
+            OidcConfig = {
+                AppId = Environment.getEnvVarOrFail "AAD_SERVICE_APP_ID"
+                AppSecret = Environment.getEnvVarOrFail "AAD_SERVICE_APP_KEY"
+                Instance = Environment.getEnvVarOrFail "AAD_INSTANCE"
+                Domain = Environment.getEnvVarOrFail "AAD_DOMAIN"
+                TenantId = Environment.getEnvVarOrFail "AAD_TENANT_ID"
+            }
             PredefinedGroupPrefix = Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUP_PREFIX"
             PredefinedGroups =
                 Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUPS"

@@ -5,10 +5,12 @@ open Giraffe
 open Giraffe.Serialization
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open System
+open System.Collections.Generic
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
@@ -17,23 +19,8 @@ open Thoth.Json.Net
 // ---------------------------------
 
 #if DEBUG
-let authTest aadConfig : HttpHandler =
+let authTest : HttpHandler =
     fun next ctx -> task {
-        let! groups = async {
-            let! groups = AAD.Auth.withAuthenticationFromHttpContext ctx (fun graphClient userId -> AAD.Core.getUserGroups graphClient userId |> Reader.retn) |> Reader.run aadConfig
-            return
-                groups
-                |> Seq.map (function
-                    | :? Microsoft.Graph.Group as group ->
-                        sprintf "%s  * %s (Group, Id = %s)" Environment.NewLine group.DisplayName group.Id
-                    | :? Microsoft.Graph.DirectoryRole as role ->
-                        sprintf "%s  * %s (Directory role, Id = %s)" Environment.NewLine role.DisplayName role.Id
-                    | other ->
-                        sprintf "%s  * Unknown (Type = %s, Id = %s)" Environment.NewLine other.ODataType other.Id
-                )
-                |> String.concat ""
-        }
-
         let claims =
             ctx.User.Claims
             |> Seq.map (fun claim -> sprintf "%s  * %s: %s" Environment.NewLine claim.Type claim.Value)
@@ -46,7 +33,6 @@ let authTest aadConfig : HttpHandler =
                 sprintf "User identity name: %O" ctx.User.Identity.Name
                 sprintf "User identity is authenticated: %O" ctx.User.Identity.IsAuthenticated
                 sprintf "Claims: %s" claims
-                sprintf "Groups: %s" groups
             ]
             |> String.concat Environment.NewLine
         return! Successful.ok (setBodyFromString result) next ctx
@@ -69,7 +55,7 @@ let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Conf
 let private sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
 let private untisConfig = Untis.Configuration.Config.fromEnvironment ()
 
-let private requiresAdmin = AAD.Auth.requiresAdmin aadConfig
+let private requiresAdmin = AAD.Auth.requiresAdmin
 
 let webApp =
     choose [
@@ -84,13 +70,13 @@ let webApp =
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesConfig untisConfig
                     route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreConfig
                     #if DEBUG
-                    route "/auth-test" >=> authTest aadConfig
+                    route "/auth-test" >=> authTest
                     #endif
                 ]
                 POST >=> choose [
                     route "/ad/updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADModifications adConfig
                     route "/ad/increment-class-group-updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates adConfig
-                    route "/aad/group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates aadConfig
+                    route "/aad/group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates
                     route "/aad/increment-class-group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADIncrementClassGroupUpdates aadConfig
                     route "/it-information/generate-sheet" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.generateSheet adConfig generateItInformationSheetConfig
                 ]
@@ -115,7 +101,9 @@ let errorHandler (ex : Exception) (logger : ILogger) =
 let configureApp (app : IApplicationBuilder) =
     let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
     match env.IsDevelopment() with
-    | true -> app.UseDeveloperExceptionPage() |> ignore
+    | true ->
+        Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII <- true
+        app.UseDeveloperExceptionPage() |> ignore
     | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
     app
         .UseHttpsRedirection()
@@ -124,7 +112,7 @@ let configureApp (app : IApplicationBuilder) =
         .UseAuthentication()
         .UseGiraffe(webApp)
 
-let configureServices (services : IServiceCollection) =
+let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =
@@ -138,7 +126,7 @@ let configureServices (services : IServiceCollection) =
         |> Extra.withCustom GenerateITInformationSheet.DataTransferTypes.InformationSheet.encode GenerateITInformationSheet.DataTransferTypes.InformationSheet.decoder
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
-    Server.addAADAuth services aadConfig.GraphClientId aadConfig.GraphAuthority
+    Server.addAADAuth services hostBuilderContext.Configuration
 
 let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
     builder
@@ -149,7 +137,19 @@ let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
 
 [<EntryPoint>]
 let main args =
+    let configDict =
+        [
+            "AzureAd:Instance", aadConfig.OidcConfig.Instance
+            "AzureAd:Domain", aadConfig.OidcConfig.Domain
+            "AzureAd:TenantId", aadConfig.OidcConfig.TenantId
+            "AzureAd:ClientId", aadConfig.OidcConfig.AppId
+            "AzureAd:ClientSecret", aadConfig.OidcConfig.AppSecret
+            "MicrosoftGraph:BaseUrl", "https://graph.microsoft.com/v1.0"
+            "MicrosoftGraph:Scopes", ""
+        ]
+        |> Seq.map KeyValuePair
     Host.CreateDefaultBuilder(args)
+        .ConfigureAppConfiguration(fun hostBuilderContext config -> config.AddInMemoryCollection(configDict) |> ignore)
         .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)

@@ -4,8 +4,6 @@ open AADGroupUpdates.DataTransferTypes
 open AADGroupUpdates.Mapping
 open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
-open System
-open System.Globalization
 
 let private calculateMemberUpdates teacherIds aadGroupMemberIds =
     {
@@ -42,13 +40,12 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
 
 let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThesesConfig untisConfig : HttpHandler =
     fun next ctx -> task {
+        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let teachingData = Untis.Core.getTeachingData |> Reader.run untisConfig
         let adUsers = AD.Core.getUsers |> Reader.run adConfig
         let finalThesesMentors = FinalTheses.Core.getMentors |> Reader.run finalThesesConfig
         let! aadUsers = async {
-            let! users =
-                AAD.Auth.withAuthTokenFromHttpContext ctx (AAD.Core.getUsers >> Reader.retn)
-                |> Reader.run aadConfig
+            let! users = AAD.Core.getUsers graphServiceClient
             return
                 users
                 |> List.map (fun user ->
@@ -65,7 +62,7 @@ let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThese
             |> Map.ofList
         let! aadPredefinedGroups = async {
             let! predefinedGroups =
-                AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getPredefinedGroups
+                AAD.Core.getPredefinedGroups graphServiceClient
                 |> Reader.run aadConfig
             return
                 predefinedGroups
@@ -187,23 +184,23 @@ let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThese
         return! Successful.OK updates next ctx
     }
 
-let applyAADGroupUpdates aadConfig : HttpHandler =
+let applyAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
+        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let! input = ctx.BindJsonAsync<GroupUpdate list>()
         let modifications =
             input
             |> List.map GroupModification.toAADDto
-        do!
-            AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications >> Reader.retn)
-            |> Reader.run aadConfig
+        do! AAD.Core.applyGroupsModifications graphServiceClient modifications
         return! Successful.OK () next ctx
     }
 
 let getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig : HttpHandler =
     fun next ctx -> task {
+        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let! classGroups = async {
             let! predefinedGroups =
-                AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getPredefinedGroups
+                AAD.Core.getPredefinedGroups graphServiceClient
                 |> Reader.run aadConfig
             return
                 predefinedGroups
@@ -216,9 +213,10 @@ let getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig : Http
 
 let applyAADIncrementClassGroupUpdates aadConfig : HttpHandler =
     fun next ctx -> task {
+        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let! aadGroupNameLookupByName = async {
             let! predefinedGroups =
-                AAD.Auth.withAuthTokenFromHttpContext ctx AAD.Core.getPredefinedGroups
+                AAD.Core.getPredefinedGroups graphServiceClient
                 |> Reader.run aadConfig
             return
                 predefinedGroups
@@ -229,8 +227,6 @@ let applyAADIncrementClassGroupUpdates aadConfig : HttpHandler =
         let modifications =
             data
             |> List.map (ClassGroupModification.toAADGroupModification (flip Map.find aadGroupNameLookupByName))
-        do!
-            AAD.Auth.withAuthTokenFromHttpContext ctx (flip AAD.Core.applyGroupsModifications modifications >> Reader.retn)
-            |> Reader.run aadConfig
+        do! AAD.Core.applyGroupsModifications graphServiceClient modifications
         return! Successful.OK () next ctx
     }
