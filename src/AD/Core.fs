@@ -58,7 +58,7 @@ module private DN =
         |> Option.bind (fun v -> if CIString v.ComponentType = CIString "CN" then Some v.ComponentValue else None)
 
 let private createNetworkConnection path = reader {
-    let! config = Reader.environment
+    let! (config: Config) = Reader.environment
     return NetworkConnection.create config.UserName config.Password path
 }
 
@@ -80,11 +80,6 @@ let private homePath (UserName userName) userType = reader {
     let! groupHomePath = groupHomePath userType
     return Path.Combine(groupHomePath, userName)
 }
-
-let private proxyAddresses firstName lastName mailDomain =
-    [
-        sprintf "smtp:%s.%s@%s" firstName lastName mailDomain
-    ]
 
 let private teacherExercisePath (UserName userName) = reader {
     let! config = Reader.environment
@@ -194,7 +189,7 @@ let private updateUser userName userType properties fn = reader {
     adUser.CommitChanges()
 }
 
-let private createUser (newUser: NewUser) password = reader {
+let private createUser (newUser: NewUser) mailAliases password = reader {
     use! adCtx = userRootEntry newUser.Type
     let (UserName userName) = newUser.Name
     let adUser = adCtx.Children.Add(sprintf "CN=%s" userName, "user")
@@ -212,8 +207,8 @@ let private createUser (newUser: NewUser) password = reader {
     adUser.Properties.["department"].Value <- department
     let! division = divisionFromUserType newUser.Type
     adUser.Properties.["division"].Value <- division
-    adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" (String.asAlphaNumeric newUser.LastName) (String.asAlphaNumeric newUser.FirstName) config.MailDomain
-    adUser.Properties.["proxyAddresses"].Value <- proxyAddresses (String.asAlphaNumeric newUser.FirstName) (String.asAlphaNumeric newUser.LastName) config.MailDomain |> List.toArray
+    adUser.Properties.["mail"].Value <- userPrincipalName
+    adUser.Properties.["proxyAddresses"].Value <- mailAliases |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString) |> List.toArray
     let! userHomePath = homePath newUser.Name newUser.Type
     adUser.Properties.["homeDirectory"].Value <- userHomePath
     adUser.Properties.["homeDrive"].Value <- config.HomeDrive
@@ -303,11 +298,9 @@ let private createUser (newUser: NewUser) password = reader {
     | Student _ -> ()
 }
 
-let private changeUserName userName userType (UserName newUserName, newFirstName, newLastName) =
-    updateUser userName userType [| "mail"; "homeDirectory"; "proxyAddresses" |] (fun adUser -> reader {
-        let oldEMailAddress = adUser.Properties.["mail"].Value :?> string
+let private changeUserName userName userType (UserName newUserName, newFirstName, newLastName, newMailAliasNames) =
+    updateUser userName userType [| "homeDirectory" |] (fun adUser -> reader {
         let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
-        let oldProxyAddresses = adUser.Properties.["proxyAddresses"] |> Seq.cast<string> |> Seq.toList
 
         adUser.Rename(sprintf "CN=%s" newUserName)
         let! config = Reader.environment
@@ -317,7 +310,7 @@ let private changeUserName userName userType (UserName newUserName, newFirstName
         adUser.Properties.["displayName"].Value <- sprintf "%s %s" newLastName newFirstName
         adUser.Properties.["sAMAccountName"].Value <- newUserName
         adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" (String.asAlphaNumeric newLastName) (String.asAlphaNumeric newFirstName) config.MailDomain
-        adUser.Properties.["proxyAddresses"].Value <- [ oldEMailAddress ] @ oldProxyAddresses @ proxyAddresses (String.asAlphaNumeric newFirstName) (String.asAlphaNumeric newLastName) config.MailDomain |> List.toArray
+        adUser.Properties.["proxyAddresses"].Value <- newMailAliasNames |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString) |> List.toArray
         let! newHomeDirectory = homePath (UserName newUserName) userType
         adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
 
@@ -512,8 +505,10 @@ let private userFromADUserSearchResult userType sokratesIdAttributeName (adUser:
         CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
         Mail = adUser.Properties.["mail"] |> Seq.cast<string> |> Seq.tryHead
         ProxyAddresses =
-            let trimProtocolFromMailAddress text = Regex.Replace(text, "^[^:]*:", "")
-            adUser.Properties.["proxyAddresses"] |> Seq.cast<string> |> Seq.map trimProtocolFromMailAddress |> Seq.toList
+            adUser.Properties.["proxyAddresses"]
+            |> Seq.cast<string>
+            |> Seq.choose ProxyAddress.tryParse
+            |> Seq.toList
         UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string
     }
 
@@ -607,8 +602,8 @@ let getComputers = reader {
 }
 
 let applyDirectoryModification = function
-    | CreateUser (user, password) -> createUser user password
-    | UpdateUser (userName, userType, ChangeUserName (newUserName, newFirstName, newLastName)) -> changeUserName userName userType (newUserName, newFirstName, newLastName)
+    | CreateUser (user, mailAliases, password) -> createUser user mailAliases password
+    | UpdateUser (userName, userType, ChangeUserName (newUserName, newFirstName, newLastName, newMailAliasNames)) -> changeUserName userName userType (newUserName, newFirstName, newLastName, newMailAliasNames)
     | UpdateUser (userName, userType, SetSokratesId sokratesId) -> setSokratesId userName userType sokratesId
     | UpdateUser (userName, Student oldClassName, MoveStudentToClass newClassName) -> moveStudentToClass userName oldClassName newClassName
     | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"

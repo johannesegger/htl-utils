@@ -15,6 +15,7 @@
     <Compile Include="CIString.fs" />
     <Compile Include="Environment.fs" />
     <Compile Include="Directory.fs" />
+    <Compile Include="MailAddress.fs" />
   </ItemGroup>
 
   <ItemGroup>

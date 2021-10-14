@@ -59,19 +59,32 @@ module User =
             }
         )
 
+type MailAliasDomain = DefaultDomain | CustomDomain of string
+
+type MailAlias = {
+    IsPrimary: bool
+    UserName: string
+    Domain: MailAliasDomain
+}
+module MailAlias =
+    let toNonPrimary v =
+        { v with IsPrimary = false }
+    let encode = Encode.Auto.generateEncoderCached()
+    let decoder = Decode.Auto.generateDecoderCached()
+
 type UserUpdate =
-    | ChangeUserName of UserName * firstName: string * lastName: string
+    | ChangeUserName of UserName * firstName: string * lastName: string * MailAlias list
     | SetSokratesId of SokratesId
     | MoveStudentToClass of GroupName
 
 module UserUpdate =
     let encode = function
-        | ChangeUserName (userName, firstName, lastName) -> Encode.object [ "changeName", Encode.tuple3 UserName.encode Encode.string Encode.string (userName, firstName, lastName) ]
+        | ChangeUserName (userName, firstName, lastName, mailAliases) -> Encode.object [ "changeName", Encode.tuple4 UserName.encode Encode.string Encode.string (List.map MailAlias.encode >> Encode.list) (userName, firstName, lastName, mailAliases) ]
         | SetSokratesId sokratesId -> Encode.object [ "setSokratesId", SokratesId.encode sokratesId ]
         | MoveStudentToClass newClassName -> Encode.object [ "moveStudentToClass", GroupName.encode newClassName ]
     let decoder : Decoder<_> =
         Decode.oneOf [
-            Decode.field "changeName" (Decode.tuple3 UserName.decoder Decode.string Decode.string) |> Decode.map ChangeUserName
+            Decode.field "changeName" (Decode.tuple4 UserName.decoder Decode.string Decode.string (Decode.list MailAlias.decoder)) |> Decode.map ChangeUserName
             Decode.field "setSokratesId" SokratesId.decoder |> Decode.map SetSokratesId
             Decode.field "moveStudentToClass" GroupName.decoder |> Decode.map MoveStudentToClass
         ]
@@ -87,7 +100,7 @@ module GroupUpdate =
         ]
 
 type DirectoryModification =
-    | CreateUser of User * password: string
+    | CreateUser of User * MailAlias list * password: string
     | UpdateUser of User * UserUpdate
     | DeleteUser of User
     | CreateGroup of UserType
@@ -95,7 +108,7 @@ type DirectoryModification =
     | DeleteGroup of UserType
 module DirectoryModification =
     let encode = function
-        | CreateUser (user, password) -> Encode.object [ "createUser", Encode.tuple2 User.encode Encode.string (user, password) ]
+        | CreateUser (user, mailAliases, password) -> Encode.object [ "createUser", Encode.tuple3 User.encode (List.map MailAlias.encode >> Encode.list) Encode.string (user, mailAliases, password) ]
         | UpdateUser (user, update) -> Encode.object [ "updateUser", Encode.tuple2 User.encode UserUpdate.encode (user, update) ]
         | DeleteUser user -> Encode.object [ "deleteUser", User.encode user ]
         | CreateGroup userType -> Encode.object [ "createGroup", UserType.encode userType ]
@@ -103,7 +116,7 @@ module DirectoryModification =
         | DeleteGroup userType -> Encode.object [ "deleteGroup", UserType.encode userType ]
     let decoder : Decoder<_> =
         Decode.oneOf [
-            Decode.field "createUser" (Decode.tuple2 User.decoder Decode.string) |> Decode.map CreateUser
+            Decode.field "createUser" (Decode.tuple3 User.decoder (Decode.list MailAlias.decoder) Decode.string) |> Decode.map CreateUser
             Decode.field "updateUser" (Decode.tuple2 User.decoder UserUpdate.decoder) |> Decode.map UpdateUser
             Decode.field "deleteUser" User.decoder |> Decode.map DeleteUser
             Decode.field "createGroup" UserType.decoder |> Decode.map CreateGroup

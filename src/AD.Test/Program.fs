@@ -1,4 +1,4 @@
-﻿module AD.Test.Program
+module AD.Test.Program
 
 open AD.Configuration
 open AD.Core
@@ -19,6 +19,10 @@ let createUser userType =
         LastName = "Einstein"
         Type = userType
     }
+let mailAliases = [
+    { IsPrimary = true; UserName = "Albert.Einstein"; Domain = DefaultDomain }
+    { IsPrimary = false; UserName = "Einstein.Albert"; Domain = DefaultDomain }
+]
 let password = "!A1b2C3#"
 
 let tests =
@@ -31,7 +35,7 @@ let tests =
                 do! applyDirectoryModifications [
                     CreateGroup (Student (GroupName group1Name))
                     CreateGroup (Student (GroupName group2Name))
-                    CreateUser (einstein, password)
+                    CreateUser (einstein, mailAliases, password)
                     UpdateUser (einstein.Name, einstein.Type, (MoveStudentToClass (GroupName group2Name)))
                 ]
 
@@ -70,7 +74,7 @@ let tests =
                 let einstein = createUser (Student (GroupName groupName))
                 do! applyDirectoryModifications [
                     CreateGroup (Student (GroupName groupName))
-                    CreateUser (einstein, password)
+                    CreateUser (einstein, mailAliases, password)
                     UpdateGroup (Student (GroupName groupName), (ChangeGroupName (GroupName newGroupName)))
                 ]
 

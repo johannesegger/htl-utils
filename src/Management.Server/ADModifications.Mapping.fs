@@ -57,9 +57,28 @@ module User =
             AD.Domain.Type = UserType.toADDto user.Type
         }
 
+module MailAliasDomain =
+    let toADDto = function
+        | DefaultDomain -> AD.Domain.DefaultDomain
+        | CustomDomain v -> AD.Domain.CustomDomain v
+
+module MailAlias =
+    let fromADProxyAddress (proxyAddress: AD.Domain.ProxyAddress) =
+        {
+            IsPrimary = proxyAddress.Protocol.IsPrimary
+            UserName = proxyAddress.Address.UserName
+            Domain = CustomDomain proxyAddress.Address.Domain
+        }
+    let toADDto v =
+        {
+            AD.Domain.MailAlias.IsPrimary = v.IsPrimary
+            AD.Domain.MailAlias.UserName = v.UserName
+            AD.Domain.MailAlias.Domain = MailAliasDomain.toADDto v.Domain
+        }
+
 module UserUpdate =
     let toADDto = function
-        | ChangeUserName (userName, firstName, lastName) -> AD.Domain.ChangeUserName (UserName.toADDto userName, firstName, lastName)
+        | ChangeUserName (userName, firstName, lastName, mailAliasNames) -> AD.Domain.ChangeUserName (UserName.toADDto userName, firstName, lastName, mailAliasNames |> List.map MailAlias.toADDto)
         | SetSokratesId sokratesId -> AD.Domain.SetSokratesId (SokratesId.toADDto sokratesId)
         | MoveStudentToClass className -> AD.Domain.MoveStudentToClass (GroupName.toADDto className)
 
@@ -69,7 +88,7 @@ module GroupUpdate =
 
 module DirectoryModification =
     let toADDto = function
-        | CreateUser (user, password) -> AD.Domain.CreateUser (User.toADDto user, password)
+        | CreateUser (user, mailAliases, password) -> AD.Domain.CreateUser (User.toADDto user, mailAliases |> List.map MailAlias.toADDto, password)
         | UpdateUser (user, update) -> AD.Domain.UpdateUser (UserName.toADDto user.Name, UserType.toADDto user.Type, UserUpdate.toADDto update)
         | DeleteUser user -> AD.Domain.DeleteUser (UserName.toADDto user.Name, UserType.toADDto user.Type)
         | CreateGroup userType -> AD.Domain.CreateGroup (UserType.toADDto userType)

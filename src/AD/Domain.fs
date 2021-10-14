@@ -1,6 +1,7 @@
 module AD.Domain
 
 open System
+open System.Text.RegularExpressions
 
 type UserName = UserName of string
 
@@ -18,6 +19,38 @@ type NewUser = {
     Type: UserType
 }
 
+type ProxyAddressProtocolType = SMTP
+
+type ProxyAddressProtocol = {
+    Type: ProxyAddressProtocolType
+    IsPrimary: bool
+}
+module ProxyAddressProtocol =
+    let tryParse v =
+        if v = "SMTP" then Some { Type = SMTP; IsPrimary = true }
+        elif v = "smtp" then Some { Type = SMTP; IsPrimary = false }
+        else None
+    let toString v =
+        match v.Type, v.IsPrimary with
+        | SMTP, true -> "SMTP"
+        | SMTP, false -> "smtp"
+
+type ProxyAddress =
+    {
+        Protocol: ProxyAddressProtocol
+        Address: MailAddress
+    }
+module ProxyAddress =
+    let tryParse (v: string) =
+        match v.IndexOf(':') with
+        | -1 -> None
+        | idx ->
+            match ProxyAddressProtocol.tryParse (v.Substring(0, idx)), MailAddress.tryParse (v.Substring(idx + 1)) with
+            | Some protocol, Some address -> Some { Protocol = protocol; Address = address }
+            | _ -> None
+    let toString v =
+        sprintf "%s:%s" (ProxyAddressProtocol.toString v.Protocol) (MailAddress.toString v.Address)
+
 type ExistingUser = {
     Name: UserName
     SokratesId: SokratesId option
@@ -26,12 +59,30 @@ type ExistingUser = {
     Type: UserType
     CreatedAt: DateTime
     Mail: string option
-    ProxyAddresses: string list
+    ProxyAddresses: ProxyAddress list
     UserPrincipalName: string
 }
 
+type MailAliasDomain = DefaultDomain | CustomDomain of string
+module MailAliasDomain =
+    let toString defaultDomain = function
+        | DefaultDomain -> defaultDomain
+        | CustomDomain v -> v
+
+type MailAlias = {
+    IsPrimary: bool
+    UserName: string
+    Domain: MailAliasDomain
+}
+module MailAlias =
+    let toProxyAddress defaultDomain v =
+        {
+            Protocol = { IsPrimary = v.IsPrimary; Type = SMTP }
+            Address = { UserName = v.UserName; Domain = MailAliasDomain.toString defaultDomain v.Domain }
+        }
+
 type UserUpdate =
-    | ChangeUserName of UserName * firstName: string * lastName: string
+    | ChangeUserName of UserName * firstName: string * lastName: string * MailAlias list
     | SetSokratesId of SokratesId
     | MoveStudentToClass of GroupName
 
@@ -39,7 +90,7 @@ type GroupUpdate =
     | ChangeGroupName of GroupName
 
 type DirectoryModification =
-    | CreateUser of NewUser * password: string
+    | CreateUser of NewUser * MailAlias list * password: string
     | UpdateUser of UserName * UserType * UserUpdate
     | DeleteUser of UserName * UserType
     | CreateGroup of UserType

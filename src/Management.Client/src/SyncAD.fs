@@ -28,16 +28,16 @@ module UIDirectoryModification =
     let fromDto modification =
         let description =
             match modification with
-            | CreateUser ({ Type = Teacher } as user, _) ->
+            | CreateUser ({ Type = Teacher } as user, _, _) ->
                 let (UserName userName) = user.Name
                 sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
-            | CreateUser ({ Type = Student _ } as user, _) ->
+            | CreateUser ({ Type = Student _ } as user, _, _) ->
                 let (UserName userName) = user.Name
                 sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
-            | UpdateUser ({ Type = Teacher } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName)) ->
+            | UpdateUser ({ Type = Teacher } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s %s (%s) -> %s %s (%s)" (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
-            | UpdateUser ({ Type = Student (GroupName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName)) ->
+            | UpdateUser ({ Type = Student (GroupName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s: %s %s (%s) -> %s %s (%s)" className (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
             | UpdateUser ({ Type = Teacher } as user, SetSokratesId (SokratesId sokratesId)) ->
@@ -89,9 +89,9 @@ module DirectoryModificationGroup =
         |> List.groupBy (function
             | CreateGroup _ ->
                 "01-CreateGroup", "Create user group", Create
-            | CreateUser ({ Type = Teacher }, _) ->
+            | CreateUser ({ Type = Teacher }, _, _) ->
                 "02-CreateTeacher", "Create teacher", Create
-            | CreateUser ({ Type = Student (GroupName className) }, _) ->
+            | CreateUser ({ Type = Student (GroupName className) }, _, _) ->
                 sprintf "03-CreateStudent-%s" className, sprintf "Create student of %s" className, Create
             | UpdateUser ({ Type = Teacher }, ChangeUserName _) ->
                 "04-RenameTeacher", "Rename teacher", Update

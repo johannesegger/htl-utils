@@ -32,7 +32,7 @@ let private getFileName template (user: AD.Domain.ExistingUser) =
 
 let private replacePlaceholders template (user: AD.Domain.ExistingUser) =
     let mailAliases =
-        [ user.UserPrincipalName ] @ user.ProxyAddresses
+        [ user.UserPrincipalName ] @ (user.ProxyAddresses |> List.map (fun v -> MailAddress.toString v.Address))
         |> List.except (Option.toList user.Mail)
     let template = Regex.Replace(template, "\r?\n?(?=<fs-template |</fs-template>)", "")
     init
