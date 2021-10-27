@@ -214,6 +214,6 @@ Program.mkSimple init update root
 |> Program.withDebugger
 |> Program.withConsoleTrace
 #endif
-|> Program.withToast Toast.renderFulma
+|> Program.withToast Toast.renderToastWithFulma
 |> Program.withReactBatched "elmish-app"
 |> Program.run
