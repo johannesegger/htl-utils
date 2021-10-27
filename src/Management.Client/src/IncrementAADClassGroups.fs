@@ -138,7 +138,7 @@ let view model dispatch =
                 sprintf "%s -> %s" oldName newName
             | DeleteClassGroup name ->
                 sprintf "%s -> *" name
-        Panel.block [] [
+        Panel.Block.div [] [
             str description
         ]
 

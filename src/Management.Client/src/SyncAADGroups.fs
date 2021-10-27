@@ -200,7 +200,7 @@ let view model dispatch =
             ]
 
         let memberUpdate icon color (memberUpdateModel: UIUserUpdate) =
-            Panel.block [ ] [
+            Panel.Block.div [ ] [
                 Panel.icon [] []
                 Button.button
                     [

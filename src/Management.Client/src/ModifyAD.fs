@@ -193,7 +193,7 @@ let view model dispatch =
             | DeleteUser _
             | DeleteGroup _ -> Fa.Solid.Minus, IsDanger
 
-        Panel.block [] [
+        Panel.Block.div [] [
             Panel.icon [] []
             Button.button
                 [
