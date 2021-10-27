@@ -259,7 +259,9 @@ let stream (pageActive: IAsyncObservable<bool>) (states: IAsyncObservable<Msg op
                 let loadComputerInfo =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
-                            return! Fetch.``get``("/api/computer-info", QueryResult.decoder) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (queryResult: QueryResult) = Fetch.get("/api/computer-info", extra = coders) |> Async.AwaitPromise
+                            return queryResult
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

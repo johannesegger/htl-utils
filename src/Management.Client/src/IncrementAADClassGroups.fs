@@ -209,10 +209,9 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            let! modifications = Fetch.tryGet("/api/aad/increment-class-group-updates", Decode.list ClassGroupModificationGroup.decoder, requestProperties) |> Async.AwaitPromise
-                            match modifications with
-                            | Ok v -> return v
-                            | Error e -> return failwith (String.ellipsis 200 e)
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (modifications: ClassGroupModificationGroup list) = Fetch.get("/api/aad/increment-class-group-updates", properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return modifications
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -229,10 +228,10 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/aad/increment-class-group-updates/apply"
-                            let data = (List.map ClassGroupModification.encode >> Encode.list) modifications
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.nil (), requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            do! Fetch.post(url, modifications, properties = requestProperties, extra = coders) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

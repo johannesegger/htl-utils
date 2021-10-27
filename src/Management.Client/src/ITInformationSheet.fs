@@ -109,7 +109,9 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.``get``("/api/it-information/users", Decode.list User.decoder, requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (users: User list) = Fetch.get("/api/it-information/users", properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return users
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -127,7 +129,9 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post("/api/it-information/generate-sheet", User.encode user, InformationSheet.decoder, requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (informationSheet: InformationSheet) = Fetch.post("/api/it-information/generate-sheet", user, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return informationSheet
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

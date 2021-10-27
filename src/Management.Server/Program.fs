@@ -117,13 +117,12 @@ let configureServices (hostBuilderContext: HostBuilderContext) (services : IServ
     services.AddGiraffe() |> ignore
     let coders =
         Extra.empty
-        |> Extra.withCustom ADModifications.DataTransferTypes.DirectoryModification.encode ADModifications.DataTransferTypes.DirectoryModification.decoder
-        |> Extra.withCustom IncrementClassGroups.DataTransferTypes.ClassGroupModification.encode IncrementClassGroups.DataTransferTypes.ClassGroupModification.decoder
-        |> Extra.withCustom AADGroupUpdates.DataTransferTypes.GroupUpdate.encode AADGroupUpdates.DataTransferTypes.GroupUpdate.decoder
-        |> Extra.withCustom ConsultationHours.DataTransferTypes.ConsultationHourEntry.encode ConsultationHours.DataTransferTypes.ConsultationHourEntry.decoder
-        |> Extra.withCustom ComputerInfo.DataTransferTypes.QueryResult.encode ComputerInfo.DataTransferTypes.QueryResult.decoder
-        |> Extra.withCustom GenerateITInformationSheet.DataTransferTypes.User.encode GenerateITInformationSheet.DataTransferTypes.User.decoder
-        |> Extra.withCustom GenerateITInformationSheet.DataTransferTypes.InformationSheet.encode GenerateITInformationSheet.DataTransferTypes.InformationSheet.decoder
+        |> ADModifications.DataTransferTypes.Thoth.addCoders
+        |> IncrementClassGroups.DataTransferTypes.Thoth.addCoders
+        |> AADGroupUpdates.DataTransferTypes.Thoth.addCoders
+        |> ConsultationHours.DataTransferTypes.Thoth.addCoders
+        |> ComputerInfo.DataTransferTypes.Thoth.addCoders
+        |> GenerateITInformationSheet.DataTransferTypes.Thoth.addCoders
     services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
 
     Server.addAADAuth services hostBuilderContext.Configuration

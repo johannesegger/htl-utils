@@ -76,7 +76,7 @@ module private AD =
         toExistingADUser (mailAliases |> List.map MailAlias.toADDto) (User.toADDto user)
 
     let asStudent className user =
-        { user with Name = userNameFromName user.FirstName user.LastName; Type = Student (GroupName className) }
+        { user with Name = userNameFromName user.FirstName user.LastName; Type = Student (ClassName className) }
 
     let withId sokratesId user =
         { user with SokratesId = Some (SokratesId sokratesId) }
@@ -121,15 +121,15 @@ module private AD =
 
     let createTeacherGroup = CreateGroup Teacher
 
-    let createStudentGroup className = CreateGroup (Student (GroupName className))
+    let createStudentGroup className = CreateGroup (Student (ClassName className))
 
-    let deleteStudentGroup className = DeleteGroup (Student (GroupName className))
+    let deleteStudentGroup className = DeleteGroup (Student (ClassName className))
 
     let createUser user mailAliasNames password = CreateUser (user, mailAliasNames, password)
 
     let changeUserName user shortName firstName lastName mailAliasNames = UpdateUser (user, ChangeUserName (UserName shortName, firstName, lastName, mailAliasNames))
 
-    let moveStudentToClass user className = UpdateUser (user, MoveStudentToClass (GroupName className))
+    let moveStudentToClass user className = UpdateUser (user, MoveStudentToClass (ClassName className))
 
 
 let tests =

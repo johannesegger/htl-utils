@@ -122,7 +122,9 @@ let stream (pageActive: IAsyncObservable<bool>) (states: IAsyncObservable<Msg op
                 let loadConsultationHours =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
-                            return! Fetch.``get``("/api/consultation-hours", Decode.list ConsultationHourEntry.decoder) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (consultationHourEntries: ConsultationHourEntry list) = Fetch.get("/api/consultation-hours", extra = coders) |> Async.AwaitPromise
+                            return consultationHourEntries
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

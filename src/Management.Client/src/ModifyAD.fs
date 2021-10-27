@@ -36,16 +36,16 @@ module UIDirectoryModification =
             | UpdateUser ({ Type = Teacher } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s %s (%s) -> %s %s (%s)" (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
-            | UpdateUser ({ Type = Student (GroupName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
+            | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s: %s %s (%s) -> %s %s (%s)" className (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
             | UpdateUser ({ Type = Teacher } as user, SetSokratesId (SokratesId sokratesId)) ->
                 let (UserName userName) = user.Name
                 sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName userName sokratesId
-            | UpdateUser ({ Type = Student (GroupName className) } as user, SetSokratesId (SokratesId sokratesId)) ->
+            | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, SetSokratesId (SokratesId sokratesId)) ->
                 let (UserName userName) = user.Name
                 sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName className sokratesId
-            | UpdateUser ({ Type = Student (GroupName oldClassName) } as user, MoveStudentToClass (GroupName newClassName)) ->
+            | UpdateUser ({ Type = Student (ClassName.ClassName oldClassName) } as user, MoveStudentToClass (ClassName.ClassName newClassName)) ->
                 sprintf "%s %s: %s -> %s" (user.LastName.ToUpper()) user.FirstName oldClassName newClassName
             | UpdateUser ({ Type = Teacher }, MoveStudentToClass _) ->
                 "<invalid>"
@@ -56,15 +56,13 @@ module UIDirectoryModification =
                 sprintf "%s %s" (user.LastName.ToUpper()) user.FirstName
             | CreateGroup Teacher ->
                 "Teachers"
-            | CreateGroup (Student (GroupName className)) ->
+            | CreateGroup (Student (ClassName.ClassName className)) ->
                 className
-            | UpdateGroup (Teacher, ChangeGroupName (GroupName newGroupName)) ->
-                sprintf "Teachers -> %s" newGroupName
-            | UpdateGroup (Student (GroupName oldClassName), ChangeGroupName (GroupName newClassName)) ->
+            | UpdateStudentClass (ClassName.ClassName oldClassName, ChangeStudentClassName (ClassName.ClassName newClassName)) ->
                 sprintf "%s -> %s" oldClassName newClassName
             | DeleteGroup Teacher ->
                 "Teachers"
-            | DeleteGroup (Student (GroupName className)) ->
+            | DeleteGroup (Student (ClassName.ClassName className)) ->
                 className
         {
             IsEnabled = true
@@ -110,14 +108,14 @@ let private validateModificationDraft directoryModification =
                 match directoryModification with
                 | CreateUser ({ Name = UserName userName; Type = Teacher }, _, _) ->
                     if String.IsNullOrWhiteSpace userName then "User name must not be empty."
-                | CreateUser ({ Name = UserName userName; Type = Student (GroupName className) }, _, _) ->
+                | CreateUser ({ Name = UserName userName; Type = Student (ClassName.ClassName className) }, _, _) ->
                     if String.IsNullOrWhiteSpace className then "Class name must not be empty."
                     if String.IsNullOrWhiteSpace userName then "User name must not be empty."
                 | DeleteUser { Name = UserName userName } ->
                     if String.IsNullOrWhiteSpace userName then "User name must not be empty."
                 | UpdateUser _
                 | CreateGroup _
-                | UpdateGroup _
+                | UpdateStudentClass _
                 | DeleteGroup _ -> "Modification type not supported"
             ]
     }
@@ -131,7 +129,7 @@ let private clearModificationDraft modificationDraft =
             DeleteUser { user with Name = UserName "" }
         | UpdateUser _
         | CreateGroup _
-        | UpdateGroup _
+        | UpdateStudentClass _
         | DeleteGroup _ -> failwith "Not implemented"
     validateModificationDraft clearedModification
 
@@ -191,7 +189,7 @@ let view model dispatch =
             | CreateUser _
             | CreateGroup _ -> Fa.Solid.Plus, IsSuccess
             | UpdateUser _
-            | UpdateGroup _ -> Fa.Solid.Sync, IsWarning
+            | UpdateStudentClass _ -> Fa.Solid.Sync, IsWarning
             | DeleteUser _
             | DeleteGroup _ -> Fa.Solid.Minus, IsDanger
 
@@ -227,7 +225,7 @@ let view model dispatch =
                     yield!
                         [
                             "Teacher", Teacher
-                            "Student", Student (GroupName "")
+                            "Student", Student (ClassName.ClassName "")
                         ]
                         |> List.map (fun (title, data) ->
                             let isSelected =
@@ -251,13 +249,13 @@ let view model dispatch =
             ]
             match user.Type with
             | Teacher -> ()
-            | Student (GroupName className) ->
+            | Student (ClassName.ClassName className) ->
                 Field.div [] [
                     Control.div [] [
                         Input.text [
                             Input.Placeholder "Class name"
                             Input.Value className
-                            Input.OnChange (fun ev -> dispatch (typeChangedMsg (Student (GroupName ev.Value))))
+                            Input.OnChange (fun ev -> dispatch (typeChangedMsg (Student (ClassName.ClassName ev.Value))))
                         ]
                     ]
                 ]
@@ -281,7 +279,7 @@ let view model dispatch =
                                 | DeleteUser _, DeleteUser _ -> true
                                 | DeleteUser _, _ -> false
                                 | CreateGroup _, _ -> false
-                                | UpdateGroup _, _ -> false
+                                | UpdateStudentClass _, _ -> false
                                 | DeleteGroup _, _ -> false
                             Radio.radio [] [
                                 Radio.input [
@@ -353,7 +351,7 @@ let view model dispatch =
                 ]
             | UpdateUser _
             | CreateGroup _
-            | UpdateGroup _
+            | UpdateStudentClass _
             | DeleteGroup _ -> div [] [ str "Not implemented" ]
 
             Button.button
@@ -402,10 +400,10 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/ad/updates/apply"
-                            let data = (List.map DirectoryModification.encode >> Encode.list) modifications
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.nil (), requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            do! Fetch.post(url, modifications, properties = requestProperties, extra = coders) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

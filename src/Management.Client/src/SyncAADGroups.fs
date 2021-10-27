@@ -325,10 +325,9 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            let! updates = Fetch.tryGet("/api/aad/group-updates", Decode.list GroupUpdate.decoder, requestProperties) |> Async.AwaitPromise
-                            match updates with
-                            | Ok v -> return v
-                            | Error e -> return failwith (String.ellipsis 200 e)
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (updates: GroupUpdate list) = Fetch.get("/api/aad/group-updates", properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return updates
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -346,10 +345,10 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/aad/group-updates/apply"
-                            let data = (List.map GroupUpdate.encode >> Encode.list) groupUpdates
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.nil (), requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            do! Fetch.post(url, groupUpdates, properties = requestProperties, extra = coders) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

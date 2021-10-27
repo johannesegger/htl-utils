@@ -42,6 +42,6 @@
     <PackageReference Include="Fulma" Version="2.2.1" />
     <PackageReference Include="Fulma.Extensions.Wikiki.Divider" Version="2.0.1" />
     <PackageReference Include="Thoth.Elmish.Toast" Version="2.1.0" />
-    <PackageReference Include="Thoth.Fetch" Version="1.1.0" />
+    <PackageReference Include="Thoth.Fetch" Version="3.0.1" />
   </ItemGroup>
 </Project>

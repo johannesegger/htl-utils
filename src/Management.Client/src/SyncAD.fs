@@ -37,16 +37,16 @@ module UIDirectoryModification =
             | UpdateUser ({ Type = Teacher } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s %s (%s) -> %s %s (%s)" (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
-            | UpdateUser ({ Type = Student (GroupName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
+            | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
                 sprintf "%s: %s %s (%s) -> %s %s (%s)" className (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
             | UpdateUser ({ Type = Teacher } as user, SetSokratesId (SokratesId sokratesId)) ->
                 let (UserName userName) = user.Name
                 sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName userName sokratesId
-            | UpdateUser ({ Type = Student (GroupName className) } as user, SetSokratesId (SokratesId sokratesId)) ->
+            | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, SetSokratesId (SokratesId sokratesId)) ->
                 let (UserName userName) = user.Name
                 sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName className sokratesId
-            | UpdateUser ({ Type = Student (GroupName oldClassName) } as user, MoveStudentToClass (GroupName newClassName)) ->
+            | UpdateUser ({ Type = Student (ClassName.ClassName oldClassName) } as user, MoveStudentToClass (ClassName.ClassName newClassName)) ->
                 sprintf "%s %s: %s -> %s" (user.LastName.ToUpper()) user.FirstName oldClassName newClassName
             | UpdateUser ({ Type = Teacher }, MoveStudentToClass _) ->
                 "<invalid>"
@@ -57,15 +57,13 @@ module UIDirectoryModification =
                 sprintf "%s %s" (user.LastName.ToUpper()) user.FirstName
             | CreateGroup Teacher ->
                 "Teachers"
-            | CreateGroup (Student (GroupName className)) ->
+            | CreateGroup (Student (ClassName.ClassName className)) ->
                 className
-            | UpdateGroup (Teacher, ChangeGroupName (GroupName newGroupName)) ->
-                sprintf "Teachers -> %s" newGroupName
-            | UpdateGroup (Student (GroupName oldClassName), ChangeGroupName (GroupName newClassName)) ->
+            | UpdateStudentClass (ClassName.ClassName oldClassName, ChangeStudentClassName (ClassName.ClassName newClassName)) ->
                 sprintf "%s -> %s" oldClassName newClassName
             | DeleteGroup Teacher ->
                 "Teachers"
-            | DeleteGroup (Student (GroupName className)) ->
+            | DeleteGroup (Student (ClassName.ClassName className)) ->
                 className
         {
             IsEnabled = true
@@ -91,7 +89,7 @@ module DirectoryModificationGroup =
                 "01-CreateGroup", "Create user group", Create
             | CreateUser ({ Type = Teacher }, _, _) ->
                 "02-CreateTeacher", "Create teacher", Create
-            | CreateUser ({ Type = Student (GroupName className) }, _, _) ->
+            | CreateUser ({ Type = Student (ClassName.ClassName className) }, _, _) ->
                 sprintf "03-CreateStudent-%s" className, sprintf "Create student of %s" className, Create
             | UpdateUser ({ Type = Teacher }, ChangeUserName _) ->
                 "04-RenameTeacher", "Rename teacher", Update
@@ -99,14 +97,14 @@ module DirectoryModificationGroup =
                 "05-SetSokratesId", "Set Sokrates ID", Update
             | UpdateUser ({ Type = Student _ }, ChangeUserName _) ->
                 "06-RenameStudent", "Rename student", Update
-            | UpdateUser (_, MoveStudentToClass (GroupName className)) ->
+            | UpdateUser (_, MoveStudentToClass (ClassName.ClassName className)) ->
                 sprintf "07-MoveStudentToClass-%s" className, sprintf "Move student to %s" className, Update
             | DeleteUser ({ Type = Teacher }) ->
                 "08-DeleteTeacher", "Delete teacher", Delete
-            | DeleteUser ({ Type = Student (GroupName className) }) ->
+            | DeleteUser ({ Type = Student (ClassName.ClassName className) }) ->
                 sprintf "09-DeleteStudent-%s" className, sprintf "Delete student of %s" className, Delete
-            | UpdateGroup (_, ChangeGroupName _) ->
-                "10-RenameGroup", "Rename user group", Update
+            | UpdateStudentClass (_, ChangeStudentClassName _) ->
+                "10-RenameClass", "Rename class", Update
             | DeleteGroup _ ->
                 "11-DeleteGroup", "Delete user group", Delete
         )
@@ -265,7 +263,7 @@ let view model dispatch =
             | CreateUser _
             | CreateGroup _ -> Fa.Solid.Plus, IsSuccess
             | UpdateUser _
-            | UpdateGroup _ -> Fa.Solid.Sync, IsWarning
+            | UpdateStudentClass _ -> Fa.Solid.Sync, IsWarning
             | DeleteUser _
             | DeleteGroup _ -> Fa.Solid.Minus, IsDanger
 
@@ -360,10 +358,9 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                             let url = sprintf "/api/ad/updates?date=%s" (timestamp.ToString("yyyy-MM-dd"))
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            let! modifications = Fetch.tryGet(url, Decode.list DirectoryModification.decoder, requestProperties) |> Async.AwaitPromise
-                            match modifications with
-                            | Ok v -> return v
-                            | Error e -> return failwith (String.ellipsis 200 e)
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (modifications: DirectoryModification list) = Fetch.get(url, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return modifications
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -382,10 +379,10 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/ad/updates/apply"
-                            let data = (List.map DirectoryModification.encode >> Encode.list) modifications
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.nil (), requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            do! Fetch.post(url, modifications, properties = requestProperties, extra = coders) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

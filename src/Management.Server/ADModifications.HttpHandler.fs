@@ -81,7 +81,7 @@ let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStud
         [
             yield!
                 sokratesStudents
-                |> List.map (fun student -> Student (GroupName student.SchoolClass))
+                |> List.map (fun student -> Student (ClassName student.SchoolClass))
             if not <| List.isEmpty sokratesTeachers then Teacher
         ]
         |> Set.ofList
@@ -166,9 +166,9 @@ let modifications (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStud
                         modifications
 
                 let modifications =
-                    if UserType.fromADDto adUser.Type <> Student (GroupName student.SchoolClass) then
+                    if UserType.fromADDto adUser.Type <> Student (ClassName student.SchoolClass) then
                         let user = User.fromADDto adUser
-                        let modification = UpdateUser (user, MoveStudentToClass (GroupName student.SchoolClass))
+                        let modification = UpdateUser (user, MoveStudentToClass (ClassName student.SchoolClass))
                         modification :: modifications
                     else
                         modifications
@@ -230,7 +230,7 @@ let getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig : HttpHa
     fun next ctx -> task {
         let classGroups =
             Reader.run adConfig AD.Core.getClassGroups
-            |> List.map (GroupName.fromADDto >> (fun (GroupName groupName) -> groupName))
+            |> List.map (ClassName.fromADDto >> (fun (ClassName groupName) -> groupName))
 
         let modifications = IncrementClassGroups.Core.modifications classGroups |> Reader.run incrementClassGroupsConfig
         return! Successful.OK modifications next ctx

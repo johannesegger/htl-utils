@@ -11,17 +11,17 @@ module SokratesId =
     let fromSokratesDto (Sokrates.Domain.SokratesId sokratesId) = SokratesId sokratesId
     let toADDto (SokratesId sokratesId) = AD.Domain.SokratesId sokratesId
 
-module GroupName =
-    let fromADDto (AD.Domain.GroupName groupName) = GroupName groupName
-    let toADDto (GroupName groupName) = AD.Domain.GroupName groupName
+module ClassName =
+    let fromADDto (AD.Domain.GroupName groupName) = ClassName groupName
+    let toADDto (ClassName groupName) = AD.Domain.GroupName groupName
 
 module UserType =
     let fromADDto = function
         | AD.Domain.Teacher -> Teacher
-        | AD.Domain.Student className -> Student (GroupName.fromADDto className)
+        | AD.Domain.Student className -> Student (ClassName.fromADDto className)
     let toADDto = function
         | Teacher -> AD.Domain.Teacher
-        | Student className -> AD.Domain.Student (GroupName.toADDto className)
+        | Student className -> AD.Domain.Student (ClassName.toADDto className)
 
 module User =
     let fromSokratesTeacherDto (teacher: Sokrates.Domain.Teacher) =
@@ -38,7 +38,7 @@ module User =
             SokratesId = Some (SokratesId.fromSokratesDto student.Id)
             FirstName = student.FirstName1
             LastName = student.LastName
-            Type = Student (GroupName student.SchoolClass)
+            Type = Student (ClassName student.SchoolClass)
         }
     let fromADDto (user: AD.Domain.ExistingUser) =
         {
@@ -80,11 +80,11 @@ module UserUpdate =
     let toADDto = function
         | ChangeUserName (userName, firstName, lastName, mailAliasNames) -> AD.Domain.ChangeUserName (UserName.toADDto userName, firstName, lastName, mailAliasNames |> List.map MailAlias.toADDto)
         | SetSokratesId sokratesId -> AD.Domain.SetSokratesId (SokratesId.toADDto sokratesId)
-        | MoveStudentToClass className -> AD.Domain.MoveStudentToClass (GroupName.toADDto className)
+        | MoveStudentToClass className -> AD.Domain.MoveStudentToClass (ClassName.toADDto className)
 
 module GroupUpdate =
     let toADDto = function
-        | ChangeGroupName newName -> AD.Domain.ChangeGroupName (GroupName.toADDto newName)
+        | ChangeStudentClassName newName -> AD.Domain.ChangeGroupName (ClassName.toADDto newName)
 
 module DirectoryModification =
     let toADDto = function
@@ -92,12 +92,12 @@ module DirectoryModification =
         | UpdateUser (user, update) -> AD.Domain.UpdateUser (UserName.toADDto user.Name, UserType.toADDto user.Type, UserUpdate.toADDto update)
         | DeleteUser user -> AD.Domain.DeleteUser (UserName.toADDto user.Name, UserType.toADDto user.Type)
         | CreateGroup userType -> AD.Domain.CreateGroup (UserType.toADDto userType)
-        | UpdateGroup (userType, groupUpdate) -> AD.Domain.UpdateGroup (UserType.toADDto userType, GroupUpdate.toADDto groupUpdate)
+        | UpdateStudentClass (className, groupUpdate) -> AD.Domain.UpdateGroup (UserType.toADDto (Student className), GroupUpdate.toADDto groupUpdate)
         | DeleteGroup userType -> AD.Domain.DeleteGroup (UserType.toADDto userType)
 
 module ClassGroupModification =
     let toDirectoryModification = function
         | IncrementClassGroups.DataTransferTypes.ChangeClassGroupName (oldName, newName) ->
-            UpdateGroup (Student (GroupName oldName), ChangeGroupName (GroupName newName))
+            UpdateStudentClass (ClassName oldName, ChangeStudentClassName (ClassName newName))
         | IncrementClassGroups.DataTransferTypes.DeleteClassGroup name ->
-            DeleteGroup (Student (GroupName name))
+            DeleteGroup (Student (ClassName name))
