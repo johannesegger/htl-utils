@@ -6,11 +6,14 @@ open Giraffe.Serialization
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Graph.Auth
+open Microsoft.Identity.Client
 open System
+open System.Collections.Generic
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
@@ -44,61 +47,65 @@ let handlePostWakeUp macAddress : HttpHandler =
 
 let handleAddTeachersAsContacts photoLibraryConfig sokratesConfig : HttpHandler =
     fun next ctx -> task {
-        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
-        let! aadUsers =
-            AAD.Core.getUsers graphServiceClient
-            |> Async.StartChild
-        let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig |> Async.StartChild
-        let teacherPhotos = PhotoLibrary.Core.getTeacherPhotos (Some 200, Some 200) |> Reader.run photoLibraryConfig
+        try
+            let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
+            let! aadUsers =
+                AAD.Core.getUsers graphServiceClient
+                |> Async.StartChild
+            let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig |> Async.StartChild
+            let teacherPhotos = PhotoLibrary.Core.getTeacherPhotos (Some 200, Some 200) |> Reader.run photoLibraryConfig
 
-        let! aadUsers = aadUsers
-        let! sokratesTeachers = sokratesTeachers
+            let! aadUsers = aadUsers
+            let! sokratesTeachers = sokratesTeachers
 
-        let contacts =
-            let aadUserMap =
-                aadUsers
-                |> List.map (fun user -> CIString user.UserName, user)
-                |> Map.ofList
-            let photoLibraryTeacherMap =
-                teacherPhotos
-                |> List.map (fun photo -> CIString photo.ShortName, photo.Data)
-                |> Map.ofList
-            sokratesTeachers
-            |> List.choose (fun sokratesTeacher ->
-                let aadUser = Map.tryFind (CIString sokratesTeacher.ShortName) aadUserMap
-                let photo = Map.tryFind (CIString sokratesTeacher.ShortName) photoLibraryTeacherMap
-                match aadUser with
-                | Some aadUser ->
-                    Some {
-                        AAD.Domain.Contact.FirstName = sokratesTeacher.FirstName
-                        AAD.Domain.Contact.LastName = sokratesTeacher.LastName
-                        AAD.Domain.Contact.DisplayName =
-                            sprintf "%s %s (%s)" sokratesTeacher.LastName sokratesTeacher.FirstName sokratesTeacher.ShortName
-                        AAD.Domain.Contact.Birthday = Some sokratesTeacher.DateOfBirth
-                        AAD.Domain.Contact.HomePhones =
-                            sokratesTeacher.Phones
-                            |> List.choose (function
-                                | Sokrates.Domain.Home number -> Some number
-                                | Sokrates.Domain.Mobile _ -> None
-                            )
-                        AAD.Domain.Contact.MobilePhone =
-                            sokratesTeacher.Phones
-                            |> List.tryPick (function
-                                | Sokrates.Domain.Home _ -> None
-                                | Sokrates.Domain.Mobile number -> Some number
-                            )
-                        AAD.Domain.Contact.MailAddresses = List.take 1 aadUser.MailAddresses
-                        AAD.Domain.Contact.Photo =
-                            photo
-                            |> Option.map (fun (PhotoLibrary.Domain.Base64EncodedImage data) ->
-                                AAD.Domain.Base64EncodedImage data
-                            )
-                    }
-                | None -> None
-            )
+            let contacts =
+                let aadUserMap =
+                    aadUsers
+                    |> List.map (fun user -> CIString user.UserName, user)
+                    |> Map.ofList
+                let photoLibraryTeacherMap =
+                    teacherPhotos
+                    |> List.map (fun photo -> CIString photo.ShortName, photo.Data)
+                    |> Map.ofList
+                sokratesTeachers
+                |> List.choose (fun sokratesTeacher ->
+                    let aadUser = Map.tryFind (CIString sokratesTeacher.ShortName) aadUserMap
+                    let photo = Map.tryFind (CIString sokratesTeacher.ShortName) photoLibraryTeacherMap
+                    match aadUser with
+                    | Some aadUser ->
+                        Some {
+                            AAD.Domain.Contact.FirstName = sokratesTeacher.FirstName
+                            AAD.Domain.Contact.LastName = sokratesTeacher.LastName
+                            AAD.Domain.Contact.DisplayName =
+                                sprintf "%s %s (%s)" sokratesTeacher.LastName sokratesTeacher.FirstName sokratesTeacher.ShortName
+                            AAD.Domain.Contact.Birthday = Some sokratesTeacher.DateOfBirth
+                            AAD.Domain.Contact.HomePhones =
+                                sokratesTeacher.Phones
+                                |> List.choose (function
+                                    | Sokrates.Domain.Home number -> Some number
+                                    | Sokrates.Domain.Mobile _ -> None
+                                )
+                            AAD.Domain.Contact.MobilePhone =
+                                sokratesTeacher.Phones
+                                |> List.tryPick (function
+                                    | Sokrates.Domain.Home _ -> None
+                                    | Sokrates.Domain.Mobile number -> Some number
+                                )
+                            AAD.Domain.Contact.MailAddresses = List.take 1 aadUser.MailAddresses
+                            AAD.Domain.Contact.Photo =
+                                photo
+                                |> Option.map (fun (PhotoLibrary.Domain.Base64EncodedImage data) ->
+                                    AAD.Domain.Base64EncodedImage data
+                                )
+                        }
+                    | None -> None
+                )
 
-        AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId (ctx.User.ToGraphUserAccount().ObjectId)) contacts
-        |> Async.Start
+            AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId (ctx.User.ToGraphUserAccount().ObjectId)) contacts
+            |> Async.Start
+        with
+            | :? MsalUiRequiredException as e -> ()
+
         return! Successful.ACCEPTED () next ctx
     }
 
@@ -285,7 +292,9 @@ let errorHandler (ex : Exception) (logger : ILogger) =
 let configureApp (app : IApplicationBuilder) =
     let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
     match env.IsDevelopment() with
-    | true -> app.UseDeveloperExceptionPage() |> ignore
+    | true ->
+        Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII <- true
+        app.UseDeveloperExceptionPage() |> ignore
     | false -> app.UseGiraffeErrorHandler errorHandler |> ignore
     app
         .UseHttpsRedirection()
@@ -316,7 +325,19 @@ let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
 
 [<EntryPoint>]
 let main args =
+    let configDict =
+        [
+            "AzureAd:Instance", aadConfig.OidcConfig.Instance
+            "AzureAd:Domain", aadConfig.OidcConfig.Domain
+            "AzureAd:TenantId", aadConfig.OidcConfig.TenantId
+            "AzureAd:ClientId", aadConfig.OidcConfig.AppId
+            "AzureAd:ClientSecret", aadConfig.OidcConfig.AppSecret
+            "MicrosoftGraph:BaseUrl", "https://graph.microsoft.com/v1.0"
+            "MicrosoftGraph:Scopes", "Calendars.ReadWrite Contacts.ReadWrite"
+        ]
+        |> Seq.map KeyValuePair
     Host.CreateDefaultBuilder(args)
+        .ConfigureAppConfiguration(fun hostBuilderContext config -> config.AddInMemoryCollection(configDict) |> ignore)
         .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)

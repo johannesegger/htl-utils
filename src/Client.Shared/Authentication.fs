@@ -52,7 +52,7 @@ let private clientApplication =
 
 let private authenticateUser = async {
     let tokenRequest = createObj [
-        "scopes" ==> [| "api://235fe3a7-8dbd-426c-b7b1-3d64cb37724b/.default" |]
+        "scopes" ==> [| "api://235fe3a7-8dbd-426c-b7b1-3d64cb37724b/user_impersonation"; "Contacts.ReadWrite"; "Calendars.ReadWrite" |]
     ]
     let! loginResponse = async {
         match clientApplication.getActiveAccount() with
