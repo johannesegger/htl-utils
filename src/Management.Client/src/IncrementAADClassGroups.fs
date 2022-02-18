@@ -224,7 +224,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                 |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AAD modifications failed", e.Message)
                 |> AsyncRx.map LoadModificationsResponse
 
-                let applyModifications modifications =
+                let applyModifications (modifications: ClassGroupModification list) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/aad/increment-class-group-updates/apply"

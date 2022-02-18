@@ -124,7 +124,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                 |> AsyncRx.showSimpleErrorToast (fun e -> "Loading users failed", e.Message)
                 |> AsyncRx.map LoadUsersResponse
 
-                let generateInformationSheet user =
+                let generateInformationSheet (user: User) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()

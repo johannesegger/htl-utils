@@ -8,7 +8,6 @@ open Fable.React.Props
 open Fable.Reaction
 open FSharp.Control
 open Fulma
-open Fulma.Extensions.Wikiki
 open System
 open Thoth.Fetch
 open Thoth.Json
@@ -396,7 +395,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
             [
                 msgs
 
-                let applyModifications modifications =
+                let applyModifications (modifications: DirectoryModification list) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/ad/updates/apply"

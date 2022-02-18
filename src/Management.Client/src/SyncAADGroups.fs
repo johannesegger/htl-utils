@@ -341,7 +341,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
 
                 AsyncRx.single LoadGroupUpdates
 
-                let applyGroupUpdates groupUpdates =
+                let applyGroupUpdates (groupUpdates: GroupUpdate list) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
                             let url = sprintf "/api/aad/group-updates/apply"

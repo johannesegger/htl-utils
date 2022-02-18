@@ -223,10 +223,10 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                 |> AsyncRx.showSimpleErrorToast (fun e -> "Loading AD modifications failed", e.Message)
                 |> AsyncRx.map LoadModificationsResponse
 
-                let applyModifications modifications =
+                let applyModifications (modifications: ClassGroupModification list) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
-                            let url = sprintf "/api/ad/increment-class-group-updates/apply"
+                            let url = "/api/ad/increment-class-group-updates/apply"
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             let coders = Extra.empty |> Thoth.addCoders
