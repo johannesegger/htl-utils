@@ -78,7 +78,7 @@ module private User =
                 |> Seq.toList
         }
 
-let private getGroupsWithPrefix (graphServiceClient: GraphServiceClient) prefix = async {
+let private getFilteredGroups (graphServiceClient: GraphServiceClient) prefix (excludePattern: Regex option) = async {
     let! graphGroups =
         readAll
             (graphServiceClient.Groups.Request()
@@ -88,6 +88,11 @@ let private getGroupsWithPrefix (graphServiceClient: GraphServiceClient) prefix 
             (fun items -> items.NextPageRequest)
     return!
         graphGroups
+        |> Seq.filter (fun (g: Microsoft.Graph.Group) ->
+            match excludePattern with
+            | Some v -> not <| v.IsMatch(g.DisplayName)
+            | None -> true
+        )
         |> Seq.map (fun (g: Microsoft.Graph.Group) -> async {
             let! members =
                 readAll
@@ -110,7 +115,7 @@ let private getGroupsWithPrefix (graphServiceClient: GraphServiceClient) prefix 
 
 let getPredefinedGroups (graphServiceClient: GraphServiceClient) = reader {
     let! config = Reader.environment
-    return getGroupsWithPrefix graphServiceClient config.PredefinedGroupPrefix
+    return getFilteredGroups graphServiceClient config.PredefinedGroupPrefix config.ManuallyManagedGroupsPattern
 }
 
 let getUsers (graphServiceClient: GraphServiceClient) = async {

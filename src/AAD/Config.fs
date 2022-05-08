@@ -1,5 +1,7 @@
 namespace AAD.Configuration
 
+open System.Text.RegularExpressions
+
 type PredefinedGroup =
     | Teachers of name: string
     | FormTeachers of name: string
@@ -20,6 +22,7 @@ type OidcConfig = {
 type Config = {
     OidcConfig: OidcConfig
     PredefinedGroupPrefix: string
+    ManuallyManagedGroupsPattern: Regex option
     PredefinedGroups: PredefinedGroup list
 }
 module Config =
@@ -33,6 +36,10 @@ module Config =
                 TenantId = Environment.getEnvVarOrFail "AAD_TENANT_ID"
             }
             PredefinedGroupPrefix = Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUP_PREFIX"
+            ManuallyManagedGroupsPattern =
+                Environment.getEnvVar "AAD_MANUALLY_MANAGED_GROUPS_PATTERN"
+                |> Option.ofObj
+                |> Option.map Regex
             PredefinedGroups =
                 Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUPS"
                 |> String.split ";"
