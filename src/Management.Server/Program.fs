@@ -123,7 +123,7 @@ let configureServices (hostBuilderContext: HostBuilderContext) (services : IServ
         |> ConsultationHours.DataTransferTypes.Thoth.addCoders
         |> ComputerInfo.DataTransferTypes.Thoth.addCoders
         |> GenerateITInformationSheet.DataTransferTypes.Thoth.addCoders
-    services.AddSingleton<IJsonSerializer>(ThothSerializer(isCamelCase = true, extra = coders)) |> ignore
+    services.AddSingleton<IJsonSerializer>(ThothSerializer(extra = coders)) |> ignore
 
     Server.addAADAuth services hostBuilderContext.Configuration
 
