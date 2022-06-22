@@ -208,7 +208,12 @@ let private createUser (newUser: NewUser) mailAliases password = reader {
     let! division = divisionFromUserType newUser.Type
     adUser.Properties.["division"].Value <- division
     adUser.Properties.["mail"].Value <- userPrincipalName
-    adUser.Properties.["proxyAddresses"].Value <- mailAliases |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString) |> List.toArray
+    let proxyAddresses =
+        mailAliases
+        |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString)
+        |> List.map (fun v -> v :> obj)
+        |> List.toArray
+    adUser.Properties.["proxyAddresses"].AddRange(proxyAddresses)
     let! userHomePath = homePath newUser.Name newUser.Type
     adUser.Properties.["homeDirectory"].Value <- userHomePath
     adUser.Properties.["homeDrive"].Value <- config.HomeDrive
