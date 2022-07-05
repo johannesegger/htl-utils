@@ -508,13 +508,13 @@ let private userFromADUserSearchResult userType sokratesIdAttributeName (adUser:
         LastName = adUser.Properties.["sn"].[0] :?> string
         Type = userType
         CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
-        Mail = adUser.Properties.["mail"] |> Seq.cast<string> |> Seq.tryHead
+        Mail = adUser.Properties.["mail"] |> Seq.cast<string> |> Seq.choose MailAddress.tryParse |> Seq.tryHead
         ProxyAddresses =
             adUser.Properties.["proxyAddresses"]
             |> Seq.cast<string>
             |> Seq.choose ProxyAddress.tryParse
             |> Seq.toList
-        UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string
+        UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string |> (fun v -> MailAddress.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse user principal name \"%s\" as mail address (User \"%s\")" v adUser.Path))
     }
 
 let getUsers = reader {

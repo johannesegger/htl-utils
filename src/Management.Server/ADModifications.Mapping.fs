@@ -57,28 +57,16 @@ module User =
             AD.Domain.Type = UserType.toADDto user.Type
         }
 
-module MailAliasDomain =
-    let toADDto = function
-        | DefaultDomain -> AD.Domain.DefaultDomain
-        | CustomDomain v -> AD.Domain.CustomDomain v
-
 module MailAlias =
-    let fromADProxyAddress (proxyAddress: AD.Domain.ProxyAddress) =
-        {
-            IsPrimary = proxyAddress.Protocol.IsPrimary
-            UserName = proxyAddress.Address.UserName
-            Domain = CustomDomain proxyAddress.Address.Domain
-        }
     let toADDto v =
         {
             AD.Domain.MailAlias.IsPrimary = v.IsPrimary
             AD.Domain.MailAlias.UserName = v.UserName
-            AD.Domain.MailAlias.Domain = MailAliasDomain.toADDto v.Domain
         }
 
 module UserUpdate =
     let toADDto = function
-        | ChangeUserName (userName, firstName, lastName, mailAliasNames) -> AD.Domain.ChangeUserName (UserName.toADDto userName, firstName, lastName, mailAliasNames |> List.map MailAlias.toADDto)
+        | ChangeUserName (userName, firstName, lastName, mailAliases) -> AD.Domain.ChangeUserName (UserName.toADDto userName, firstName, lastName, mailAliases |> List.map MailAlias.toADDto)
         | SetSokratesId sokratesId -> AD.Domain.SetSokratesId (SokratesId.toADDto sokratesId)
         | MoveStudentToClass className -> AD.Domain.MoveStudentToClass (ClassName.toADDto className)
 

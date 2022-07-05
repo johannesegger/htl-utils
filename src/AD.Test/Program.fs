@@ -20,8 +20,8 @@ let createUser userType =
         Type = userType
     }
 let mailAliases = [
-    { IsPrimary = true; UserName = "Albert.Einstein"; Domain = DefaultDomain }
-    { IsPrimary = false; UserName = "Einstein.Albert"; Domain = DefaultDomain }
+    { IsPrimary = true; UserName = "Albert.Einstein" }
+    { IsPrimary = false; UserName = "Einstein.Albert" }
 ]
 let password = "!A1b2C3#"
 

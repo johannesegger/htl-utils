@@ -31,16 +31,10 @@ type User = {
     Type: UserType
 }
 
-type MailAliasDomain = DefaultDomain | CustomDomain of string
-
 type MailAlias = {
     IsPrimary: bool
     UserName: string
-    Domain: MailAliasDomain
 }
-module MailAlias =
-    let toNonPrimary v =
-        { v with IsPrimary = false }
 
 type UserUpdate =
     | ChangeUserName of UserName * firstName: string * lastName: string * MailAlias list

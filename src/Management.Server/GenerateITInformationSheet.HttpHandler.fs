@@ -31,17 +31,31 @@ let private getFileName template (user: AD.Domain.ExistingUser) =
     |> fromText template
 
 let private replacePlaceholders template (user: AD.Domain.ExistingUser) =
-    let mailAliases =
-        [ user.UserPrincipalName ] @ (user.ProxyAddresses |> List.map (fun v -> MailAddress.toString v.Address))
-        |> List.except (Option.toList user.Mail)
+    let (mailAddress, mailAliases) =
+        let primaryAddress =
+            user.ProxyAddresses
+            |> List.tryPick (fun v -> if v.Protocol.IsPrimary then Some v.Address else None)
+            |> Option.defaultValue user.UserPrincipalName
+        let allAddresses =
+            [
+                yield!
+                    user.ProxyAddresses
+                    |> List.map (fun v -> v.Address)
+                user.UserPrincipalName
+            ]
+        let aliases =
+            allAddresses
+            |> List.except [ primaryAddress ]
+            |> List.map MailAddress.toString
+        MailAddress.toString primaryAddress, aliases
+
     let template = Regex.Replace(template, "\r?\n?(?=<fs-template |</fs-template>)", "")
     init
     |> add "shortName" (let (AD.Domain.UserName userName) = user.Name in userName)
     |> add "firstName" user.FirstName
     |> add "lastName" user.LastName
-    |> add "mailAddress" user.Mail
-    |> add "aadUserName" user.UserPrincipalName
-    |> add "aliases" mailAliases
+    |> add "mailAddress" mailAddress
+    |> add "aadUserName" (MailAddress.toString user.UserPrincipalName)
     |> add "firstAlias" (mailAliases |> List.tryHead |> Option.defaultValue "")
     |> add "secondAlias" (mailAliases |> List.tryItem 1 |> Option.defaultValue "")
     |> add "aliases" mailAliases

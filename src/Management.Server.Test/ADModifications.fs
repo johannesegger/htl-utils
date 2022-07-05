@@ -59,7 +59,7 @@ module private AD =
     let toExistingADUser mailAliases (user: AD.Domain.NewUser) =
         let mail =
             let (AD.Domain.UserName userName) = user.Name
-            sprintf "%s@%s" userName mailDomain
+            { UserName = userName; Domain = mailDomain }
         {
             AD.Domain.ExistingUser.Name = user.Name
             AD.Domain.ExistingUser.SokratesId = user.SokratesId
@@ -110,13 +110,11 @@ module private AD =
     let primaryMailAlias userName = {
         IsPrimary = true
         UserName = userName
-        Domain = DefaultDomain
     }
 
-    let nonPrimaryMailAliasWithDomain userName domain = {
+    let nonPrimaryMailAlias userName = {
         IsPrimary = false
         UserName = userName
-        Domain = CustomDomain domain
     }
 
     let createTeacherGroup = CreateGroup Teacher
@@ -199,7 +197,11 @@ let tests =
                     []
                     [ AD.einstein |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
             let expected = [
-                AD.changeUserName AD.einstein "ZWEA" "Albert" "Zweistein" [ AD.primaryMailAlias "Albert.Zweistein"; AD.nonPrimaryMailAliasWithDomain "Albert.Einstein" AD.mailDomain ]
+                AD.changeUserName AD.einstein "ZWEA" "Albert" "Zweistein" [
+                    AD.primaryMailAlias "Albert.Zweistein"
+                    AD.nonPrimaryMailAlias "EINA"
+                    AD.nonPrimaryMailAlias "Albert.Einstein"
+                ]
             ]
             Expect.equal actual expected "Teacher name should be changed"
 

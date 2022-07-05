@@ -1,7 +1,6 @@
 module AD.Domain
 
 open System
-open System.Text.RegularExpressions
 
 type UserName = UserName of string
 
@@ -58,27 +57,20 @@ type ExistingUser = {
     LastName: string
     Type: UserType
     CreatedAt: DateTime
-    Mail: string option
+    Mail: MailAddress option
     ProxyAddresses: ProxyAddress list
-    UserPrincipalName: string
+    UserPrincipalName: MailAddress
 }
-
-type MailAliasDomain = DefaultDomain | CustomDomain of string
-module MailAliasDomain =
-    let toString defaultDomain = function
-        | DefaultDomain -> defaultDomain
-        | CustomDomain v -> v
 
 type MailAlias = {
     IsPrimary: bool
     UserName: string
-    Domain: MailAliasDomain
 }
 module MailAlias =
-    let toProxyAddress defaultDomain v =
+    let toProxyAddress domain v =
         {
             Protocol = { IsPrimary = v.IsPrimary; Type = SMTP }
-            Address = { UserName = v.UserName; Domain = MailAliasDomain.toString defaultDomain v.Domain }
+            Address = { UserName = v.UserName; Domain = domain }
         }
 
 type UserUpdate =
