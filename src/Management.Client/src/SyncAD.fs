@@ -86,30 +86,29 @@ module DirectoryModificationGroup =
         modifications
         |> List.groupBy (function
             | CreateGroup _ ->
-                "01-CreateGroup", "Create user group", Create
+                "Create user group", Create
             | CreateUser ({ Type = Teacher }, _, _) ->
-                "02-CreateTeacher", "Create teacher", Create
+                "Create teacher", Create
             | CreateUser ({ Type = Student (ClassName.ClassName className) }, _, _) ->
-                sprintf "03-CreateStudent-%s" className, sprintf "Create student of %s" className, Create
+                sprintf "Create student of %s" className, Create
             | UpdateUser ({ Type = Teacher }, ChangeUserName _) ->
-                "04-RenameTeacher", "Rename teacher", Update
+                "Rename teacher", Update
             | UpdateUser (_, SetSokratesId _) ->
-                "05-SetSokratesId", "Set Sokrates ID", Update
+                "Set Sokrates ID", Update
             | UpdateUser ({ Type = Student _ }, ChangeUserName _) ->
-                "06-RenameStudent", "Rename student", Update
+                "Rename student", Update
             | UpdateUser (_, MoveStudentToClass (ClassName.ClassName className)) ->
-                sprintf "07-MoveStudentToClass-%s" className, sprintf "Move student to %s" className, Update
+                sprintf "Move student to %s" className, Update
             | DeleteUser ({ Type = Teacher }) ->
-                "08-DeleteTeacher", "Delete teacher", Delete
+                "Delete teacher", Delete
             | DeleteUser ({ Type = Student (ClassName.ClassName className) }) ->
-                sprintf "09-DeleteStudent-%s" className, sprintf "Delete student of %s" className, Delete
+                sprintf "Delete student of %s" className, Delete
             | UpdateStudentClass (_, ChangeStudentClassName _) ->
-                "10-RenameClass", "Rename class", Update
+                "Rename class", Update
             | DeleteGroup _ ->
-                "11-DeleteGroup", "Delete user group", Delete
+                "Delete user group", Delete
         )
-        |> List.sortBy (fun ((key, _, _), _) -> key)
-        |> List.map (fun ((_, title, kind), modifications) ->
+        |> List.map (fun ((title, kind), modifications) ->
             {
                 IsEnabled = true
                 Title = title
