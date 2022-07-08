@@ -88,7 +88,7 @@ let getTeachingData = reader {
                         | None -> { ShortName = timetableEntry.Room; FullName = None }
                     Informant (TeacherShortName row.Teacher, room, WorkingDay.tryFromOrdinal timetableEntry.Day |> Option.get, tryGetTimeFrameFromPeriodNumber timetableEntry.Period |> Option.get)
                 )
-            elif String.IsNullOrEmpty row.Class then
+            elif String.IsNullOrEmpty row.Class && not <| String.IsNullOrEmpty row.Subject then
                 Custodian (TeacherShortName row.Teacher, Map.find (CIString row.Subject) subjectMap)
                 |> Some
             else
