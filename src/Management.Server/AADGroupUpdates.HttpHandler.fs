@@ -2,7 +2,6 @@ module AADGroupUpdates.HttpHandler
 
 open AADGroupUpdates.DataTransferTypes
 open AADGroupUpdates.Mapping
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 
 let private calculateMemberUpdates teacherIds aadGroupMemberIds =

@@ -8,7 +8,7 @@ module UserName =
 
 module SokratesId =
     let fromADDto (AD.Domain.SokratesId sokratesId) = SokratesId sokratesId
-    let fromSokratesDto (Sokrates.Domain.SokratesId sokratesId) = SokratesId sokratesId
+    let fromSokratesDto (Sokrates.SokratesId sokratesId) = SokratesId sokratesId
     let toADDto (SokratesId sokratesId) = AD.Domain.SokratesId sokratesId
 
 module ClassName =
@@ -24,7 +24,7 @@ module UserType =
         | Student className -> AD.Domain.Student (ClassName.toADDto className)
 
 module User =
-    let fromSokratesTeacherDto (teacher: Sokrates.Domain.Teacher) =
+    let fromSokratesTeacherDto (teacher: Sokrates.Teacher) =
         {
             Name = UserName teacher.ShortName
             SokratesId = Some (SokratesId.fromSokratesDto teacher.Id)
@@ -32,7 +32,7 @@ module User =
             LastName = teacher.LastName
             Type = Teacher
         }
-    let fromSokratesStudentDto (student: Sokrates.Domain.Student) userName =
+    let fromSokratesStudentDto (student: Sokrates.Student) userName =
         {
             Name = userName
             SokratesId = Some (SokratesId.fromSokratesDto student.Id)

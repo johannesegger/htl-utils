@@ -1,6 +1,5 @@
 module GenerateITInformationSheet.HttpHandler
 
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Fue.Data
 open Fue.Compiler
 open GenerateITInformationSheet.Configuration

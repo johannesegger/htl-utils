@@ -1,14 +1,14 @@
 module App
 
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
-open Giraffe.Serialization
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
+open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 open System
 open System.Collections.Generic
 open Thoth.Json.Giraffe
@@ -52,22 +52,40 @@ let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
 let private finalThesesConfig = FinalTheses.Configuration.Config.fromEnvironment ()
 let private generateItInformationSheetConfig = GenerateITInformationSheet.Configuration.Config.fromEnvironment ()
 let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Config.fromEnvironment ()
-let private sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
 let private untisConfig = Untis.Configuration.Config.fromEnvironment ()
 
 let private requiresAdmin = AAD.Auth.requiresAdmin
 
-let webApp =
+type SokratesConfig() =
+    member val WebServiceUrl = "" with get, set
+    member val UserName = "" with get, set
+    member val Password = "" with get, set
+    member val SchoolId = "" with get, set
+    member val ClientCertificatePath = "" with get, set
+    member val ClientCertificatePassphrase = "" with get, set
+    member x.Build() : Sokrates.Config = {
+        WebServiceUrl = x.WebServiceUrl
+        UserName = x.UserName
+        Password = x.Password
+        SchoolId = x.SchoolId
+        ClientCertificatePath = x.ClientCertificatePath
+        ClientCertificatePassphrase = x.ClientCertificatePassphrase
+    }
+
+let webApp = fun next (ctx: HttpContext) ->
+    let sokratesConfig = ctx.GetService<IOptions<SokratesConfig>>().Value.Build()
+    printfn "%A" sokratesConfig
+    let sokratesApi = Sokrates.SokratesApi(sokratesConfig)
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adConfig sokratesConfig
+                    route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adConfig sokratesApi
                     route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig
                     route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adConfig aadConfig finalThesesConfig untisConfig
                     route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig
                     route "/it-information/users" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.getUsers adConfig
-                    route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesConfig untisConfig
+                    route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesApi untisConfig
                     route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreConfig
                     #if DEBUG
                     route "/auth-test" >=> authTest
@@ -84,7 +102,7 @@ let webApp =
         #if DEBUG
         route "/log" >=> logRequest
         #endif
-        setStatusCode 404 >=> text "Not Found" ]
+        setStatusCode 404 >=> text "Not Found" ] next ctx
 
 // ---------------------------------
 // Error handler
@@ -113,6 +131,7 @@ let configureApp (app : IApplicationBuilder) =
         .UseGiraffe(webApp)
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
+    services.AddOptions<SokratesConfig>().BindConfiguration("Sokrates") |> ignore
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =
@@ -123,7 +142,7 @@ let configureServices (hostBuilderContext: HostBuilderContext) (services : IServ
         |> ConsultationHours.DataTransferTypes.Thoth.addCoders
         |> ComputerInfo.DataTransferTypes.Thoth.addCoders
         |> GenerateITInformationSheet.DataTransferTypes.Thoth.addCoders
-    services.AddSingleton<IJsonSerializer>(ThothSerializer(extra = coders)) |> ignore
+    services.AddSingleton<Json.ISerializer>(ThothSerializer(extra = coders)) |> ignore
 
     Server.addAADAuth services hostBuilderContext.Configuration
 

@@ -1,6 +1,13 @@
-open MySql.Data.MySqlClient
-open System
 open Dapper
+open MySql.Data.MySqlClient
+open Sokrates
+open System
+
+let private getEnvVarOrFail name =
+    let value = Environment.GetEnvironmentVariable name
+    if isNull value
+    then failwithf "Environment variable \"%s\" not set" name
+    else value
 
 let connectionString = Environment.getEnvVarOrFail "SISIMPORT_SIS_DB_CONNECTION_STRING"
 
@@ -34,13 +41,12 @@ type Address = {
     UpdateDateSpecified: int
 }
 
-let syncStudents () =
+let syncStudents (sokratesApi: SokratesApi) =
     use connection = new MySqlConnection(connectionString)
     let sisStudents = connection.Query<Pupil>("SELECT * FROM pupil") |> Seq.toList
     let adConfig = AD.Configuration.Config.fromEnvironment ()
     let adUsers = AD.Core.getUsers |> Reader.run adConfig
-    let sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
-    let sokratesStudents = Sokrates.Core.getStudents None None |> Reader.run sokratesConfig |> Async.RunSynchronously
+    let sokratesStudents = sokratesApi.FetchStudents None None |> Async.RunSynchronously
 
     let sisStudentsBySokratesId =
         sisStudents
@@ -56,12 +62,12 @@ let syncStudents () =
         |> Map.ofList
     let sokratesStudentsBySokratesId =
         sokratesStudents
-        |> List.map (fun student -> let (Sokrates.Domain.SokratesId sokratesId) = student.Id in sokratesId, student)
+        |> List.map (fun student -> let (SokratesId sokratesId) = student.Id in sokratesId, student)
         |> Map.ofList
 
     sokratesStudents
     |> List.iter (fun sokratesStudent ->
-        let (Sokrates.Domain.SokratesId sokratesId) = sokratesStudent.Id
+        let (SokratesId sokratesId) = sokratesStudent.Id
         let (accountName, accountCreatedAt) =
             Map.tryFind sokratesId adUsersBySokratesId
             |> Option.map (fun adUser -> let (AD.Domain.UserName userName) = adUser.Name in userName, Nullable(adUser.CreatedAt))
@@ -107,8 +113,8 @@ let syncStudents () =
         | Some _ -> ()
     )
 
-let syncStudentAddresses sokratesConfig =
-    let addresses = Sokrates.Core.getStudentAddresses None |> Reader.run sokratesConfig |> Async.RunSynchronously
+let syncStudentAddresses (sokratesApi: SokratesApi) =
+    let addresses = sokratesApi.FetchStudentAddresses None |> Async.RunSynchronously
     use connection = new MySqlConnection(connectionString)
     connection.Open()
     let dbTransaction = connection.BeginTransaction()
@@ -117,7 +123,7 @@ let syncStudentAddresses sokratesConfig =
         addresses
         |> List.map (fun address ->
             {
-                PersonId = (let (Sokrates.Domain.SokratesId studentId) = address.StudentId in studentId)
+                PersonId = (let (SokratesId studentId) = address.StudentId in studentId)
                 AddressType = "Wohnadresse"
                 Zip = address.Address |> Option.map (fun address -> address.Zip) |> Option.toObj
                 City = address.Address |> Option.map (fun address -> address.City) |> Option.toObj
@@ -136,11 +142,11 @@ let syncStudentAddresses sokratesConfig =
     connection.Execute("INSERT INTO address (addrType, personID, plz, city, street, phone1, phone2,  country, fromDate, fromSpecified, tillDate, tillSpecified, updateDate, updateDateSpecified) VALUES (@AddressType, @PersonId, @Zip, @City, @Street, @Phone1, @Phone2, @Country, @From, @FromSpecified, @Till, @TillSpecified, @UpdateDate, @UpdateDateSpecified)", updates) |> ignore
     dbTransaction.Commit()
 
-let syncStudentContactInfos sokratesConfig =
+let syncStudentContactInfos (sokratesApi: SokratesApi) =
     use connection = new MySqlConnection(connectionString)
-    let studentIds = connection.Query<string>("SELECT DISTINCT personID FROM pupil") |> Seq.map Sokrates.Domain.SokratesId |> Seq.toList
+    let studentIds = connection.Query<string>("SELECT DISTINCT personID FROM pupil") |> Seq.map SokratesId |> Seq.toList
 
-    let contactInfos = Sokrates.Core.getStudentContactInfos studentIds None |> Reader.run sokratesConfig |> Async.RunSynchronously
+    let contactInfos = sokratesApi.FetchStudentContactInfos studentIds None |> Async.RunSynchronously
     use connection = new MySqlConnection(connectionString)
     connection.Open()
     let dbTransaction = connection.BeginTransaction()
@@ -148,7 +154,7 @@ let syncStudentContactInfos sokratesConfig =
     let updates =
         contactInfos
         |> List.collect (fun contactInfo -> contactInfo.ContactAddresses |> List.map (fun address -> contactInfo.StudentId, address))
-        |> List.map (fun (Sokrates.Domain.SokratesId studentId, address) ->
+        |> List.map (fun (SokratesId studentId, address) ->
             {
                 PersonId = studentId
                 AddressType = address.Type
@@ -171,14 +177,22 @@ let syncStudentContactInfos sokratesConfig =
 
 [<EntryPoint>]
 let main argv =
-    let sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
+    let sokratesConfig = {
+        WebServiceUrl = getEnvVarOrFail "SOKRATES_URL"
+        UserName = getEnvVarOrFail "SOKRATES_USER_NAME"
+        Password = getEnvVarOrFail "SOKRATES_PASSWORD"
+        SchoolId = getEnvVarOrFail "SOKRATES_SCHOOL_ID"
+        ClientCertificatePath = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PATH"
+        ClientCertificatePassphrase = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE"
+    }
+    let sokratesApi = SokratesApi(sokratesConfig)
 
     printfn "== Syncing students"
-    syncStudents ()
+    syncStudents sokratesApi
 
     printfn "== Syncing student addresses"
-    syncStudentAddresses sokratesConfig
+    syncStudentAddresses sokratesApi
 
     printfn "== Syncing student contact infos"
-    syncStudentContactInfos sokratesConfig
+    syncStudentContactInfos sokratesApi
     0

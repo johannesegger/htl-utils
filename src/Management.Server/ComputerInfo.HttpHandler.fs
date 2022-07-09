@@ -1,6 +1,5 @@
 module ComputerInfo.HttpHandler
 
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open ComputerInfo.Mapping
 

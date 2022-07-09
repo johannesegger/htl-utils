@@ -1,13 +1,12 @@
 module ConsultationHours.HttpHandler
 
 open ConsultationHours.DataTransferTypes
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 
-let getConsultationHours sokratesConfig untisConfig : HttpHandler =
+let getConsultationHours (sokratesApi: Sokrates.SokratesApi) untisConfig : HttpHandler =
     fun next ctx -> task {
         let untisTeachingData = Untis.Core.getTeachingData |> Reader.run untisConfig
-        let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig
+        let! sokratesTeachers = sokratesApi.FetchTeachers
 
         let consultationHours =
             untisTeachingData
@@ -22,7 +21,7 @@ let getConsultationHours sokratesConfig untisConfig : HttpHandler =
                 let sokratesTeacher =
                     let (Untis.Domain.TeacherShortName shortName) = teacherShortName
                     sokratesTeachers
-                    |> List.tryFind (fun (t: Sokrates.Domain.Teacher) -> CIString t.ShortName = CIString shortName)
+                    |> List.tryFind (fun (t: Sokrates.Teacher) -> CIString t.ShortName = CIString shortName)
                 {
                     Teacher =
                         {

@@ -4,7 +4,7 @@ open ADModifications.HttpHandler
 open Expecto
 
 module private Sokrates =
-    open Sokrates.Domain
+    open Sokrates
 
     let asStudent className teacher =
         {

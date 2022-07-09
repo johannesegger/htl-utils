@@ -1,4 +1,11 @@
+open Sokrates
 open System
+
+let private getEnvVarOrFail name =
+    let value = Environment.GetEnvironmentVariable name
+    if isNull value
+    then failwithf "Environment variable \"%s\" not set" name
+    else value
 
 [<EntryPoint>]
 let main argv =
@@ -9,14 +16,23 @@ let main argv =
             printf "Class: "
             Console.ReadLine()
         )
-    let sokratesConfig = Sokrates.Configuration.Config.fromEnvironment ()
-    let students = Sokrates.Core.getStudents (Some className) None |> Reader.run sokratesConfig |> Async.RunSynchronously
+    let sokratesConfig = {
+        WebServiceUrl = getEnvVarOrFail "SOKRATES_URL"
+        UserName = getEnvVarOrFail "SOKRATES_USER_NAME"
+        Password = getEnvVarOrFail "SOKRATES_PASSWORD"
+        SchoolId = getEnvVarOrFail "SOKRATES_SCHOOL_ID"
+        ClientCertificatePath = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PATH"
+        ClientCertificatePassphrase = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE"
+    }
+    let sokratesApi = SokratesApi(sokratesConfig)
+    let students = sokratesApi.FetchStudents (Some className) None |> Async.RunSynchronously
     students
     |> List.sortBy (fun student -> student.LastName, student.FirstName1, student.FirstName2)
     |> List.iter (fun student ->
-        printfn "%s %s %s"
-            student.LastName
-            student.FirstName1
-            (Option.defaultValue "" student.FirstName2)
+        let firstName =
+            match student.FirstName2 with
+            | Some v -> $"%s{student.FirstName1} %s{v}"
+            | None -> student.FirstName1
+        printfn $"%s{student.LastName} %s{firstName}"
     )
     0

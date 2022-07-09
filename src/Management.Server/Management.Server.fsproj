@@ -29,10 +29,10 @@
 
   <ItemGroup>
     <PackageReference Include="Fue" Version="1.7.0" />
-    <PackageReference Include="Giraffe" Version="4.0.0" />
+    <PackageReference Include="Giraffe" Version="6.0.0" />
     <PackageReference Include="Markdig" Version="0.22.1" />
     <PackageReference Include="PuppeteerSharp" Version="2.0.4" />
-    <PackageReference Include="Thoth.Json.Giraffe" Version="2.2.0" />
+    <PackageReference Include="Thoth.Json.Giraffe" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>

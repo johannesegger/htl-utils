@@ -2,7 +2,6 @@ module ADModifications.HttpHandler
 
 open ADModifications.DataTransferTypes
 open ADModifications.Mapping
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open System
 open System.Globalization
@@ -108,7 +107,7 @@ let calculateDeleteStudentModification sokratesStudents (existingUser: ExistingU
     | Student _ ->
         let sokratesUsers =
             sokratesStudents
-            |> List.map (fun (v: Sokrates.Domain.Student) ->
+            |> List.map (fun (v: Sokrates.Student) ->
                 let rawUserName = userNameFromName v.FirstName1 v.LastName
                 User.fromSokratesStudentDto v rawUserName
             )
@@ -262,7 +261,7 @@ let private getExistingUserTypes existingUsers =
     |> List.map (fun existingUser -> existingUser.User.Type)
     |> Set.ofList
 
-let private getSokratesUserTypes (sokratesTeachers: Sokrates.Domain.Teacher list) (sokratesStudents: Sokrates.Domain.Student list) =
+let private getSokratesUserTypes (sokratesTeachers: Sokrates.Teacher list) (sokratesStudents: Sokrates.Student list) =
     [
         yield!
             sokratesStudents
@@ -381,16 +380,16 @@ let modifications sokratesTeachers sokratesStudents adUsers =
     let (_, modifications) = state in
     List.rev modifications
 
-let getADModifications adConfig sokratesConfig : HttpHandler =
+let getADModifications adConfig (sokratesApi: Sokrates.SokratesApi) : HttpHandler =
     fun next ctx -> task {
-        let! sokratesTeachers = Sokrates.Core.getTeachers |> Reader.run sokratesConfig |> Async.StartChild
+        let! sokratesTeachers = sokratesApi.FetchTeachers |> Async.StartChild
         let timestamp =
             ctx.TryGetQueryStringValue "date"
             |> Option.map (fun date ->
                 tryDo (fun () -> (DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.CurrentCulture, DateTimeStyles.None))) ()
                 |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\"" date)
             )
-        let! sokratesStudents = Sokrates.Core.getStudents None timestamp |> Reader.run sokratesConfig |> Async.StartChild
+        let! sokratesStudents = sokratesApi.FetchStudents None timestamp |> Async.StartChild
         let adUsers = Reader.run adConfig AD.Core.getUsers |> List.sortBy (fun v -> v.Type, v.LastName, v.FirstName)
 
         let! sokratesTeachers = sokratesTeachers |> Async.map (List.sortBy (fun v -> v.LastName, v.FirstName))
