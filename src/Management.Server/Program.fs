@@ -74,7 +74,6 @@ type SokratesConfig() =
 
 let webApp = fun next (ctx: HttpContext) ->
     let sokratesConfig = ctx.GetService<IOptions<SokratesConfig>>().Value.Build()
-    printfn "%A" sokratesConfig
     let sokratesApi = Sokrates.SokratesApi(sokratesConfig)
     choose [
         subRoute "/api"
