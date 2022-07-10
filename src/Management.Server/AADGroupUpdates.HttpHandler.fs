@@ -37,10 +37,10 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
             )
     ]
 
-let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThesesConfig untisConfig : HttpHandler =
+let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThesesConfig (untis: Untis.UntisExport) : HttpHandler =
     fun next ctx -> task {
         let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
-        let teachingData = Untis.Core.getTeachingData |> Reader.run untisConfig
+        let teachingData = untis.GetTeachingData()
         let adUsers = AD.Core.getUsers |> Reader.run adConfig
         let finalThesesMentors = FinalTheses.Core.getMentors |> Reader.run finalThesesConfig
         let! aadUsers = async {
@@ -112,17 +112,17 @@ let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThese
         let classGroupsWithTeachers =
             teachingData
             |> List.choose (function
-                | Untis.Domain.NormalTeacher (schoolClass, teacherShortName, _)
-                | Untis.Domain.FormTeacher (schoolClass, teacherShortName) -> Some (schoolClass, teacherShortName)
-                | Untis.Domain.Custodian _
-                | Untis.Domain.Informant _ -> None
+                | Untis.NormalTeacher (schoolClass, teacherShortName, _)
+                | Untis.FormTeacher (schoolClass, teacherShortName) -> Some (schoolClass, teacherShortName)
+                | Untis.Custodian _
+                | Untis.Informant _ -> None
             )
             |> List.groupBy fst
             |> List.sortBy fst
-            |> List.map (fun (Untis.Domain.SchoolClass schoolClass, teachers) ->
+            |> List.map (fun (Untis.SchoolClass schoolClass, teachers) ->
                 let teacherIds =
                     teachers
-                    |> List.choose (snd >> fun (Untis.Domain.TeacherShortName v) -> Map.tryFind v aadUserLookupByUserName)
+                    |> List.choose (snd >> fun (Untis.TeacherShortName v) -> Map.tryFind v aadUserLookupByUserName)
                     |> List.distinct
                 (schoolClass, teacherIds)
             )
@@ -130,10 +130,10 @@ let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThese
         let formTeachers =
             teachingData
             |> List.choose (function
-                | Untis.Domain.FormTeacher (_, Untis.Domain.TeacherShortName teacherShortName) -> Some teacherShortName
-                | Untis.Domain.NormalTeacher _
-                | Untis.Domain.Custodian _
-                | Untis.Domain.Informant _ -> None
+                | Untis.FormTeacher (_, Untis.TeacherShortName teacherShortName) -> Some teacherShortName
+                | Untis.NormalTeacher _
+                | Untis.Custodian _
+                | Untis.Informant _ -> None
             )
             |> List.choose (flip Map.tryFind aadUserLookupByUserName)
             |> List.distinct
@@ -153,11 +153,11 @@ let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThese
         let teachersWithAnySubject subjects =
             teachingData
             |> List.choose (function
-                | Untis.Domain.NormalTeacher (_, Untis.Domain.TeacherShortName teacherShortName, subject) ->
+                | Untis.NormalTeacher (_, Untis.TeacherShortName teacherShortName, subject) ->
                     Some (teacherShortName, subject)
-                | Untis.Domain.FormTeacher _
-                | Untis.Domain.Custodian _
-                | Untis.Domain.Informant _ -> None
+                | Untis.FormTeacher _
+                | Untis.Custodian _
+                | Untis.Informant _ -> None
             )
             |> List.filter (snd >> fun subject ->
                 subjects |> List.map CIString |> List.contains (CIString subject.ShortName)

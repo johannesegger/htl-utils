@@ -52,7 +52,6 @@ let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
 let private finalThesesConfig = FinalTheses.Configuration.Config.fromEnvironment ()
 let private generateItInformationSheetConfig = GenerateITInformationSheet.Configuration.Config.fromEnvironment ()
 let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Config.fromEnvironment ()
-let private untisConfig = Untis.Configuration.Config.fromEnvironment ()
 
 let private requiresAdmin = AAD.Auth.requiresAdmin
 
@@ -72,19 +71,48 @@ type SokratesConfig() =
         ClientCertificatePassphrase = x.ClientCertificatePassphrase
     }
 
+type UntisConfig() =
+    member val GPU001TimetableFilePath = "" with get, set
+    member val GPU002TeachingDataFilePath = "" with get, set
+    member val GPU005RoomsFilePath = "" with get, set
+    member val GPU006SubjectsFilePath = "" with get, set
+    member val TimeFrames = "" with get, set
+    member x.Build() : Untis.Config = {
+        GPU001TimetableFilePath = x.GPU001TimetableFilePath
+        GPU002TeachingDataFilePath = x.GPU002TeachingDataFilePath
+        GPU005RoomsFilePath = x.GPU005RoomsFilePath
+        GPU006SubjectsFilePath = x.GPU006SubjectsFilePath
+        TimeFrames =
+            x.TimeFrames
+            |> String.split ";"
+            |> Seq.map (fun t ->
+                String.split "-" t
+                |> Seq.choose (tryDo TimeSpan.TryParse)
+                |> Seq.toList
+                |> function
+                | ``begin`` :: [ ``end`` ] ->
+                    let timeFrame: Untis.TimeFrame = { BeginTime = ``begin``; EndTime = ``end`` }
+                    timeFrame
+                | _ -> failwithf "Can't parse \"%s\" as time frame" t
+            )
+            |> Seq.toList
+    }
+
 let webApp = fun next (ctx: HttpContext) ->
     let sokratesConfig = ctx.GetService<IOptions<SokratesConfig>>().Value.Build()
     let sokratesApi = Sokrates.SokratesApi(sokratesConfig)
+    let untisConfig = ctx.GetService<IOptions<UntisConfig>>().Value.Build()
+    let untisExport = Untis.UntisExport(untisConfig)
     choose [
         subRoute "/api"
             (choose [
                 GET >=> choose [
                     route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adConfig sokratesApi
                     route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig
-                    route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adConfig aadConfig finalThesesConfig untisConfig
+                    route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adConfig aadConfig finalThesesConfig untisExport
                     route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig
                     route "/it-information/users" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.getUsers adConfig
-                    route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesApi untisConfig
+                    route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesApi untisExport
                     route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreConfig
                     #if DEBUG
                     route "/auth-test" >=> authTest
@@ -131,6 +159,7 @@ let configureApp (app : IApplicationBuilder) =
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
     services.AddOptions<SokratesConfig>().BindConfiguration("Sokrates") |> ignore
+    services.AddOptions<UntisConfig>().BindConfiguration("Untis") |> ignore
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =

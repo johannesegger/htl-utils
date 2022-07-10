@@ -1,71 +1,100 @@
-module Untis.Core
+module Untis
 
 open FSharp.Data
 open System
 open System.IO
-open Untis.Configuration
-open Untis.Domain
+
+type SchoolClass = SchoolClass of string
+
+type TeacherShortName = TeacherShortName of string
+
+type Subject = {
+    ShortName: string
+    FullName: string
+}
+
+type Room = {
+    ShortName: string
+    FullName: string option
+}
+
+type WorkingDay = Monday | Tuesday | Wednesday | Thursday | Friday
+module WorkingDay =
+    open Microsoft.FSharp.Reflection
+    let tryFromOrdinal v =
+        FSharpType.GetUnionCases typeof<WorkingDay>
+        |> Array.tryItem (v - 1)
+        |> Option.map (fun v -> FSharpValue.MakeUnion (v, [||]) :?> WorkingDay)
+    let toGermanString = function
+        | Monday -> "Montag"
+        | Tuesday -> "Dienstag"
+        | Wednesday -> "Mittwoch"
+        | Thursday -> "Donnerstag"
+        | Friday -> "Freitag"
+
+type TimeFrame = { BeginTime: TimeSpan; EndTime: TimeSpan }
+
+type TeacherTask =
+    | NormalTeacher of SchoolClass * TeacherShortName * Subject
+    | FormTeacher of SchoolClass * TeacherShortName
+    | Custodian of TeacherShortName * Subject
+    | Informant of TeacherShortName * Room * WorkingDay * TimeFrame
+
+type Config = {
+    GPU001TimetableFilePath: string
+    GPU002TeachingDataFilePath: string
+    GPU005RoomsFilePath: string
+    GPU006SubjectsFilePath: string
+    TimeFrames: TimeFrame list
+}
 
 [<Literal>]
 let private TimetablePath = __SOURCE_DIRECTORY__ + "/data/GPU001.TXT"
 type private Timetable = CsvProvider<TimetablePath, Schema=",Class,Teacher,Subject,Room,Day,Period">
 
-let private timetable = reader {
-    let! config = Reader.environment
-    return
-        config.GPU001TimetableFilePath
-        |> File.ReadAllText
-        |> Timetable.ParseRows
-}
-
 [<Literal>]
 let private TeachingDataPath = __SOURCE_DIRECTORY__ + "/data/GPU002.TXT"
 type private TeachingData = CsvProvider<TeachingDataPath, Schema=",,,,Class,Teacher,Subject">
-
-let private teachingData = reader {
-    let! config = Reader.environment
-    return
-        config.GPU002TeachingDataFilePath
-        |> File.ReadAllText
-        |> TeachingData.ParseRows
-}
 
 [<Literal>]
 let private RoomsPath = __SOURCE_DIRECTORY__ + "/data/GPU005.TXT"
 type private Rooms = CsvProvider<RoomsPath, Schema="ShortName,FullName">
 
-let private rooms = reader {
-    let! config = Reader.environment
-    return
-        config.GPU005RoomsFilePath
-        |> File.ReadAllText
-        |> Rooms.ParseRows
-}
-
 [<Literal>]
 let private SubjectsPath = __SOURCE_DIRECTORY__ + "/data/GPU006.TXT"
 type private Subjects = CsvProvider<SubjectsPath, Schema="ShortName,FullName">
 
-let private subjects = reader {
-    let! config = Reader.environment
-    return
+type UntisExport(config) =
+    let getTimetable () =
+        config.GPU001TimetableFilePath
+        |> File.ReadAllText
+        |> Timetable.ParseRows
+
+    let getTeachingData () =
+        config.GPU002TeachingDataFilePath
+        |> File.ReadAllText
+        |> TeachingData.ParseRows
+
+    let getRooms () =
+        config.GPU005RoomsFilePath
+        |> File.ReadAllText
+        |> Rooms.ParseRows
+
+    let getSubjects () =
         config.GPU006SubjectsFilePath
         |> File.ReadAllText
         |> Subjects.ParseRows
-}
 
-let getTeachingData = reader {
-    let! teachingData = teachingData
-    let! subjects = subjects
-    let subjectMap =
-        subjects
-        |> Seq.map (fun r -> CIString r.ShortName, { Subject.ShortName = r.ShortName; FullName = r.FullName })
-        |> Map.ofSeq
-    let! timetable = timetable
-    let! rooms = rooms
-    let! config = Reader.environment
-    let tryGetTimeFrameFromPeriodNumber v = config.TimeFrames |> List.tryItem (v - 1)
-    return
+    member _.GetTeachingData () =
+        let teachingData = getTeachingData()
+        let subjects = getSubjects()
+        let subjectMap =
+            subjects
+            |> Seq.map (fun r -> CIString r.ShortName, { Subject.ShortName = r.ShortName; FullName = r.FullName })
+            |> Map.ofSeq
+        let timetable = getTimetable()
+        let rooms = getRooms()
+        let tryGetTimeFrameFromPeriodNumber v = config.TimeFrames |> List.tryItem (v - 1)
         teachingData
         |> Seq.choose (fun row ->
             if not <| String.IsNullOrEmpty row.Class && not <| String.IsNullOrEmpty row.Teacher && not <| String.IsNullOrEmpty row.Subject then
@@ -95,4 +124,3 @@ let getTeachingData = reader {
                 None
         )
         |> Seq.toList
-}
