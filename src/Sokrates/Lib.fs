@@ -298,7 +298,7 @@ type SokratesApi(config: Config) =
         let! xmlElement = getRequestContent "getTeacher" [] |> fetch
         return parseTeachers xmlElement
     }
-    
+
     member _.FetchClasses schoolYear = async {
         let schoolYear =
             schoolYear
@@ -315,7 +315,7 @@ type SokratesApi(config: Config) =
         let! xmlElement = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ] |> fetch
         let students = parseStudents xmlElement
         match className with
-        | Some className -> return students |> List.filter (fun student -> student.SchoolClass.Equals(className, StringComparison.InvariantCultureIgnoreCase))
+        | Some className -> return students |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
         | None -> return students
     }
 
