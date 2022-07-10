@@ -1,6 +1,5 @@
 module AAD.Auth
 
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 
 type Role = Admin | Teacher

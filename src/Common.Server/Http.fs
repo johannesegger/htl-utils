@@ -1,6 +1,5 @@
 ﻿module Http
 
-open FSharp.Control.Tasks.V2.ContextInsensitive
 open Giraffe
 open Microsoft.AspNetCore.Http
 open System.Net
