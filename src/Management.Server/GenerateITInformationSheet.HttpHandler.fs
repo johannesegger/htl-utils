@@ -13,23 +13,23 @@ open System
 open System.IO
 open System.Text.RegularExpressions
 
-let getUsers adConfig : HttpHandler =
+let getUsers (adApi: AD.ADApi) : HttpHandler =
     fun next ctx -> task {
         let teachers =
-            AD.Core.getUsers |> Reader.run adConfig
-            |> List.filter (fun user -> user.Type = AD.Domain.Teacher)
+            adApi.GetUsers ()
+            |> List.filter (fun user -> user.Type = AD.Teacher)
             |> List.map User.fromADDto
         return! Successful.OK teachers next ctx
     }
 
-let private getFileName template (user: AD.Domain.ExistingUser) =
+let private getFileName template (user: AD.ExistingUser) =
     init
-    |> add "shortName" (let (AD.Domain.UserName userName) = user.Name in userName)
+    |> add "shortName" (let (AD.UserName userName) = user.Name in userName)
     |> add "firstName" user.FirstName
     |> add "lastName" user.LastName
     |> fromText template
 
-let private replacePlaceholders template (user: AD.Domain.ExistingUser) =
+let private replacePlaceholders template (user: AD.ExistingUser) =
     let (mailAddress, mailAliases) =
         let primaryAddress =
             user.ProxyAddresses
@@ -50,7 +50,7 @@ let private replacePlaceholders template (user: AD.Domain.ExistingUser) =
 
     let template = Regex.Replace(template, "\r?\n?(?=<fs-template |</fs-template>)", "")
     init
-    |> add "shortName" (let (AD.Domain.UserName userName) = user.Name in userName)
+    |> add "shortName" (let (AD.UserName userName) = user.Name in userName)
     |> add "firstName" user.FirstName
     |> add "lastName" user.LastName
     |> add "mailAddress" mailAddress
@@ -99,10 +99,10 @@ let private htmlToPdf header footer content =
     pdfStream.CopyToAsync(stream) |> Async.AwaitTask |> Async.RunSynchronously
     stream.ToArray()
 
-let generateSheet adConfig config : HttpHandler =
+let generateSheet (adApi: AD.ADApi) config : HttpHandler =
     fun next ctx -> task {
         let! user = ctx.BindJsonAsync<User>()
-        let adUser = AD.Core.getUser (AD.Domain.UserName user.ShortName) AD.Domain.Teacher |> Reader.run adConfig
+        let adUser = adApi.GetUser (AD.UserName user.ShortName) AD.Teacher
         let result = {
             Title = getFileName config.FileNameTemplate adUser |> sprintf "%s.pdf"
             Content =

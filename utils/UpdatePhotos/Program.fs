@@ -1,5 +1,7 @@
 open System.IO
 
+let adApi = AD.ADApi.FromEnvironment()
+
 type Teacher = {
     ShortName: string
     FirstName: string
@@ -73,8 +75,7 @@ let updatePhotos existingPhotosPath newPhotosPath names =
 
 [<EntryPoint>]
 let main argv =
-    let config = AD.Configuration.Config.fromEnvironment ()
-    let users = AD.Core.getUsers |> Reader.run config
+    let users = adApi.GetUsers ()
 
     let newTeacherPhotosPath = Environment.getEnvVarOrFail "NEW_TEACHER_PHOTOS_PATH"
     let existingTeacherPhotosPath = Environment.getEnvVarOrFail "EXISTING_TEACHER_PHOTOS_PATH"
@@ -82,9 +83,9 @@ let main argv =
         users
         |> List.choose (fun user ->
             match user.Type with
-            | AD.Domain.Teacher ->
+            | AD.Teacher ->
                 Some {
-                    ShortName = (let (AD.Domain.UserName userName) = user.Name in userName)
+                    ShortName = (let (AD.UserName userName) = user.Name in userName)
                     FirstName = user.FirstName
                     LastName = user.LastName
                 }
@@ -99,7 +100,7 @@ let main argv =
         users
         |> List.choose (fun user ->
             match user.Type, user.SokratesId with
-            | AD.Domain.Student (AD.Domain.GroupName schoolClass), Some (AD.Domain.SokratesId sokratesId) ->
+            | AD.Student (AD.GroupName schoolClass), Some (AD.SokratesId sokratesId) ->
                 Some {
                     SchoolClass = schoolClass
                     Id = sokratesId

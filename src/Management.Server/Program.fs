@@ -46,7 +46,6 @@ let logRequest : HttpHandler =
     }
 #endif
 
-let private adConfig = AD.Configuration.Config.fromEnvironment ()
 let private aadConfig = AAD.Configuration.Config.fromEnvironment ()
 let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
 let private finalThesesConfig = FinalTheses.Configuration.Config.fromEnvironment ()
@@ -99,6 +98,7 @@ type UntisConfig() =
     }
 
 let webApp = fun next (ctx: HttpContext) ->
+    let adApi = AD.ADApi.FromEnvironment()
     let sokratesConfig = ctx.GetService<IOptions<SokratesConfig>>().Value.Build()
     let sokratesApi = Sokrates.SokratesApi(sokratesConfig)
     let untisConfig = ctx.GetService<IOptions<UntisConfig>>().Value.Build()
@@ -107,11 +107,11 @@ let webApp = fun next (ctx: HttpContext) ->
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adConfig sokratesApi
-                    route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig
-                    route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adConfig aadConfig finalThesesConfig untisExport
+                    route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adApi sokratesApi
+                    route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adApi incrementClassGroupsConfig
+                    route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adApi aadConfig finalThesesConfig untisExport
                     route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig
-                    route "/it-information/users" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.getUsers adConfig
+                    route "/it-information/users" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.getUsers adApi
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesApi untisExport
                     route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreConfig
                     #if DEBUG
@@ -119,11 +119,11 @@ let webApp = fun next (ctx: HttpContext) ->
                     #endif
                 ]
                 POST >=> choose [
-                    route "/ad/updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADModifications adConfig
-                    route "/ad/increment-class-group-updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates adConfig
+                    route "/ad/updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADModifications adApi
+                    route "/ad/increment-class-group-updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates adApi
                     route "/aad/group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates
                     route "/aad/increment-class-group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADIncrementClassGroupUpdates aadConfig
-                    route "/it-information/generate-sheet" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.generateSheet adConfig generateItInformationSheetConfig
+                    route "/it-information/generate-sheet" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.generateSheet adApi generateItInformationSheetConfig
                 ]
             ])
         #if DEBUG

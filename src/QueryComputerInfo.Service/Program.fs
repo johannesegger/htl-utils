@@ -7,7 +7,7 @@ open System
 open System.Threading.Tasks
 open Quartz
 
-let private adConfig = AD.Configuration.Config.fromEnvironment ()
+let private adApi = AD.ADApi.FromEnvironment ()
 let private cimConfig = CIM.Configuration.Config.fromEnvironment ()
 let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
 
@@ -19,7 +19,7 @@ type QueryResult = {
 let queryComputerInfo = async {
     let timestamp = DateTimeOffset.Now
     let! computerInfo =
-        Reader.run adConfig AD.Core.getComputers
+        adApi.GetComputers ()
         |> List.map (CIM.Core.getComputerInfo >> Reader.run cimConfig)
         |> Async.Parallel
     return {

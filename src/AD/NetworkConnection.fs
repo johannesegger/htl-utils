@@ -64,6 +64,6 @@ let create userName password path =
         if m.Success then m.Value
         else failwithf "Can't get share name from path \"%s\"" path
     let result = Win32.WNetAddConnection2(NetResource(networkName), password, userName, 0)
-    if result <> 0 then raise (Win32Exception(result, sprintf "Error connecting to remote share %s" networkName))
+    if result <> 0 then raise (Win32Exception(result, $"Error connecting to remote share %s{networkName} as \"%s{userName}\""))
 
     { new IDisposable with member _.Dispose() = Win32.WNetCancelConnection2(networkName, 0, true) |> ignore }

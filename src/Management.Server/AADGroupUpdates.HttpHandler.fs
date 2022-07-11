@@ -37,11 +37,11 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
             )
     ]
 
-let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThesesConfig (untis: Untis.UntisExport) : HttpHandler =
+let getAADGroupUpdates (adApi: AD.ADApi) (aadConfig: AAD.Configuration.Config) finalThesesConfig (untis: Untis.UntisExport) : HttpHandler =
     fun next ctx -> task {
         let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let teachingData = untis.GetTeachingData()
-        let adUsers = AD.Core.getUsers |> Reader.run adConfig
+        let adUsers = adApi.GetUsers()
         let finalThesesMentors = FinalTheses.Core.getMentors |> Reader.run finalThesesConfig
         let! aadUsers = async {
             let! users = AAD.Core.getUsers graphServiceClient
@@ -78,32 +78,32 @@ let getAADGroupUpdates adConfig (aadConfig: AAD.Configuration.Config) finalThese
             adUsers
             |> List.choose (fun user ->
                 match user.Type with
-                | AD.Domain.Teacher ->
-                    let (AD.Domain.UserName userName) = user.Name
+                | AD.Teacher ->
+                    let (AD.UserName userName) = user.Name
                     Map.tryFind userName aadUserLookupByUserName
-                | AD.Domain.Student _ -> None
+                | AD.Student _ -> None
             )
 
         let students =
             adUsers
             |> List.choose (fun user ->
                 match user.Type with
-                | AD.Domain.Student _ ->
-                    let (AD.Domain.UserName userName) = user.Name
+                | AD.Student _ ->
+                    let (AD.UserName userName) = user.Name
                     Map.tryFind userName aadUserLookupByUserName
-                | AD.Domain.Teacher -> None
+                | AD.Teacher -> None
             )
 
         let studentsPerClass =
             adUsers
             |> List.choose (fun user ->
                 match user.Type with
-                | AD.Domain.Student (AD.Domain.GroupName className) ->
-                    let (AD.Domain.UserName userName) = user.Name
+                | AD.Student (AD.GroupName className) ->
+                    let (AD.UserName userName) = user.Name
                     match Map.tryFind userName aadUserLookupByUserName with
                     | Some aadUser -> Some (className, aadUser)
                     | None -> None
-                | AD.Domain.Teacher -> None
+                | AD.Teacher -> None
             )
             |> List.groupBy fst
             |> List.map (Tuple.mapSnd (List.map snd))

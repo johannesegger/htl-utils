@@ -11,6 +11,8 @@ let private getEnvVarOrFail name =
 
 let connectionString = Environment.getEnvVarOrFail "SISIMPORT_SIS_DB_CONNECTION_STRING"
 
+let adApi = AD.ADApi.FromEnvironment()
+
 [<CLIMutable>]
 type Pupil = {
     SokratesId: string
@@ -44,8 +46,7 @@ type Address = {
 let syncStudents (sokratesApi: SokratesApi) =
     use connection = new MySqlConnection(connectionString)
     let sisStudents = connection.Query<Pupil>("SELECT * FROM pupil") |> Seq.toList
-    let adConfig = AD.Configuration.Config.fromEnvironment ()
-    let adUsers = AD.Core.getUsers |> Reader.run adConfig
+    let adUsers = adApi.GetUsers ()
     let sokratesStudents = sokratesApi.FetchStudents None None |> Async.RunSynchronously
 
     let sisStudentsBySokratesId =
@@ -56,7 +57,7 @@ let syncStudents (sokratesApi: SokratesApi) =
         adUsers
         |> List.choose (fun adUser ->
             match adUser.SokratesId with
-            | Some (AD.Domain.SokratesId sokratesId) -> Some (sokratesId, adUser)
+            | Some (AD.SokratesId sokratesId) -> Some (sokratesId, adUser)
             | None -> None
         )
         |> Map.ofList
@@ -70,7 +71,7 @@ let syncStudents (sokratesApi: SokratesApi) =
         let (SokratesId sokratesId) = sokratesStudent.Id
         let (accountName, accountCreatedAt) =
             Map.tryFind sokratesId adUsersBySokratesId
-            |> Option.map (fun adUser -> let (AD.Domain.UserName userName) = adUser.Name in userName, Nullable(adUser.CreatedAt))
+            |> Option.map (fun adUser -> let (AD.UserName userName) = adUser.Name in userName, Nullable(adUser.CreatedAt))
             |> Option.defaultValue (null, Nullable<DateTime>())
         let update =
             {

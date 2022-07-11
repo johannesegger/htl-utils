@@ -11,7 +11,7 @@ type ExistingUser = {
     MailAddressNames: string list
 }
 module ExistingUser =
-    let fromADDto (adUser: AD.Domain.ExistingUser) =
+    let fromADDto (adUser: AD.ExistingUser) =
         {
             User = User.fromADDto adUser
             MailAddressNames = [
@@ -82,7 +82,7 @@ let tryFindExistingUser (users: ExistingUser list) sokratesId userName =
         )
     )
 
-let getMailAddressNames (adUser: AD.Domain.ExistingUser) =
+let getMailAddressNames (adUser: AD.ExistingUser) =
     [
         adUser.UserPrincipalName.UserName
         yield! adUser.ProxyAddresses |> List.map (fun v -> v.Address.UserName)
@@ -380,7 +380,7 @@ let modifications sokratesTeachers sokratesStudents adUsers =
     let (_, modifications) = state in
     List.rev modifications
 
-let getADModifications adConfig (sokratesApi: Sokrates.SokratesApi) : HttpHandler =
+let getADModifications (adApi: AD.ADApi) (sokratesApi: Sokrates.SokratesApi) : HttpHandler =
     fun next ctx -> task {
         let! sokratesTeachers = sokratesApi.FetchTeachers |> Async.StartChild
         let timestamp =
@@ -390,7 +390,7 @@ let getADModifications adConfig (sokratesApi: Sokrates.SokratesApi) : HttpHandle
                 |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\"" date)
             )
         let! sokratesStudents = sokratesApi.FetchStudents None timestamp |> Async.StartChild
-        let adUsers = Reader.run adConfig AD.Core.getUsers |> List.sortBy (fun v -> v.Type, v.LastName, v.FirstName)
+        let adUsers = adApi.GetUsers () |> List.sortBy (fun v -> v.Type, v.LastName, v.FirstName)
 
         let! sokratesTeachers = sokratesTeachers |> Async.map (List.sortBy (fun v -> v.LastName, v.FirstName))
         let! sokratesStudents = sokratesStudents |> Async.map (List.sortBy (fun v -> v.SchoolClass, v.LastName, v.FirstName1))
@@ -399,32 +399,30 @@ let getADModifications adConfig (sokratesApi: Sokrates.SokratesApi) : HttpHandle
         return! Successful.OK modifications next ctx
     }
 
-let applyADModifications adConfig : HttpHandler =
+let applyADModifications (adApi: AD.ADApi) : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<DirectoryModification list>()
         data
         |> List.map DirectoryModification.toADDto
-        |> AD.Core.applyDirectoryModifications
-        |> Reader.run adConfig
+        |> adApi.ApplyDirectoryModifications
         return! Successful.OK () next ctx
     }
 
-let getADIncrementClassGroupUpdates adConfig incrementClassGroupsConfig : HttpHandler =
+let getADIncrementClassGroupUpdates (adApi: AD.ADApi) incrementClassGroupsConfig : HttpHandler =
     fun next ctx -> task {
         let classGroups =
-            Reader.run adConfig AD.Core.getClassGroups
+            adApi.GetClassGroups ()
             |> List.map (ClassName.fromADDto >> (fun (ClassName groupName) -> groupName))
 
         let modifications = IncrementClassGroups.Core.modifications classGroups |> Reader.run incrementClassGroupsConfig
         return! Successful.OK modifications next ctx
     }
 
-let applyADIncrementClassGroupUpdates adConfig : HttpHandler =
+let applyADIncrementClassGroupUpdates (adApi: AD.ADApi) : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<IncrementClassGroups.DataTransferTypes.ClassGroupModification list>()
         data
         |> List.map (ClassGroupModification.toDirectoryModification >> DirectoryModification.toADDto)
-        |> AD.Core.applyDirectoryModifications
-        |> Reader.run adConfig
+        |> adApi.ApplyDirectoryModifications
         return! Successful.OK () next ctx
     }

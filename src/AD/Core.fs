@@ -1,14 +1,11 @@
-module AD.Core
+namespace AD
 
-open AD.Configuration
-open AD.Domain
 open CPI.DirectoryServices
 open System
 open System.DirectoryServices
 open System.IO
 open System.Security.AccessControl
 open System.Security.Principal
-open System.Text.RegularExpressions
 
 // see http://www.gabescode.com/active-directory/2018/12/15/better-performance-activedirectory.html
 
@@ -57,546 +54,499 @@ module private DN =
         |> Option.bind (fun v -> v.Components |> Seq.tryExactlyOne)
         |> Option.bind (fun v -> if CIString v.ComponentType = CIString "CN" then Some v.ComponentValue else None)
 
-let private createNetworkConnection path = reader {
-    let! (config: Config) = Reader.environment
-    return NetworkConnection.create config.UserName config.Password path
-}
-
-let internal adDirectoryEntry properties (DistinguishedName path) = reader {
-    let! config = Reader.environment
-    let entry = new DirectoryEntry(sprintf "LDAP://%s/%s" config.DomainControllerHostName path, config.UserName, config.Password)
-    entry.RefreshCache(properties)
-    return entry
-}
-
-let private groupHomePath userType = reader {
-    let! config = Reader.environment
-    match userType with
-    | Teacher -> return config.TeacherHomePath
-    | Student (GroupName className) -> return Path.Combine(config.StudentHomePath, className)
-}
-
-let private homePath (UserName userName) userType = reader {
-    let! groupHomePath = groupHomePath userType
-    return Path.Combine(groupHomePath, userName)
-}
-
-let private teacherExercisePath (UserName userName) = reader {
-    let! config = Reader.environment
-    return Path.Combine(config.TeacherExercisePath, userName)
-}
-
-let private createOU path =
-    path
-    |> DN.parentsAndSelf
-    |> Seq.rev
-    |> Seq.filter DN.isOU
-    |> Seq.map (fun path -> reader {
+type internal ADHelper(config) =
+    member _.FetchDirectoryEntry properties (DistinguishedName dn) =
+        let path = $"LDAP://%s{config.DomainControllerHostName}/%s{dn}"
         try
-            let! adCtx = adDirectoryEntry [||] path
-            adCtx.Guid |> ignore // Test if OU exists
-            return adCtx
-        with _ ->
-            let parentPath = DN.parent path
-            use! parentCtx = adDirectoryEntry [||] parentPath
-            let child = parentCtx.Children.Add(uncurry (sprintf "%s=%s") (DN.head path), "organizationalUnit")
-            child.CommitChanges()
-            return child
-    })
-    |> Seq.tryLast
+            let entry = new DirectoryEntry(path, config.UserName, config.Password, AuthenticationTypes.SecureSocketsLayer)
+            entry.RefreshCache(properties)
+            entry
+        with e ->
+            let properties = String.concat ", " properties
+            failwith $"Can't fetch AD entry \"%s{path}\" (Properties: \"%s{properties}\"): %s{e.Message}"
 
-let private createCN path entryType = reader {
-    let name = DN.tryCN path |> Option.defaultWith (fun () -> failwithf "Can't create CN entry: %A doesn't identify a CN entry" path)
-    use! parentCtx = createOU (DN.parent path) |> Option.defaultWith (fun () -> failwithf "Error while creating %O" path)
-    let child = parentCtx.Children.Add(sprintf "CN=%s" name, entryType)
-    parentCtx.CommitChanges()
-    return child
-}
+    member _.GetGroupHomePath userType =
+        match userType with
+        | Teacher -> config.TeacherHomePath
+        | Student (GroupName className) -> Path.Combine(config.StudentHomePath, className)
 
-let private createGroupEntry path = createCN path "group"
+    member x.GetUserHomePath (UserName userName) userType =
+        let groupHomePath = x.GetGroupHomePath userType
+        Path.Combine(groupHomePath, userName)
 
-let private userContainer userType = reader {
-    let! config = Reader.environment
-    match userType with
-    | Teacher -> return config.TeacherContainer
-    | Student (GroupName className) -> return DN.childOU className config.ClassContainer
-}
+    member _.GetTeacherExercisePath (UserName userName) =
+        Path.Combine(config.TeacherExercisePath, userName)
 
-let internal userRootEntry = userContainer >> Reader.bind (adDirectoryEntry [||])
+    member x.CreateOU path =
+        path
+        |> DN.parentsAndSelf
+        |> Seq.rev
+        |> Seq.filter DN.isOU
+        |> Seq.map (fun path ->
+            try
+                let adCtx = x.FetchDirectoryEntry [||] path
+                adCtx.Guid |> ignore // Test if OU exists
+                adCtx
+            with _ ->
+                let parentPath = DN.parent path
+                use parentCtx = x.FetchDirectoryEntry [||] parentPath
+                let child = parentCtx.Children.Add(uncurry (sprintf "%s=%s") (DN.head path), "organizationalUnit")
+                child.CommitChanges()
+                child
+        )
+        |> Seq.tryLast
 
-let internal user ctx (UserName userName) properties =
-    use searcher = new DirectorySearcher(ctx, sprintf "(&(objectCategory=person)(objectClass=user)(sAMAccountName=%s))" userName, properties)
-    searcher.FindOne()
+    member x.CreateCN path entryType =
+        let name = DN.tryCN path |> Option.defaultWith (fun () -> failwithf "Can't create CN entry: %A doesn't identify a CN entry" path)
+        use parentCtx = x.CreateOU (DN.parent path) |> Option.defaultWith (fun () -> failwithf "Error while creating %O" path)
+        let child = parentCtx.Children.Add(sprintf "CN=%s" name, entryType)
+        parentCtx.CommitChanges()
+        child
 
-let private teacherGroupName = reader {
-    let! config = Reader.environment
-    return
+    member x.CreateGroupEntry path = x.CreateCN path "group"
+
+    member _.GetUserOu userType =
+        match userType with
+        | Teacher -> config.TeacherContainer
+        | Student (GroupName className) -> DN.childOU className config.ClassContainer
+
+    member x.FetchUserOu userType =
+        x.GetUserOu userType
+        |> x.FetchDirectoryEntry [||]
+
+    member _.FindUser ctx (UserName userName) properties =
+        use searcher = new DirectorySearcher(ctx, sprintf "(&(objectCategory=person)(objectClass=user)(sAMAccountName=%s))" userName, properties)
+        searcher.FindOne()
+
+    member _.TeacherGroupName =
         DN.tryCN config.TeacherGroup
-        |> Option.defaultWith (fun () -> failwith "Can't get teacher group name: AD_TEACHER_GROUP must be a distinguished name with CN at the beginning")
+        |> Option.defaultWith (fun () -> failwith "Can't get teacher group name: AD:TeacherGroup must be a distinguished name with CN at the beginning")
         |> GroupName
-}
 
-let private studentGroupName = reader {
-    let! config = Reader.environment
-    return
+    member _.StudentGroupName =
         DN.tryCN config.StudentGroup
-        |> Option.defaultWith (fun () -> failwith "Can't get student group name: AD_STUDENT_GROUP must be a distinguished name with CN at the beginning")
+        |> Option.defaultWith (fun () -> failwith "Can't get student group name: AD:StudentGroup must be a distinguished name with CN at the beginning")
         |> GroupName
-}
 
-let internal groupPathFromUserType userType = reader {
-    let! config = Reader.environment
-    match userType with
-    | Teacher -> return config.TeacherGroup
-    | Student (GroupName className) -> return DN.childCN className config.ClassGroupsContainer
-}
+    member _.GetGroupPathFromUserType userType =
+        match userType with
+        | Teacher -> config.TeacherGroup
+        | Student (GroupName className) -> DN.childCN className config.ClassGroupsContainer
 
-let private departmentFromUserType = function
-    | Teacher -> teacherGroupName |> Reader.map (fun (GroupName name) -> name)
-    | Student (GroupName className) -> Reader.retn className
+    member x.GetDepartmentFromUserType userType =
+        match userType with
+        | Teacher -> let (GroupName name) = x.TeacherGroupName in name
+        | Student (GroupName className) -> className
 
-let private divisionFromUserType = function
-    | Teacher -> teacherGroupName |> Reader.map (fun (GroupName name) -> name)
-    | Student _ -> studentGroupName |> Reader.map (fun (GroupName name) -> name)
+    member x.GetDivisionFromUserType userType =
+        match userType with
+        | Teacher -> let (GroupName name) = x.TeacherGroupName in name
+        | Student _ -> let (GroupName name) = x.StudentGroupName in name
 
-let private sidFromDirectoryEntry (directoryEntry: DirectoryEntry) =
-    directoryEntry.RefreshCache([| "objectSid" |])
-    let data = directoryEntry.Properties.["objectSid"].[0] :?> byte array
-    SecurityIdentifier(data, 0)
+    member _.FetchSid (directoryEntry: DirectoryEntry) =
+        directoryEntry.RefreshCache([| "objectSid" |])
+        let data = directoryEntry.Properties.["objectSid"].[0] :?> byte array
+        SecurityIdentifier(data, 0)
 
-let private sidFromDistinguishedName path = reader {
-    use! adCtx = adDirectoryEntry [||] path
-    return sidFromDirectoryEntry adCtx
-}
+    member x.FetchSid path =
+        use adCtx = x.FetchDirectoryEntry [||] path
+        x.FetchSid adCtx
 
-let private updateDirectoryEntry path properties fn = reader {
-    use! adEntry = adDirectoryEntry properties path
-    do! fn adEntry
-    adEntry.CommitChanges()
-}
+    member x.UpdateDirectoryEntry path properties fn =
+        use adEntry = x.FetchDirectoryEntry properties path
+        fn adEntry
+        adEntry.CommitChanges()
 
-let private updateGroup userType properties fn = reader {
-    let! path = groupPathFromUserType userType
-    do! updateDirectoryEntry path properties fn
-}
+    member x.UpdateGroup userType properties fn =
+        let path = x.GetGroupPathFromUserType userType
+        x.UpdateDirectoryEntry path properties fn
 
-let private updateUser userName userType properties fn = reader {
-    use! adCtx = userRootEntry userType
-    let searchResult = user adCtx userName properties
-    use adUser = searchResult.GetDirectoryEntry()
-    adUser.RefreshCache(properties)
-    do! fn adUser
-    adUser.CommitChanges()
-}
+    member x.UpdateUser userName userType properties fn =
+        use adCtx = x.FetchUserOu userType
+        let searchResult = x.FindUser adCtx userName properties
+        use adUser = searchResult.GetDirectoryEntry()
+        adUser.RefreshCache(properties)
+        fn adUser
+        adUser.CommitChanges()
 
-let private createUser (newUser: NewUser) mailAliases password = reader {
-    use! adCtx = userRootEntry newUser.Type
-    let (UserName userName) = newUser.Name
-    let adUser = adCtx.Children.Add(sprintf "CN=%s" userName, "user")
-    adCtx.CommitChanges()
 
-    let! config = Reader.environment
-    let userPrincipalName = sprintf "%s@%s" userName config.MailDomain
-    adUser.Properties.["userPrincipalName"].Value <- userPrincipalName
-    newUser.SokratesId |> Option.iter (fun (SokratesId v) -> adUser.Properties.[config.SokratesIdAttributeName].Value <- v)
-    adUser.Properties.["givenName"].Value <- newUser.FirstName
-    adUser.Properties.["sn"].Value <- newUser.LastName
-    adUser.Properties.["displayName"].Value <- sprintf "%s %s" newUser.LastName newUser.FirstName
-    adUser.Properties.["sAMAccountName"].Value <- userName
-    let! department = departmentFromUserType newUser.Type
-    adUser.Properties.["department"].Value <- department
-    let! division = divisionFromUserType newUser.Type
-    adUser.Properties.["division"].Value <- division
-    adUser.Properties.["mail"].Value <- userPrincipalName
-    let proxyAddresses =
-        mailAliases
-        |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString)
-        |> List.map (fun v -> v :> obj)
-        |> List.toArray
-    adUser.Properties.["proxyAddresses"].AddRange(proxyAddresses)
-    let! userHomePath = homePath newUser.Name newUser.Type
-    adUser.Properties.["homeDirectory"].Value <- userHomePath
-    adUser.Properties.["homeDrive"].Value <- config.HomeDrive
-    adUser.Properties.["userAccountControl"].Value <- 0x220 // PASSWD_NOTREQD | NORMAL_ACCOUNT
-    adUser.CommitChanges() // Must create user before setting password
-    adUser.Invoke("SetPassword", [| password |]) |> ignore
-    adUser.Properties.["pwdLastSet"].Value <- 0 // Expire password
-    adUser.CommitChanges()
+type ADApi(config) =
+    let adHelper = ADHelper(config)
 
-    do! updateGroup newUser.Type [| "member" |] (fun group -> reader {
-        group.Properties.["member"].Add(adUser.Properties.["distinguishedName"].Value) |> ignore
-    })
+    let createUser (newUser: NewUser) mailAliases (password: string) =
+        use adCtx = adHelper.FetchUserOu newUser.Type
+        let (UserName userName) = newUser.Name
+        let adUser = adCtx.Children.Add(sprintf "CN=%s" userName, "user")
+        adCtx.CommitChanges()
 
-    use! __ = createNetworkConnection userHomePath
+        let userPrincipalName = sprintf "%s@%s" userName config.MailDomain
+        adUser.Properties.["userPrincipalName"].Value <- userPrincipalName
+        newUser.SokratesId |> Option.iter (fun (SokratesId v) -> adUser.Properties.[config.SokratesIdAttributeName].Value <- v)
+        adUser.Properties.["givenName"].Value <- newUser.FirstName
+        adUser.Properties.["sn"].Value <- newUser.LastName
+        adUser.Properties.["displayName"].Value <- sprintf "%s %s" newUser.LastName newUser.FirstName
+        adUser.Properties.["sAMAccountName"].Value <- userName
+        adUser.Properties.["department"].Value <- adHelper.GetDepartmentFromUserType newUser.Type
+        adUser.Properties.["division"].Value <- adHelper.GetDivisionFromUserType newUser.Type
+        adUser.Properties.["mail"].Value <- userPrincipalName
+        let proxyAddresses =
+            mailAliases
+            |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString)
+            |> List.map (fun v -> v :> obj)
+            |> List.toArray
+        adUser.Properties.["proxyAddresses"].AddRange(proxyAddresses)
+        let userHomePath = adHelper.GetUserHomePath newUser.Name newUser.Type
+        adUser.Properties.["homeDirectory"].Value <- userHomePath
+        adUser.Properties.["homeDrive"].Value <- config.HomeDrive
+        adUser.Properties.["userAccountControl"].Value <- 0x220 // PASSWD_NOTREQD | NORMAL_ACCOUNT
+        adUser.CommitChanges() // Must create user before setting password
+        adUser.Invoke("SetPassword", [| password :> obj |]) |> ignore
+        adUser.Properties.["pwdLastSet"].Value <- 0 // Expire password
+        adUser.CommitChanges()
 
-    let adUserSid = sidFromDirectoryEntry adUser
+        adHelper.UpdateGroup newUser.Type [| "member" |] (fun group ->
+            group.Properties.["member"].Add(adUser.Properties.["distinguishedName"].Value) |> ignore
+        )
 
-    do
-        let dir = Directory.CreateDirectory(userHomePath)
-        let acl = dir.GetAccessControl()
-        acl.SetAccessRuleProtection(true, false) // Disable inheritance
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        dir.SetAccessControl(acl)
+        use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword userHomePath
 
-    match newUser.Type with
-    | Teacher ->
-        let! exercisePath = teacherExercisePath newUser.Name
+        let adUserSid = adHelper.FetchSid adUser
 
-        let! teacherSid = sidFromDistinguishedName config.TeacherGroup
-        let! studentSid = sidFromDistinguishedName config.StudentGroup
-        let! testUserSid = sidFromDistinguishedName config.TestUserGroup
+        do
+            let dir = Directory.CreateDirectory(userHomePath)
+            let acl = dir.GetAccessControl()
+            acl.SetAccessRuleProtection(true, false) // Disable inheritance
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            dir.SetAccessControl(acl)
 
-        let dir = Directory.CreateDirectory(exercisePath)
-        let acl = dir.GetAccessControl()
-        acl.SetAccessRuleProtection(true, false) // Disable inheritance
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(teacherSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        dir.SetAccessControl(acl)
+        match newUser.Type with
+        | Teacher ->
+            let exercisePath = adHelper.GetTeacherExercisePath newUser.Name
 
-        let instructionDir = dir.CreateSubdirectory("Abgabe")
-        let acl = instructionDir.GetAccessControl()
-        acl.SetAccessRuleProtection(true, false) // Disable inheritance
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.CreatorOwnerSid, null), FileSystemRights.CreateFiles ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-        instructionDir.SetAccessControl(acl)
+            let teacherSid = adHelper.FetchSid config.TeacherGroup
+            let studentSid = adHelper.FetchSid config.StudentGroup
+            let testUserSid = adHelper.FetchSid config.TestUserGroup
 
-        let testInstructionDir = dir.CreateSubdirectory("Abgabe_SA")
-        let acl = testInstructionDir.GetAccessControl()
-        acl.SetAccessRuleProtection(true, false) // Disable inheritance
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.CreatorOwnerSid, null), FileSystemRights.CreateFiles ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-        testInstructionDir.SetAccessControl(acl)
+            let dir = Directory.CreateDirectory(exercisePath)
+            let acl = dir.GetAccessControl()
+            acl.SetAccessRuleProtection(true, false) // Disable inheritance
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(teacherSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            dir.SetAccessControl(acl)
 
-        let deliveryDir = dir.CreateSubdirectory("Angabe")
-        let acl = deliveryDir.GetAccessControl()
-        acl.SetAccessRuleProtection(true, false) // Disable inheritance
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(teacherSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-        deliveryDir.SetAccessControl(acl)
+            let instructionDir = dir.CreateSubdirectory("Abgabe")
+            let acl = instructionDir.GetAccessControl()
+            acl.SetAccessRuleProtection(true, false) // Disable inheritance
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.CreatorOwnerSid, null), FileSystemRights.CreateFiles ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
+            instructionDir.SetAccessControl(acl)
 
-        let testDeliveryDir = dir.CreateSubdirectory("Angabe_SA")
-        let acl = testDeliveryDir.GetAccessControl()
-        acl.SetAccessRuleProtection(true, false) // Disable inheritance
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(teacherSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-        acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        testDeliveryDir.SetAccessControl(acl)
-    | Student _ -> ()
-}
+            let testInstructionDir = dir.CreateSubdirectory("Abgabe_SA")
+            let acl = testInstructionDir.GetAccessControl()
+            acl.SetAccessRuleProtection(true, false) // Disable inheritance
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.CreatorOwnerSid, null), FileSystemRights.CreateFiles ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
+            testInstructionDir.SetAccessControl(acl)
 
-let private changeUserName userName userType (UserName newUserName, newFirstName, newLastName, newMailAliasNames) =
-    updateUser userName userType [| "homeDirectory" |] (fun adUser -> reader {
-        let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
+            let deliveryDir = dir.CreateSubdirectory("Angabe")
+            let acl = deliveryDir.GetAccessControl()
+            acl.SetAccessRuleProtection(true, false) // Disable inheritance
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(teacherSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
+            deliveryDir.SetAccessControl(acl)
 
-        adUser.Rename(sprintf "CN=%s" newUserName)
-        let! config = Reader.environment
-        adUser.Properties.["userPrincipalName"].Value <- sprintf "%s@%s" newUserName config.MailDomain
-        adUser.Properties.["givenName"].Value <- newFirstName
-        adUser.Properties.["sn"].Value <- newLastName
-        adUser.Properties.["displayName"].Value <- sprintf "%s %s" newLastName newFirstName
-        adUser.Properties.["sAMAccountName"].Value <- newUserName
-        adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" (String.asAlphaNumeric newLastName) (String.asAlphaNumeric newFirstName) config.MailDomain
-        adUser.Properties.["proxyAddresses"].Value <- newMailAliasNames |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString) |> List.toArray
-        let! newHomeDirectory = homePath (UserName newUserName) userType
-        adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
+            let testDeliveryDir = dir.CreateSubdirectory("Angabe_SA")
+            let acl = testDeliveryDir.GetAccessControl()
+            acl.SetAccessRuleProtection(true, false) // Disable inheritance
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(teacherSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
+            acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
+            testDeliveryDir.SetAccessControl(acl)
+        | Student _ -> ()
 
-        // TODO handle if oldHomeDirectory doesn't exist
-        if CIString oldHomeDirectory <> CIString newHomeDirectory then
-            use! __ = createNetworkConnection oldHomeDirectory
-            use! __ = createNetworkConnection newHomeDirectory
-            Directory.Move(oldHomeDirectory, newHomeDirectory)
+    let changeUserName userName userType (UserName newUserName, newFirstName, newLastName, newMailAliasNames) =
+        adHelper.UpdateUser userName userType [| "homeDirectory" |] (fun adUser ->
+            let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
+
+            adUser.Rename(sprintf "CN=%s" newUserName)
+            adUser.Properties.["userPrincipalName"].Value <- sprintf "%s@%s" newUserName config.MailDomain
+            adUser.Properties.["givenName"].Value <- newFirstName
+            adUser.Properties.["sn"].Value <- newLastName
+            adUser.Properties.["displayName"].Value <- sprintf "%s %s" newLastName newFirstName
+            adUser.Properties.["sAMAccountName"].Value <- newUserName
+            adUser.Properties.["mail"].Value <- sprintf "%s.%s@%s" (String.asAlphaNumeric newLastName) (String.asAlphaNumeric newFirstName) config.MailDomain
+            adUser.Properties.["proxyAddresses"].Value <- newMailAliasNames |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString) |> List.toArray
+            let newHomeDirectory = adHelper.GetUserHomePath (UserName newUserName) userType
+            adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
+
+            // TODO handle if oldHomeDirectory doesn't exist
+            if CIString oldHomeDirectory <> CIString newHomeDirectory then
+                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldHomeDirectory
+                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newHomeDirectory
+                Directory.Move(oldHomeDirectory, newHomeDirectory)
+
+            match userType with
+            | Teacher ->
+                let oldExercisePath = adHelper.GetTeacherExercisePath userName
+                let newExercisePath = adHelper.GetTeacherExercisePath (UserName newUserName)
+                if CIString oldExercisePath <> CIString newExercisePath then
+                    use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldExercisePath
+                    use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newExercisePath
+                    Directory.Move(oldExercisePath, newExercisePath)
+            | Student _ -> ()
+        )
+
+    let setSokratesId userName userType (SokratesId sokratesId) =
+        adHelper.UpdateUser userName userType [||] (fun adUser ->
+            adUser.Properties.[config.SokratesIdAttributeName].Value <- sokratesId
+        )
+
+    let moveStudentToClass userName oldClassName newClassName =
+        let oldUserType = Student oldClassName
+        let newUserType = Student newClassName
+        adHelper.UpdateUser userName oldUserType [| "distinguishedName"; "homeDirectory" |] (fun adUser ->
+            let targetOu = adHelper.FetchUserOu newUserType
+            adUser.MoveTo(targetOu)
+
+            let department = adHelper.GetDepartmentFromUserType newUserType
+            adUser.Properties.["department"].Value <- department
+            let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
+            let newHomeDirectory = adHelper.GetUserHomePath userName newUserType
+            adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
+
+            // TODO handle if oldHomeDirectory doesn't exist
+            if CIString oldHomeDirectory <> CIString newHomeDirectory then
+                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldHomeDirectory
+                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newHomeDirectory
+                Directory.Move(oldHomeDirectory, newHomeDirectory)
+
+            let distinguishedName = adUser.Properties.["distinguishedName"].Value :?> string
+            adHelper.UpdateGroup oldUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Remove(distinguishedName))
+            adHelper.UpdateGroup newUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Add(distinguishedName) |> ignore)
+        )
+
+    let deleteUser userName userType =
+        use adCtx = adHelper.FetchUserOu userType
+        let searchResult = adHelper.FindUser adCtx userName [| "homeDirectory" |]
+
+        use adUser = searchResult.GetDirectoryEntry()
+        adUser.DeleteTree()
+
+        match searchResult.Properties.["homeDirectory"] |> Seq.cast<string> |> Seq.tryItem 0 with
+        | Some homeDirectory ->
+            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword homeDirectory
+            Directory.delete homeDirectory
+        | None -> ()
 
         match userType with
         | Teacher ->
-            let! oldExercisePath = teacherExercisePath userName
-            let! newExercisePath = teacherExercisePath (UserName newUserName)
-            if CIString oldExercisePath <> CIString newExercisePath then
-                use! __ = createNetworkConnection oldExercisePath
-                use! __ = createNetworkConnection newExercisePath
-                Directory.Move(oldExercisePath, newExercisePath)
+            let exercisePath = adHelper.GetTeacherExercisePath userName
+            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword exercisePath
+            Directory.delete exercisePath
         | Student _ -> ()
-    })
 
-let private setSokratesId userName userType (SokratesId sokratesId) =
-    updateUser userName userType [||] (fun adUser -> reader {
-        let! config = Reader.environment
-        adUser.Properties.[config.SokratesIdAttributeName].Value <- sokratesId
-    })
+    let createGroup userType =
+        do
+            use __ = adHelper.GetUserOu userType |> adHelper.CreateOU |> Option.defaultWith (fun () -> failwithf "Error while creating OU for user type %A" userType)
+            ()
 
-let private moveStudentToClass userName oldClassName newClassName =
-    let oldUserType = Student oldClassName
-    let newUserType = Student newClassName
-    updateUser userName oldUserType [| "distinguishedName"; "homeDirectory" |] (fun adUser -> reader {
-        let! targetOu = userRootEntry newUserType
-        adUser.MoveTo(targetOu)
+        do
+            let groupHomePath = adHelper.GetGroupHomePath userType
+            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword groupHomePath
+            Directory.CreateDirectory(groupHomePath) |> ignore
 
-        let! department = departmentFromUserType newUserType
-        adUser.Properties.["department"].Value <- department
-        let oldHomeDirectory = adUser.Properties.["homeDirectory"].Value :?> string
-        let! newHomeDirectory = homePath userName newUserType
-        adUser.Properties.["homeDirectory"].Value <- newHomeDirectory
+        let groupPath = adHelper.GetGroupPathFromUserType userType
+        let groupName = DN.head groupPath |> snd
+        use adGroup = adHelper.CreateGroupEntry groupPath
+        adGroup.Properties.["sAMAccountName"].Value <- groupName
+        adGroup.Properties.["displayName"].Value <- groupName
+        adGroup.Properties.["mail"].Value <- sprintf "%s@%s" groupName config.MailDomain
+        adGroup.CommitChanges()
 
-        // TODO handle if oldHomeDirectory doesn't exist
-        if CIString oldHomeDirectory <> CIString newHomeDirectory then
-            use! __ = createNetworkConnection oldHomeDirectory
-            use! __ = createNetworkConnection newHomeDirectory
-            Directory.Move(oldHomeDirectory, newHomeDirectory)
+        match userType with
+        | Student _ ->
+            adHelper.UpdateDirectoryEntry config.StudentGroup [| "member" |] (fun parentGroup ->
+                parentGroup.Properties.["member"].Add(adGroup.Properties.["distinguishedName"].Value) |> ignore
+            )
+        | Teacher -> ()
 
-        let distinguishedName = adUser.Properties.["distinguishedName"].Value :?> string
-        do! updateGroup oldUserType [| "member" |] (fun adGroup -> reader { adGroup.Properties.["member"].Remove(distinguishedName) })
-        do! updateGroup newUserType [| "member" |] (fun adGroup -> reader { adGroup.Properties.["member"].Add(distinguishedName) |> ignore })
-    })
+    let changeStudentGroupName (GroupName oldClassName) (GroupName newClassName) =
+        let oldUserType = Student (GroupName oldClassName)
+        let newUserType = Student (GroupName newClassName)
 
-let private deleteUser userName userType = reader {
-    use! adCtx = userRootEntry userType
-    let searchResult = user adCtx userName [| "homeDirectory" |]
+        do
+            use adCtx = adHelper.GetUserOu oldUserType |> adHelper.FetchDirectoryEntry [||]
+            adCtx.Rename(sprintf "OU=%s" newClassName)
+            adCtx.CommitChanges()
 
-    use adUser = searchResult.GetDirectoryEntry()
-    adUser.DeleteTree()
+        do
+            let oldGroupHomePath = adHelper.GetGroupHomePath oldUserType
+            let newGroupHomePath = adHelper.GetGroupHomePath newUserType
+            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldGroupHomePath
+            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newGroupHomePath
+            Directory.Move(oldGroupHomePath, newGroupHomePath)
 
-    match searchResult.Properties.["homeDirectory"] |> Seq.cast<string> |> Seq.tryItem 0 with
-    | Some homeDirectory ->
-        use! __ = createNetworkConnection homeDirectory
-        Directory.delete homeDirectory
-    | None -> ()
+        adHelper.UpdateGroup oldUserType [| "member" |] (fun adGroup ->
+            adGroup.Rename(sprintf "CN=%s" newClassName)
+            adGroup.Properties.["sAMAccountName"].Value <- newClassName
+            adGroup.Properties.["displayName"].Value <- newClassName
+            adGroup.Properties.["mail"].Value <- sprintf "%s@%s" newClassName config.MailDomain
 
-    match userType with
-    | Teacher ->
-        let! exercisePath = teacherExercisePath userName
-        use! __ = createNetworkConnection exercisePath
-        Directory.delete exercisePath
-    | Student _ -> ()
-}
-
-let private createGroup userType = reader {
-    do! reader {
-        use! __ = userContainer userType |> Reader.bind (createOU >> Option.defaultWith (fun () -> failwithf "Error while creating OU for user type %A" userType))
-        ()
-    }
-
-    do! reader {
-        let! groupHomePath = groupHomePath userType
-        use! __ = createNetworkConnection groupHomePath
-        Directory.CreateDirectory(groupHomePath) |> ignore
-    }
-
-    let! groupPath = groupPathFromUserType userType
-    let groupName = DN.head groupPath |> snd
-    use! adGroup = createGroupEntry groupPath
-    adGroup.Properties.["sAMAccountName"].Value <- groupName
-    adGroup.Properties.["displayName"].Value <- groupName
-    let! config = Reader.environment
-    adGroup.Properties.["mail"].Value <- sprintf "%s@%s" groupName config.MailDomain
-    adGroup.CommitChanges()
-
-    match userType with
-    | Student _ ->
-        do! updateDirectoryEntry config.StudentGroup [| "member" |] (fun parentGroup -> reader {
-            parentGroup.Properties.["member"].Add(adGroup.Properties.["distinguishedName"].Value) |> ignore
-        })
-    | Teacher -> ()
-}
-
-let private changeStudentGroupName (GroupName oldClassName) (GroupName newClassName) = reader {
-    let oldUserType = Student (GroupName oldClassName)
-    let newUserType = Student (GroupName newClassName)
-
-    do! reader {
-        use! adCtx = userContainer oldUserType |> Reader.bind (adDirectoryEntry [||])
-        adCtx.Rename(sprintf "OU=%s" newClassName)
-        adCtx.CommitChanges()
-    }
-
-    do! reader {
-        let! oldGroupHomePath = groupHomePath oldUserType
-        let! newGroupHomePath = groupHomePath newUserType
-        use! __ = createNetworkConnection oldGroupHomePath
-        use! __ = createNetworkConnection newGroupHomePath
-        Directory.Move(oldGroupHomePath, newGroupHomePath)
-    }
-
-    do! updateGroup oldUserType [| "member" |] (fun adGroup -> reader {
-        adGroup.Rename(sprintf "CN=%s" newClassName)
-        adGroup.Properties.["sAMAccountName"].Value <- newClassName
-        adGroup.Properties.["displayName"].Value <- newClassName
-        let! config = Reader.environment
-        adGroup.Properties.["mail"].Value <- sprintf "%s@%s" newClassName config.MailDomain
-
-        do!
             adGroup.Properties.["member"]
             |> Seq.cast<string>
-            |> Seq.map (DistinguishedName >> fun userPath ->
-                updateDirectoryEntry userPath [| "sAMAccountName" |] (fun adUser -> reader {
-                    let! department = departmentFromUserType newUserType
-                    adUser.Properties.["department"].Value <- department
+            |> Seq.iter (DistinguishedName >> fun userPath ->
+                adHelper.UpdateDirectoryEntry userPath [| "sAMAccountName" |] (fun adUser ->
+                    adUser.Properties.["department"].Value <- adHelper.GetDepartmentFromUserType newUserType
                     let userName = adUser.Properties.["sAMAccountName"].[0] :?> string |> UserName
-                    let! userHomePath = homePath userName newUserType
-                    adUser.Properties.["homeDirectory"].Value <- userHomePath
-                })
+                    adUser.Properties.["homeDirectory"].Value <- adHelper.GetUserHomePath userName newUserType
+                )
             )
-            |> Seq.toList
-            |> Reader.sequence
-            |> Reader.ignore
-    })
-}
-
-let private deleteGroup userType = reader {
-    do! reader {
-        use! adCtx = userRootEntry userType
-        if adCtx.Children |> Seq.cast<DirectoryEntry> |> Seq.isEmpty |> not
-        then failwith "Can't delete non-empty OU"
-        adCtx.DeleteTree()
-    }
-    do! reader {
-        let! groupHomePath = groupHomePath userType
-        use! __ = createNetworkConnection groupHomePath
-        try Directory.Delete(groupHomePath) with _ -> ()
-    }
-    do! reader {
-        use! adCtx = groupPathFromUserType userType |> Reader.bind (adDirectoryEntry [||])
-        adCtx.DeleteTree()
-    }
-}
-
-let private getUserType teachers classGroups userName =
-    if teachers |> Seq.contains userName then Some Teacher
-    else
-        classGroups
-        |> Seq.tryPick (fun (groupName, members) ->
-            if members |> Seq.contains userName then Some (Student groupName)
-            else None
         )
 
-let private userProperties = reader {
-    let! config = Reader.environment
-    return [|
-        "distinguishedName"
-        "sAMAccountName"
-        "givenName"
-        "sn"
-        "whenCreated"
-        "mail"
-        "proxyAddresses"
-        "userPrincipalName"
-        config.SokratesIdAttributeName
-    |]
-}
-let private userFromADUserSearchResult userType sokratesIdAttributeName (adUser: SearchResult) =
-    {
-        Name = UserName (adUser.Properties.["sAMAccountName"].[0] :?> string)
-        SokratesId = adUser.Properties.[sokratesIdAttributeName] |> Seq.cast<string> |> Seq.tryHead |> Option.map SokratesId
-        FirstName = adUser.Properties.["givenName"].[0] :?> string
-        LastName = adUser.Properties.["sn"].[0] :?> string
-        Type = userType
-        CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
-        Mail = adUser.Properties.["mail"] |> Seq.cast<string> |> Seq.choose MailAddress.tryParse |> Seq.tryHead
-        ProxyAddresses =
-            adUser.Properties.["proxyAddresses"]
-            |> Seq.cast<string>
-            |> Seq.choose ProxyAddress.tryParse
-            |> Seq.toList
-        UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string |> (fun v -> MailAddress.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse user principal name \"%s\" as mail address (User \"%s\")" v adUser.Path))
-    }
+    let deleteGroup userType =
+        do
+            use adCtx = adHelper.FetchUserOu userType
+            if adCtx.Children |> Seq.cast<DirectoryEntry> |> Seq.isEmpty |> not
+            then failwith "Can't delete non-empty OU"
+            adCtx.DeleteTree()
 
-let getUsers = reader {
-    let! config = Reader.environment
+        do
+            let groupHomePath = adHelper.GetGroupHomePath userType
+            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword groupHomePath
+            try Directory.Delete(groupHomePath) with _ -> ()
 
-    let! teachers = reader {
-        let! adGroup = adDirectoryEntry [| "member" |] config.TeacherGroup
-        return
+        do
+            use adCtx = adHelper.GetGroupPathFromUserType userType |> adHelper.FetchDirectoryEntry [||]
+            adCtx.DeleteTree()
+
+    let getUserType teachers classGroups userName =
+        if teachers |> Seq.contains userName then Some Teacher
+        else
+            classGroups
+            |> Seq.tryPick (fun (groupName, members) ->
+                if members |> Seq.contains userName then Some (Student groupName)
+                else None
+            )
+
+    let userProperties =
+        [|
+            "distinguishedName"
+            "sAMAccountName"
+            "givenName"
+            "sn"
+            "whenCreated"
+            "mail"
+            "proxyAddresses"
+            "userPrincipalName"
+            config.SokratesIdAttributeName
+        |]
+
+    let userFromADUserSearchResult userType sokratesIdAttributeName (adUser: SearchResult) =
+        {
+            Name = UserName (adUser.Properties.["sAMAccountName"].[0] :?> string)
+            SokratesId = adUser.Properties.[sokratesIdAttributeName] |> Seq.cast<string> |> Seq.tryHead |> Option.map SokratesId
+            FirstName = adUser.Properties.["givenName"].[0] :?> string
+            LastName = adUser.Properties.["sn"].[0] :?> string
+            Type = userType
+            CreatedAt = adUser.Properties.["whenCreated"].[0] :?> DateTime
+            Mail = adUser.Properties.["mail"] |> Seq.cast<string> |> Seq.choose MailAddress.tryParse |> Seq.tryHead
+            ProxyAddresses =
+                adUser.Properties.["proxyAddresses"]
+                |> Seq.cast<string>
+                |> Seq.choose ProxyAddress.tryParse
+                |> Seq.toList
+            UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string |> (fun v -> MailAddress.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse user principal name \"%s\" as mail address (User \"%s\")" v adUser.Path))
+        }
+
+    let applyDirectoryModification = function
+        | CreateUser (user, mailAliases, password) -> createUser user mailAliases password
+        | UpdateUser (userName, userType, ChangeUserName (newUserName, newFirstName, newLastName, newMailAliasNames)) -> changeUserName userName userType (newUserName, newFirstName, newLastName, newMailAliasNames)
+        | UpdateUser (userName, userType, SetSokratesId sokratesId) -> setSokratesId userName userType sokratesId
+        | UpdateUser (userName, Student oldClassName, MoveStudentToClass newClassName) -> moveStudentToClass userName oldClassName newClassName
+        | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"
+        | DeleteUser (userName, userType) -> deleteUser userName userType
+        | CreateGroup (userType) -> createGroup userType
+        | UpdateGroup (Teacher, ChangeGroupName _) -> failwith "Can't rename teacher group"
+        | UpdateGroup (Student oldClassName, ChangeGroupName newClassName) -> changeStudentGroupName oldClassName newClassName
+        | DeleteGroup userType -> deleteGroup userType
+
+    member _.GetUsers () =
+        let teachers =
+            let adGroup = adHelper.FetchDirectoryEntry [| "member" |] config.TeacherGroup
             adGroup.Properties.["member"]
             |> Seq.cast<string>
             |> Seq.map DistinguishedName
             |> Seq.toList
-    }
 
-    let! classGroups = reader {
-        let! studentGroup = adDirectoryEntry [| "member" |] config.StudentGroup
-        return!
+        let classGroups =
+            let studentGroup = adHelper.FetchDirectoryEntry [| "member" |] config.StudentGroup
             studentGroup.Properties.["member"]
             |> Seq.cast<string>
-            |> Seq.map (DistinguishedName >> fun groupName -> reader {
-                use! group = adDirectoryEntry [| "sAMAccountName"; "member" |] groupName
+            |> Seq.map (DistinguishedName >> fun groupName ->
+                use group = adHelper.FetchDirectoryEntry [| "sAMAccountName"; "member" |] groupName
                 let groupName = group.Properties.["sAMAccountName"].Value :?> string |> GroupName
                 let members = group.Properties.["member"] |> Seq.cast<string> |> Seq.map DistinguishedName |> Seq.toList
-                return groupName, members
-            })
+                (groupName, members)
+            )
             |> Seq.toList
-            |> Reader.sequence
-            |> Reader.map Seq.toList
-    }
 
-    return!
         [ config.TeacherContainer; config.ClassContainer ]
-        |> List.map (fun userContainerPath -> reader {
-            use! userCtx = adDirectoryEntry [||] userContainerPath
-            let! userProperties = userProperties
+        |> List.collect (fun userContainerPath ->
+            use userCtx = adHelper.FetchDirectoryEntry [||] userContainerPath
+            let userProperties = userProperties
             use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", userProperties, PageSize = 1024)
             use searchResults = searcher.FindAll()
-            return
-                searchResults
-                |> Seq.cast<SearchResult>
-                |> Seq.choose (fun adUser ->
-                    let distinguishedName = DistinguishedName (adUser.Properties.["distinguishedName"].[0] :?> string)
-                    getUserType teachers classGroups distinguishedName
-                    |> Option.map (fun userType ->
-                        userFromADUserSearchResult userType config.SokratesIdAttributeName adUser
-                    )
+            searchResults
+            |> Seq.cast<SearchResult>
+            |> Seq.choose (fun adUser ->
+                let distinguishedName = DistinguishedName (adUser.Properties.["distinguishedName"].[0] :?> string)
+                getUserType teachers classGroups distinguishedName
+                |> Option.map (fun userType ->
+                    userFromADUserSearchResult userType config.SokratesIdAttributeName adUser
                 )
-                |> Seq.toList
-        })
-        |> Reader.sequence
-        |> Reader.map List.concat
-}
+            )
+            |> Seq.toList
+        )
 
-let getUser userName userType = reader {
-    let! config = Reader.environment
-    use! adCtx = userRootEntry userType
-    let! userProperties = userProperties
-    let adUser = user adCtx userName userProperties
-    return userFromADUserSearchResult userType config.SokratesIdAttributeName adUser
-}
+    member _.GetUser userName userType =
+        use adCtx = adHelper.FetchUserOu userType
+        let userProperties = userProperties
+        let adUser = adHelper.FindUser adCtx userName userProperties
+        userFromADUserSearchResult userType config.SokratesIdAttributeName adUser
 
-let getClassGroups = reader {
-    let! config = Reader.environment
-    use! studentGroup = adDirectoryEntry [| "member" |] config.StudentGroup
-    return!
+    member _.GetClassGroups () =
+        use studentGroup = adHelper.FetchDirectoryEntry [| "member" |] config.StudentGroup
         studentGroup.Properties.["member"]
         |> Seq.cast<string>
-        |> Seq.map (DistinguishedName >> fun groupName -> reader {
-            use! group = adDirectoryEntry [| "sAMAccountName" |] groupName
-            return group.Properties.["sAMAccountName"].Value :?> string |> GroupName
-        })
+        |> Seq.map (DistinguishedName >> fun groupName ->
+            use group = adHelper.FetchDirectoryEntry [| "sAMAccountName" |] groupName
+            group.Properties.["sAMAccountName"].Value :?> string |> GroupName
+        )
         |> Seq.toList
-        |> Reader.sequence
-        |> Reader.map Seq.toList
-}
 
-let getComputers = reader {
-    let! config = Reader.environment
-    use! computerCtx = adDirectoryEntry [||] config.ComputerContainer
-    use searcher = new DirectorySearcher(computerCtx, "(objectCategory=computer)", [| "dNSHostName" |], PageSize = 1024)
-    use searchResults = searcher.FindAll()
-    return
+    member _.GetComputers () =
+        use computerCtx = adHelper.FetchDirectoryEntry [||] config.ComputerContainer
+        use searcher = new DirectorySearcher(computerCtx, "(objectCategory=computer)", [| "dNSHostName" |], PageSize = 1024)
+        use searchResults = searcher.FindAll()
         searchResults
         |> Seq.cast<SearchResult>
         |> Seq.filter (fun adComputer -> adComputer.Properties.["dNSHostName"].Count > 0)
@@ -604,25 +554,14 @@ let getComputers = reader {
             adComputer.Properties.["dNSHostName"] |> Seq.cast<string> |> Seq.tryExactlyOne
         )
         |> Seq.toList
-}
 
-let applyDirectoryModification = function
-    | CreateUser (user, mailAliases, password) -> createUser user mailAliases password
-    | UpdateUser (userName, userType, ChangeUserName (newUserName, newFirstName, newLastName, newMailAliasNames)) -> changeUserName userName userType (newUserName, newFirstName, newLastName, newMailAliasNames)
-    | UpdateUser (userName, userType, SetSokratesId sokratesId) -> setSokratesId userName userType sokratesId
-    | UpdateUser (userName, Student oldClassName, MoveStudentToClass newClassName) -> moveStudentToClass userName oldClassName newClassName
-    | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"
-    | DeleteUser (userName, userType) -> deleteUser userName userType
-    | CreateGroup (userType) -> createGroup userType
-    | UpdateGroup (Teacher, ChangeGroupName _) -> failwith "Can't rename teacher group"
-    | UpdateGroup (Student oldClassName, ChangeGroupName newClassName) -> changeStudentGroupName oldClassName newClassName
-    | DeleteGroup userType -> deleteGroup userType
+    member _.ApplyDirectoryModifications =
+        List.iter (fun modification ->
+            try
+                applyDirectoryModification modification
+            with e -> failwithf "Error while applying modification \"%A\": %O" modification e
+        )
 
-let applyDirectoryModifications =
-    List.map (fun modification ->
-        try
-            applyDirectoryModification modification
-        with e -> failwithf "Error while applying modification \"%A\": %O" modification e
-    )
-    >> Reader.sequence
-    >> Reader.ignore
+    static member FromEnvironment () =
+        ADApi(Config.fromEnvironment ())
+

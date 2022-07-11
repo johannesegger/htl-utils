@@ -1,4 +1,4 @@
-module AD.Domain
+namespace AD
 
 open System
 

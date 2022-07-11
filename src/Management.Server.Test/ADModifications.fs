@@ -56,21 +56,22 @@ module private AD =
 
     let mailDomain = "htl.at"
 
-    let toExistingADUser mailAliases (user: AD.Domain.NewUser) =
+    let toExistingADUser mailAliases (user: AD.NewUser) =
         let mail =
-            let (AD.Domain.UserName userName) = user.Name
+            let (AD.UserName userName) = user.Name
             { UserName = userName; Domain = mailDomain }
-        {
-            AD.Domain.ExistingUser.Name = user.Name
-            AD.Domain.ExistingUser.SokratesId = user.SokratesId
-            AD.Domain.ExistingUser.FirstName = user.FirstName
-            AD.Domain.ExistingUser.LastName = user.LastName
-            AD.Domain.ExistingUser.Type = user.Type
-            AD.Domain.ExistingUser.CreatedAt = System.DateTime.Today
-            AD.Domain.ExistingUser.Mail = Some mail
-            AD.Domain.ExistingUser.ProxyAddresses = mailAliases |> List.map (AD.Domain.MailAlias.toProxyAddress mailDomain)
-            AD.Domain.ExistingUser.UserPrincipalName = mail
+        let user : AD.ExistingUser = {
+            Name = user.Name
+            SokratesId = user.SokratesId
+            FirstName = user.FirstName
+            LastName = user.LastName
+            Type = user.Type
+            CreatedAt = System.DateTime.Today
+            Mail = Some mail
+            ProxyAddresses = mailAliases |> List.map (AD.MailAlias.toProxyAddress mailDomain)
+            UserPrincipalName = mail
         }
+        user
 
     let toExistingDomainUser mailAliases user =
         toExistingADUser (mailAliases |> List.map MailAlias.toADDto) (User.toADDto user)
