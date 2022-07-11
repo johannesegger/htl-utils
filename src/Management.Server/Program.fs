@@ -119,6 +119,7 @@ let webApp = fun next (ctx: HttpContext) ->
                     #endif
                 ]
                 POST >=> choose [
+                    route "/ad/updates/verify" >=> requiresAdmin >=> ADModifications.HttpHandler.verifyADModification adApi
                     route "/ad/updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADModifications adApi
                     route "/ad/increment-class-group-updates/apply" >=> requiresAdmin >=> ADModifications.HttpHandler.applyADIncrementClassGroupUpdates adApi
                     route "/aad/group-updates/apply" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.applyAADGroupUpdates

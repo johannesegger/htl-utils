@@ -399,6 +399,20 @@ let getADModifications (adApi: AD.ADApi) (sokratesApi: Sokrates.SokratesApi) : H
         return! Successful.OK modifications next ctx
     }
 
+let verifyADModification (adApi: AD.ADApi) : HttpHandler =
+    fun next ctx -> task {
+        let! data = ctx.BindJsonAsync<DirectoryModification>()
+        match data with
+        | CreateUser (user, [], password) ->
+            let users =
+                adApi.GetUsers ()
+                |> List.map ExistingUser.fromADDto
+            let mailAliases = uniqueMailAliases user users
+            let modification = CreateUser (user, mailAliases, password)
+            return! Successful.OK modification next ctx
+        | _ -> return! RequestErrors.BAD_REQUEST "Can't verify modification" next ctx
+    }
+
 let applyADModifications (adApi: AD.ADApi) : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<DirectoryModification list>()

@@ -74,10 +74,12 @@ module UIDirectoryModification =
 
 type ModificationsState =
     | Drafting
+    | Adding
     | Applying of DirectoryModification list
     | Applied
 module ModificationsState =
     let isDrafting = function | Drafting -> true | _ -> false
+    let isAdding = function | Adding -> true | _ -> false
     let isApplying = function | Applying _ -> true | _ -> false
     let isApplied = function | Applied -> true | _ -> false
 
@@ -96,6 +98,7 @@ type Msg =
     | ToggleEnableModification of UIDirectoryModification
     | SetModificationDraft of DirectoryModification
     | AddModification
+    | AddModificationResponse of Result<DirectoryModification, exn>
     | ApplyModifications
     | ApplyModificationsResponse of Result<unit, exn>
 
@@ -146,20 +149,21 @@ let rec update msg model =
     | ApplyModifications ->
         match model.ModificationsState with
         | Drafting -> { model with ModificationsState = Applying (List.choose UIDirectoryModification.toDto model.Modifications) }
-        | Drafting
+        | Adding
         | Applying _
         | Applied -> model
     | SetModificationDraft directoryModification ->
         { model with ModificationDraft = validateModificationDraft directoryModification }
-    | AddModification ->
-        if List.isEmpty model.ModificationDraft.ValidationErrors then
-            let modification = UIDirectoryModification.fromDto model.ModificationDraft.Modification
-            { model with
-                Modifications = model.Modifications @ [ modification ]
-                ModificationDraft = clearModificationDraft model.ModificationDraft
-            }
-        else
-            model
+    | AddModification when List.isEmpty model.ModificationDraft.ValidationErrors ->
+        { model with ModificationsState = Adding }
+    | AddModification -> model
+    | AddModificationResponse (Ok modification) ->
+        { model with
+            Modifications = model.Modifications @ [ UIDirectoryModification.fromDto modification ]
+            ModificationDraft = clearModificationDraft model.ModificationDraft
+            ModificationsState = Drafting
+        }
+    | AddModificationResponse (Error _) -> { model with ModificationsState = Drafting }
     | ApplyModificationsResponse (Ok ())
     | ApplyModificationsResponse (Error _) -> { model with ModificationsState = Applied }
 
@@ -356,6 +360,7 @@ let view model dispatch =
             Button.button
                 [
                     Button.Disabled (isLocked || model.ModificationDraft.ValidationErrors.Length > 0)
+                    Button.IsLoading (ModificationsState.isAdding model.ModificationsState)
                     Button.Color IsSuccess
                     Button.Props [
                         Title (model.ModificationDraft.ValidationErrors |> String.concat "\n")
@@ -395,10 +400,32 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
             [
                 msgs
 
+                let addModification (modification: DirectoryModification) =
+                    AsyncRx.defer (fun () ->
+                        AsyncRx.ofAsync (async {
+                            let url = "/api/ad/updates/verify"
+                            let! authHeader = getAuthRequestHeader ()
+                            let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (modification: DirectoryModification) = Fetch.post(url, modification, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return modification
+                        })
+                        |> AsyncRx.map Ok
+                        |> AsyncRx.catch (Error >> AsyncRx.single)
+                    )
+
+                states
+                |> AsyncRx.choose (function
+                    | Some AddModification, { ModificationsState = Adding; ModificationDraft = { Modification = modification } } -> Some (addModification modification)
+                    | _ -> None)
+                |> AsyncRx.switchLatest
+                |> AsyncRx.showSimpleErrorToast (fun e -> "Adding AD modification failed", e.Message)
+                |> AsyncRx.map AddModificationResponse
+
                 let applyModifications (modifications: DirectoryModification list) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
-                            let url = sprintf "/api/ad/updates/apply"
+                            let url = "/api/ad/updates/apply"
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             let coders = Extra.empty |> Thoth.addCoders
