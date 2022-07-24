@@ -25,7 +25,7 @@ let private retryRequest (request: #IBaseRequest) (send: #IBaseRequest -> Task<_
                         |> Option.bind (fun p -> p.RetryAfter |> Option.ofObj)
                         |> Option.bind (fun p -> p.Delta |> Option.ofNullable)
                         |> Option.defaultValue (TimeSpan.FromSeconds 2.)
-                    printfn "Warning: Request %s %s failed (#%d/%d). Waiting %O before retrying. %s" request.Method request.RequestUrl i retryCount timeout ex.Message
+                    printfn "Warning: Request %O %s failed (#%d/%d). Waiting %O before retrying. %s" request.Method request.RequestUrl i retryCount timeout ex.Message
                     timeout
                 ),
                 Func<_, _, _, _, _>(fun ex t i ctx -> Task.CompletedTask))

@@ -4,12 +4,14 @@ open Giraffe
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
 open Microsoft.Graph.Auth
 open System
+open System.Collections.Generic
 open Thoth.Json.Giraffe
 open Thoth.Json.Net
 
@@ -96,9 +98,9 @@ let handleAddTeachersAsContacts photoLibraryConfig (sokratesApi: Sokrates.Sokrat
                 | None -> None
             )
 
-        AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId (ctx.User.ToGraphUserAccount().ObjectId)) contacts
-        |> Async.Start
-        return! Successful.ACCEPTED () next ctx
+
+        do! AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId (ctx.User.ToGraphUserAccount().ObjectId)) contacts
+        return! Successful.OK () next ctx
     }
 
 let fileStorageConfig = FileStorage.Configuration.Config.fromEnvironment ()
@@ -240,6 +242,7 @@ let handleGetKnowNameStudentPhoto photoLibraryConfig studentId : HttpHandler =
             return! RequestErrors.notFound HttpHandler.nil next ctx
     }
 
+let private aadConfig = AAD.Configuration.Config.fromEnvironment ()
 let private photoLibraryConfig = PhotoLibrary.Configuration.Config.fromEnvironment ()
 
 let requiresTeacher = AAD.Auth.requiresTeacher
@@ -332,7 +335,19 @@ let configureLogging (ctx: HostBuilderContext) (builder : ILoggingBuilder) =
 
 [<EntryPoint>]
 let main args =
+    let configDict =
+        [
+            "AzureAd:Instance", aadConfig.OidcConfig.Instance
+            "AzureAd:Domain", aadConfig.OidcConfig.Domain
+            "AzureAd:TenantId", aadConfig.OidcConfig.TenantId
+            "AzureAd:ClientId", aadConfig.OidcConfig.AppId
+            "AzureAd:ClientSecret", aadConfig.OidcConfig.AppSecret
+            "MicrosoftGraph:BaseUrl", "https://graph.microsoft.com/v1.0"
+            "MicrosoftGraph:Scopes", ""
+        ]
+        |> Seq.map KeyValuePair
     Host.CreateDefaultBuilder(args)
+        .ConfigureAppConfiguration(fun hostBuilderContext config -> config.AddInMemoryCollection(configDict) |> ignore)
         .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)
