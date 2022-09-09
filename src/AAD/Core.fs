@@ -128,7 +128,7 @@ let getUsers (graphServiceClient: GraphServiceClient) = async {
 }
 
 // see https://github.com/microsoftgraph/msgraph-sdk-dotnet/issues/528#issuecomment-523083170
-type private ExtendedGroup() =
+type ExtendedGroup() =
     inherit Group()
         [<Newtonsoft.Json.JsonProperty(DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore, PropertyName = "resourceBehaviorOptions")>]
         member val ResourceBehaviorOptions = [||] with get, set
@@ -148,7 +148,21 @@ let private createGroup (graphServiceClient: GraphServiceClient) name = async {
 
     // `AutoSubscribeNewMembers` must be set separately, see https://docs.microsoft.com/en-us/graph/api/resources/group#properties
     let groupUpdate = Group(AutoSubscribeNewMembers = Nullable true)
-    return! retryRequest (graphServiceClient.Groups.[group.Id].Request()) (fun request -> request.UpdateAsync groupUpdate)
+    let! group = retryRequest (graphServiceClient.Groups.[group.Id].Request()) (fun request -> request.UpdateAsync groupUpdate)
+
+    let rec checkGroup i = async {
+        if i = 0 then failwith $"Group validation failed (%s{group.DisplayName} - %s{group.Id})"
+        let! ct = Async.CancellationToken
+        let! group =
+            let request = graphServiceClient.Groups.[group.Id].Request().Select("autoSubscribeNewMembers,resourceBehaviorOptions") :?> BaseRequest
+            request.SendAsync<ExtendedGroup>(null, ct) |> Async.AwaitTask
+        if (group.AutoSubscribeNewMembers = Nullable true && group.ResourceBehaviorOptions |> Array.contains "WelcomeEmailDisabled")
+        then return group
+        else
+            do! Async.Sleep (TimeSpan.FromSeconds 10.)
+            return! checkGroup (i - 1)
+    }
+    return! checkGroup 6
 }
 
 let private deleteGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) =

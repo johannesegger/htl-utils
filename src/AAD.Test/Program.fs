@@ -55,7 +55,25 @@ let randomGroupName () =
 
 let tests =
     testList "Modifications" [
-        testCaseAsync "Change group name" <| async {
+        testCaseAsync "Create group" <| async {
+            let groupName = randomGroupName ()
+            do!
+                applyGroupsModifications graphServiceClient [
+                    CreateGroup (groupName, [])
+                ]
+
+            let! groupId =
+                graphServiceClient.Groups.Request()
+                    .WithMaxRetry(5)
+                    .Filter(sprintf "displayName eq '%s'" groupName).Select("id")
+                    .GetAsync()
+                |> Async.AwaitTask
+                |> Async.map (Seq.exactlyOne >> fun v -> v.Id)
+
+            do! graphServiceClient.Groups.[groupId].Request().DeleteAsync() |> Async.AwaitTask
+        }
+
+        ptestCaseAsync "Change group name" <| async {
             let groupName = randomGroupName ()
             do!
                 applyGroupsModifications graphServiceClient [
