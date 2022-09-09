@@ -45,7 +45,7 @@ let tests =
             Expect.isEmpty groupMembers "Group should not have members"
         )
 
-        ftestCase "Can create user" (fun () ->
+        testCase "Can create user" (fun () ->
             let userType = randomName "Group" |> GroupName |> Student
             let user = createUser userType
             adApi.ApplyDirectoryModifications [
