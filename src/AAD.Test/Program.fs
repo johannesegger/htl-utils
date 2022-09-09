@@ -53,6 +53,17 @@ let graphServiceClient = GraphServiceClient(authProvider)
 let randomGroupName () =
     sprintf "Test-%O" (Guid.NewGuid())
 
+let getGroup groupName = async {
+    let! groups =
+        graphServiceClient.Groups.Request()
+            .WithMaxRetry(5)
+            .Filter(sprintf "displayName eq '%s'" groupName)
+            .Select("id,displayName,mail")
+            .GetAsync()
+        |> Async.AwaitTask
+    return groups |> Seq.exactlyOne
+}
+
 let tests =
     testList "Modifications" [
         testCaseAsync "Create group" <| async {
@@ -62,15 +73,50 @@ let tests =
                     CreateGroup (groupName, [])
                 ]
 
-            let! groupId =
-                graphServiceClient.Groups.Request()
+            let! group = getGroup groupName
+            do! graphServiceClient.Groups.[group.Id].Request().DeleteAsync() |> Async.AwaitTask
+        }
+
+        ftestCaseAsync "Create group with member" <| async {
+            let groupName = randomGroupName ()
+            let! me =
+                graphServiceClient.Me.Request()
                     .WithMaxRetry(5)
-                    .Filter(sprintf "displayName eq '%s'" groupName).Select("id")
                     .GetAsync()
                 |> Async.AwaitTask
-                |> Async.map (Seq.exactlyOne >> fun v -> v.Id)
+            let! memberIds =
+                graphServiceClient.Users.Request()
+                    .WithMaxRetry(5)
+                    .Filter("userPrincipalName eq 'eggj@htlvb.at'").Select("id")
+                    .GetAsync()
+                |> Async.AwaitTask
+                |> Async.map (Seq.map (fun v -> UserId v.Id) >> Seq.toList)
+            do!
+                applyGroupsModifications graphServiceClient [
+                    CreateGroup (groupName, memberIds)
+                ]
 
-            do! graphServiceClient.Groups.[groupId].Request().DeleteAsync() |> Async.AwaitTask
+            let! group = getGroup groupName
+
+            do! Async.Sleep (TimeSpan.FromMinutes 1.)
+
+            let message =
+                Message(
+                    Subject = "Test",
+                    Body = ItemBody(
+                        ContentType = BodyType.Text,
+                        Content = "Test"
+                    ),
+                    From = Recipient(EmailAddress = EmailAddress(Address = me.Mail)),
+                    ToRecipients = [
+                        Recipient(EmailAddress = EmailAddress(Address = group.Mail))
+                    ]
+                )
+            do! graphServiceClient.Me.SendMail(message, SaveToSentItems = Nullable false).Request().PostAsync() |> Async.AwaitTask
+
+            do! graphServiceClient.Groups.[group.Id].Request().DeleteAsync() |> Async.AwaitTask
+
+            // TODO check that no welcome mail is received and that you received the test mail in your inbox
         }
 
         ptestCaseAsync "Change group name" <| async {
@@ -80,21 +126,15 @@ let tests =
                     CreateGroup (groupName, [])
                 ]
 
-            let! groupId =
-                graphServiceClient.Groups.Request()
-                    .WithMaxRetry(5)
-                    .Filter(sprintf "displayName eq '%s'" groupName).Select("id")
-                    .GetAsync()
-                |> Async.AwaitTask
-                |> Async.map (Seq.exactlyOne >> fun v -> v.Id)
+            let! group = getGroup groupName
             let groupName = sprintf "%s-new" groupName
             do!
                 applyGroupsModifications graphServiceClient [
-                    ChangeGroupName (GroupId groupId, groupName)
+                    ChangeGroupName (GroupId group.Id, groupName)
                 ]
 
-            let! group = graphServiceClient.Groups.[groupId].Request().GetAsync() |> Async.AwaitTask
-            do! graphServiceClient.Groups.[groupId].Request().DeleteAsync() |> Async.AwaitTask
+            let! group = getGroup groupName
+            do! graphServiceClient.Groups.[group.Id].Request().DeleteAsync() |> Async.AwaitTask
 
             Expect.all (group.Mail :: Seq.toList group.ProxyAddresses) (fun address -> address.Contains(groupName)) "Mail addresses should contain new group name"
         }

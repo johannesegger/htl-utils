@@ -151,18 +151,20 @@ let private createGroup (graphServiceClient: GraphServiceClient) name = async {
     let! group = retryRequest (graphServiceClient.Groups.[group.Id].Request()) (fun request -> request.UpdateAsync groupUpdate)
 
     let rec checkGroup i = async {
-        if i = 0 then failwith $"Group validation failed (%s{group.DisplayName} - %s{group.Id})"
         let! ct = Async.CancellationToken
         let! group =
-            let request = graphServiceClient.Groups.[group.Id].Request().Select("autoSubscribeNewMembers,resourceBehaviorOptions") :?> BaseRequest
+            let request = graphServiceClient.Groups.[group.Id].Request().Select("autoSubscribeNewMembers,resourceBehaviorOptions,displayName") :?> BaseRequest
             request.SendAsync<ExtendedGroup>(null, ct) |> Async.AwaitTask
-        if (group.AutoSubscribeNewMembers = Nullable true && group.ResourceBehaviorOptions |> Array.contains "WelcomeEmailDisabled")
-        then return group
-        else
+        if (group.AutoSubscribeNewMembers = Nullable true && group.ResourceBehaviorOptions |> Array.contains "WelcomeEmailDisabled") then
+            printfn $"Group validation succeeded (%s{group.DisplayName} - %s{group.Id}) (Retry count = %d{i})"
+            return group
+        elif i > 1 then
+            printfn $"Group validation failed (%s{group.DisplayName} - %s{group.Id}) (Retry count = %d{i})"
             do! Async.Sleep (TimeSpan.FromSeconds 10.)
             return! checkGroup (i - 1)
+        else return failwith $"Group validation failed (%s{group.DisplayName} - %s{group.Id})"
     }
-    return! checkGroup 6
+    return! checkGroup (6 * 5)
 }
 
 let private deleteGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) =
