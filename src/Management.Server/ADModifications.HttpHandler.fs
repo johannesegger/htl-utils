@@ -30,8 +30,9 @@ let uniqueUserName existingUserNames (UserName rawUserName) =
     Seq.initInfinite ((+)2)
     |> Seq.map string
     |> Seq.append [ "" ]
-    |> Seq.map (fun number -> sprintf "%s%s" (String.cut (20 - number.Length) rawUserName) number |> UserName)
-    |> Seq.find (fun name -> not <| List.contains name existingUserNames)
+    |> Seq.map (fun number -> sprintf "%s%s" (String.cut (20 - number.Length) rawUserName) number)
+    |> Seq.find (fun name -> not <| List.exists (fun (UserName v) -> CIString name = CIString v) existingUserNames)
+    |> UserName
 
 let rawMailAliases user =
     [
