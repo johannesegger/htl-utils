@@ -15,7 +15,7 @@ let create message =
 
 // https://github.com/thoth-org/Thoth.Elmish.Toast/blob/main/demo/src/App.fs#L25-L68
 let renderToastWithFulma =
-    { new Toast.IRenderer<Fa.IconOption> with
+    { new Toast.IRenderer<ReactElement> with
         member __.Toast children color =
             Notification.notification [ Notification.CustomClass color ]
                 children
@@ -28,11 +28,8 @@ let renderToastWithFulma =
             Heading.h5 []
                        [ str txt ]
 
-        member __.Icon (icon : Fa.IconOption) =
-            Icon.icon [ Icon.Size IsMedium ]
-                [ Fa.i [ icon
-                         Fa.Size Fa.Fa2x ]
-                    [ ] ]
+        member __.Icon icon =
+            icon
 
         member __.SingleLayout title message =
             div [ ]
