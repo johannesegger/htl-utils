@@ -37,12 +37,17 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
             )
     ]
 
-let getAADGroupUpdates (adApi: AD.ADApi) (aadConfig: AAD.Configuration.Config) finalThesesConfig (untis: Untis.UntisExport) : HttpHandler =
+let getAADGroupUpdates (adApi: AD.ADApi) (aadConfig: AAD.Configuration.Config) finalThesesConfig (sokratesApi: Sokrates.SokratesApi) (untis: Untis.UntisExport) : HttpHandler =
     fun next ctx -> task {
         let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let teachingData = untis.GetTeachingData()
         let adUsers = adApi.GetUsers()
         let finalThesesMentors = FinalTheses.Core.getMentors |> Reader.run finalThesesConfig
+        let! sokratesStudents = sokratesApi.FetchStudents None None
+        let sokratesStudentIdToGender =
+            sokratesStudents
+            |> Seq.map (fun v -> SokratesId.fromSokratesDto v.Id, v.Gender)
+            |> Map.ofSeq
         let! aadUsers = async {
             let! users = AAD.Core.getUsers graphServiceClient
             return
@@ -92,6 +97,19 @@ let getAADGroupUpdates (adApi: AD.ADApi) (aadConfig: AAD.Configuration.Config) f
                     let (AD.UserName userName) = user.Name
                     Map.tryFind userName aadUserLookupByUserName
                 | AD.Teacher -> None
+            )
+
+        let femaleStudents =
+            adUsers
+            |> List.choose (fun user ->
+                match user.Type with
+                | AD.Student _ ->
+                    match user.SokratesId |> Option.bind (SokratesId.fromADDto >> flip Map.tryFind sokratesStudentIdToGender) with
+                    | Some Sokrates.Gender.Female ->
+                        let (AD.UserName userName) = user.Name
+                        Map.tryFind userName aadUserLookupByUserName
+                    | _ -> None
+                | AD.Teacher-> None
             )
 
         let studentsPerClass =
@@ -175,6 +193,7 @@ let getAADGroupUpdates (adApi: AD.ADApi) (aadConfig: AAD.Configuration.Config) f
                 | AAD.Configuration.ProfessionalGroup (groupName, subjects) -> [ (groupName, teachersWithAnySubject subjects) ]
                 | AAD.Configuration.Students groupName -> [ (groupName, students) ]
                 | AAD.Configuration.ClassStudents classNameToGroupName -> studentsPerClass |> List.map (Tuple.mapFst classNameToGroupName)
+                | AAD.Configuration.FemaleStudents groupName -> [ (groupName, femaleStudents) ]
             )
             |> Seq.toList
 

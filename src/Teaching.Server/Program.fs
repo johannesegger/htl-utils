@@ -8,7 +8,6 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
-open Microsoft.Extensions.Options
 open Microsoft.Graph.Auth
 open System
 open System.Collections.Generic
@@ -247,25 +246,8 @@ let private photoLibraryConfig = PhotoLibrary.Configuration.Config.fromEnvironme
 
 let requiresTeacher = AAD.Auth.requiresTeacher
 
-type SokratesConfig() =
-    member val WebServiceUrl = "" with get, set
-    member val UserName = "" with get, set
-    member val Password = "" with get, set
-    member val SchoolId = "" with get, set
-    member val ClientCertificatePath = "" with get, set
-    member val ClientCertificatePassphrase = "" with get, set
-    member x.Build() : Sokrates.Config = {
-        WebServiceUrl = x.WebServiceUrl
-        UserName = x.UserName
-        Password = x.Password
-        SchoolId = x.SchoolId
-        ClientCertificatePath = x.ClientCertificatePath
-        ClientCertificatePassphrase = x.ClientCertificatePassphrase
-    }
-
 let webApp = fun next (ctx: HttpContext) ->
-    let sokratesConfig = ctx.GetService<IOptions<SokratesConfig>>().Value.Build()
-    let sokratesApi = Sokrates.SokratesApi(sokratesConfig)
+    let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
     choose [
         subRoute "/api"
             (choose [
@@ -313,7 +295,6 @@ let configureApp (app : IApplicationBuilder) =
         .UseGiraffe(webApp)
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
-    services.AddOptions<SokratesConfig>().BindConfiguration("Sokrates") |> ignore
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =

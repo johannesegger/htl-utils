@@ -18,8 +18,32 @@ type Config = {
     ClientCertificatePath: string
     ClientCertificatePassphrase: string
 }
+module Config =
+    open Microsoft.Extensions.Configuration
+
+    type SokratesConfig() =
+        member val WebServiceUrl = "" with get, set
+        member val UserName = "" with get, set
+        member val Password = "" with get, set
+        member val SchoolId = "" with get, set
+        member val ClientCertificatePath = "" with get, set
+        member val ClientCertificatePassphrase = "" with get, set
+        member x.Build() : Config = {
+            WebServiceUrl = x.WebServiceUrl
+            UserName = x.UserName
+            Password = x.Password
+            SchoolId = x.SchoolId
+            ClientCertificatePath = x.ClientCertificatePath
+            ClientCertificatePassphrase = x.ClientCertificatePassphrase
+        }
+
+    let fromEnvironment () =
+        let config = ConfigurationBuilder().AddEnvironmentVariables().Build()
+        ConfigurationBinder.Get<SokratesConfig>(config.GetSection("Sokrates")).Build()
 
 type SokratesId = SokratesId of string
+
+type Gender = Male | Female
 
 type Student = {
     Id: SokratesId
@@ -28,6 +52,7 @@ type Student = {
     FirstName2: string option
     DateOfBirth: DateTime
     SchoolClass: string
+    Gender: Gender
 }
 
 type Phone =
@@ -89,6 +114,10 @@ type private ParameterType =
     | List of (string * string) list
 
 type SokratesApi(config: Config) =
+    let getSchoolYear (date: DateTime) =
+        if date.Month < 9 then date.Year - 1
+        else date.Year
+
     let getRequestContent messageName parameters =
         let xmlParameters =
             parameters
@@ -232,8 +261,18 @@ type SokratesApi(config: Config) =
         |> Seq.distinct
         |> Seq.toList
 
-    let parseStudents (xmlElement: XElement) =
-        SokratesWebService.PupilList(xmlElement).PupilEntries
+    let parseGender text =
+        if CIString text = CIString "m" then Male
+        elif CIString text = CIString "w" then Female
+        else failwith $"Unknown gender \"%s{text}\""
+
+    let parseStudents (mainStudentXmlData: XElement) (additionalStudentXmlData: XElement) =
+        let additionalData =
+            SokratesWebService.TsnPupilList(additionalStudentXmlData).TsnPupilEntries
+            |> Seq.map (fun v -> string v.PupilId, {| Gender = parseGender v.Sex |})
+            |> Map.ofSeq
+
+        SokratesWebService.PupilList(mainStudentXmlData).PupilEntries
         |> Seq.choose (fun n -> n.Pupil)
         |> Seq.map (fun student ->
             {
@@ -243,6 +282,10 @@ type SokratesApi(config: Config) =
                 FirstName2 = student.XElement.Element(XName.Get "firstName2") |> Option.ofObj |> Option.map (fun n -> n.Value)
                 DateOfBirth = DateTimeOffset(student.DateOfBirth).DateTime.Date
                 SchoolClass = parseClassName student.SchoolClass
+                Gender =
+                    Map.tryFind student.SokratesId additionalData
+                    |> Option.map (fun v -> v.Gender)
+                    |> Option.defaultWith (fun () -> failwith $"Can't find gender of student %A{student}")
             }
         )
         |> Seq.toList
@@ -302,18 +345,17 @@ type SokratesApi(config: Config) =
     member _.FetchClasses schoolYear = async {
         let schoolYear =
             schoolYear
-            |> Option.defaultValue (
-                if DateTime.Now.Month < 9 then DateTime.Now.Year - 1
-                else DateTime.Now.Year
-            )
+            |> Option.defaultWith (fun () -> getSchoolYear DateTime.Today)
         let! xmlElement = getRequestContent "getTSNClasses" [ "schoolYear", Simple (string schoolYear) ] |> fetch
         return parseClasses xmlElement
     }
 
     member _.FetchStudents className date = async {
         let date = date |> Option.defaultValue DateTime.Today
-        let! xmlElement = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ] |> fetch
-        let students = parseStudents xmlElement
+        let schoolYear = getSchoolYear date
+        let! mainStudentXmlData = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ] |> fetch
+        let! additionalStudentXmlData = getRequestContent "getTSNPupils" [ "schoolYear", Simple (string schoolYear); "dateOfInterest", Simple (date.ToString("s")) ] |> fetch
+        let students = parseStudents mainStudentXmlData additionalStudentXmlData
         match className with
         | Some className -> return students |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
         | None -> return students
@@ -334,3 +376,6 @@ type SokratesApi(config: Config) =
         let! xmlElement = getRequestContent "getContactInfos" [ "dateOfInterest", Simple (date.ToString("s")); "personIDs", personIdsParameter ] |> fetch
         return parseContactInfos xmlElement
     }
+
+    static member FromEnvironment () =
+        SokratesApi(Config.fromEnvironment ())

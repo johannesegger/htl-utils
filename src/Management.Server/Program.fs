@@ -54,22 +54,6 @@ let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Conf
 
 let private requiresAdmin = AAD.Auth.requiresAdmin
 
-type SokratesConfig() =
-    member val WebServiceUrl = "" with get, set
-    member val UserName = "" with get, set
-    member val Password = "" with get, set
-    member val SchoolId = "" with get, set
-    member val ClientCertificatePath = "" with get, set
-    member val ClientCertificatePassphrase = "" with get, set
-    member x.Build() : Sokrates.Config = {
-        WebServiceUrl = x.WebServiceUrl
-        UserName = x.UserName
-        Password = x.Password
-        SchoolId = x.SchoolId
-        ClientCertificatePath = x.ClientCertificatePath
-        ClientCertificatePassphrase = x.ClientCertificatePassphrase
-    }
-
 type UntisConfig() =
     member val GPU001TimetableFilePath = "" with get, set
     member val GPU002TeachingDataFilePath = "" with get, set
@@ -99,8 +83,7 @@ type UntisConfig() =
 
 let webApp = fun next (ctx: HttpContext) ->
     let adApi = AD.ADApi.FromEnvironment()
-    let sokratesConfig = ctx.GetService<IOptions<SokratesConfig>>().Value.Build()
-    let sokratesApi = Sokrates.SokratesApi(sokratesConfig)
+    let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
     let untisConfig = ctx.GetService<IOptions<UntisConfig>>().Value.Build()
     let untisExport = Untis.UntisExport(untisConfig)
     choose [
@@ -109,7 +92,7 @@ let webApp = fun next (ctx: HttpContext) ->
                 GET >=> choose [
                     route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adApi sokratesApi
                     route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adApi incrementClassGroupsConfig
-                    route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adApi aadConfig finalThesesConfig untisExport
+                    route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adApi aadConfig finalThesesConfig sokratesApi untisExport
                     route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig
                     route "/it-information/users" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.getUsers adApi
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesApi untisExport
@@ -159,7 +142,6 @@ let configureApp (app : IApplicationBuilder) =
         .UseGiraffe(webApp)
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
-    services.AddOptions<SokratesConfig>().BindConfiguration("Sokrates") |> ignore
     services.AddOptions<UntisConfig>().BindConfiguration("Untis") |> ignore
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore

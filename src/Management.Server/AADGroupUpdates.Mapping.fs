@@ -2,6 +2,11 @@ namespace AADGroupUpdates.Mapping
 
 open AADGroupUpdates.DataTransferTypes
 
+type SokratesId = SokratesId of string
+module SokratesId =
+    let fromSokratesDto (Sokrates.SokratesId v) = SokratesId v
+    let fromADDto (AD.SokratesId v) = SokratesId v
+
 module UserId =
     let fromAADDto (AAD.Domain.UserId userId) = UserId userId
     let toAADDto (UserId userId) = AAD.Domain.UserId userId

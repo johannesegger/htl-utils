@@ -10,6 +10,7 @@ type PredefinedGroup =
     | ProfessionalGroup of name: string * subjects: string list
     | Students of string
     | ClassStudents of classNameToGroupName: (string -> string)
+    | FemaleStudents of name: string
 
 type OidcConfig = {
     AppId: string
@@ -72,6 +73,7 @@ module Config =
                         |> Seq.toList
                     | CIString "Students" -> [ Students groupName ]
                     | CIString "ClassStudents" -> [ ClassStudents (fun className -> String.replace "<class>" className groupName) ]
+                    | CIString "FemaleStudents" -> [ FemaleStudents groupName ]
                     | _ -> failwithf "Error in row \"%s\" of predefined groups settings: Unknown group id \"%s\"" row groupId
                 )
                 |> Seq.toList
