@@ -54,38 +54,10 @@ let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Conf
 
 let private requiresAdmin = AAD.Auth.requiresAdmin
 
-type UntisConfig() =
-    member val GPU001TimetableFilePath = "" with get, set
-    member val GPU002TeachingDataFilePath = "" with get, set
-    member val GPU005RoomsFilePath = "" with get, set
-    member val GPU006SubjectsFilePath = "" with get, set
-    member val TimeFrames = "" with get, set
-    member x.Build() : Untis.Config = {
-        GPU001TimetableFilePath = x.GPU001TimetableFilePath
-        GPU002TeachingDataFilePath = x.GPU002TeachingDataFilePath
-        GPU005RoomsFilePath = x.GPU005RoomsFilePath
-        GPU006SubjectsFilePath = x.GPU006SubjectsFilePath
-        TimeFrames =
-            x.TimeFrames
-            |> String.split ";"
-            |> Seq.map (fun t ->
-                String.split "-" t
-                |> Seq.choose (tryDo TimeSpan.TryParse)
-                |> Seq.toList
-                |> function
-                | ``begin`` :: [ ``end`` ] ->
-                    let timeFrame: Untis.TimeFrame = { BeginTime = ``begin``; EndTime = ``end`` }
-                    timeFrame
-                | _ -> failwithf "Can't parse \"%s\" as time frame" t
-            )
-            |> Seq.toList
-    }
-
 let webApp = fun next (ctx: HttpContext) ->
     let adApi = AD.ADApi.FromEnvironment()
     let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
-    let untisConfig = ctx.GetService<IOptions<UntisConfig>>().Value.Build()
-    let untisExport = Untis.UntisExport(untisConfig)
+    let untisExport = Untis.UntisExport.FromEnvironment()
     choose [
         subRoute "/api"
             (choose [

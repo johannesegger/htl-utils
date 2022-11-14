@@ -47,6 +47,39 @@ type Config = {
     GPU006SubjectsFilePath: string
     TimeFrames: TimeFrame list
 }
+module Config =
+    open Microsoft.Extensions.Configuration
+
+    type UntisConfig() =
+        member val GPU001TimetableFilePath = "" with get, set
+        member val GPU002TeachingDataFilePath = "" with get, set
+        member val GPU005RoomsFilePath = "" with get, set
+        member val GPU006SubjectsFilePath = "" with get, set
+        member val TimeFrames = "" with get, set
+        member x.Build() = {
+            GPU001TimetableFilePath = x.GPU001TimetableFilePath
+            GPU002TeachingDataFilePath = x.GPU002TeachingDataFilePath
+            GPU005RoomsFilePath = x.GPU005RoomsFilePath
+            GPU006SubjectsFilePath = x.GPU006SubjectsFilePath
+            TimeFrames =
+                x.TimeFrames
+                |> String.split ";"
+                |> Seq.map (fun t ->
+                    String.split "-" t
+                    |> Seq.choose (tryDo TimeSpan.TryParse)
+                    |> Seq.toList
+                    |> function
+                    | ``begin`` :: [ ``end`` ] ->
+                        let timeFrame = { BeginTime = ``begin``; EndTime = ``end`` }
+                        timeFrame
+                    | _ -> failwithf "Can't parse \"%s\" as time frame" t
+                )
+                |> Seq.toList
+        }
+
+    let fromEnvironment () =
+        let config = ConfigurationBuilder().AddEnvironmentVariables().Build()
+        ConfigurationBinder.Get<UntisConfig>(config.GetSection("Untis")).Build()
 
 [<Literal>]
 let private TimetablePath = __SOURCE_DIRECTORY__ + "/data/GPU001.TXT"
@@ -124,3 +157,6 @@ type UntisExport(config) =
                 None
         )
         |> Seq.toList
+
+    static member FromEnvironment () =
+        UntisExport(Config.fromEnvironment ())
