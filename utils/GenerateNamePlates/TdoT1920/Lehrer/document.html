@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Namensschilder</title>
+        <meta charset="UTF-8" />
+        <style>
+            body
+            {
+                font-family: "Segoe UI Light";
+                width: 140mm;
+                padding-right: 1mm; /* offset to correct inaccurate printer */
+                margin: 0 auto;
+                font-variant: small-caps;
+            }
+            .page
+            {
+                margin-top: 30px;
+                page-break-after: always;
+            }
+            .page:nth-child(2n)
+            {
+                direction: rtl;
+            }
+            .page .items
+            {
+                display: flex;
+                flex-wrap: wrap;
+            }
+            .item
+            {
+                direction: ltr;
+                position: relative;
+                text-align: center;
+                line-height: 1;
+                width: 70mm;
+                height: 70mm;
+                box-sizing: border-box;
+                overflow: hidden;
+            }
+            .page:nth-child(2n + 1) .item
+            {
+                border: 1px dotted grey;
+            }
+            .page:nth-child(2n) .item
+            {
+                border: 1px solid transparent;
+            }
+            .item:nth-child(2n)
+            {
+                border-left: none !important;
+            }
+            .item:nth-child(n + 3)
+            {
+                border-top: 0 !important;
+            }
+            .item .punchhole
+            {
+                display: block;
+                position: absolute;
+                left: 50%;
+                margin-left: -5px;
+                top: 3mm;
+                background-color: lightgrey;
+                border: 1px solid darkgrey;
+                width: 5px;
+                height: 5px;
+                border-radius: 50%;
+            }
+            .page:nth-child(2n) .punchhole
+            {
+                display: none;
+            }
+            .item .logo
+            {
+                width: 100%;
+            }
+            .item .name
+            {
+                font-size: 24px;
+                color: #134883;
+                margin: 0 0 20px 0;
+                padding: 0 10px;
+            }
+            .item .name .core-name
+            {
+                white-space: nowrap;
+            }
+            .item .name .title-after:not(:empty)::before
+            {
+                content: ', ';
+            }
+        </style>
+    </head>
+    <body>
+        <div id="items">%Zeilen%</div>
+        <script>
+function groupInPages(/** @type {Element[]} */items, /** @type {Element} */groupContainer)
+{
+    let columns = 2;
+    let rows = 4;
+    let itemsPerPage = columns * rows;
+    for (let i = 0; i < items.length; i += itemsPerPage)
+    {
+        let pageItems = items.slice(i, i + itemsPerPage);
+
+        let pageContainer = document.createElement("div");
+        pageContainer.classList.add("page");
+        groupContainer.appendChild(pageContainer);
+        
+        let itemsContainer = document.createElement("div");
+        itemsContainer.classList.add("items");
+        pageContainer.appendChild(itemsContainer);
+
+        pageItems.forEach(item => itemsContainer.appendChild(item));
+    }
+}
+function duplicatePages()
+{
+    let pages = document.querySelectorAll(".page");
+    for (let page of pages)
+    {
+        let clone = page.cloneNode(true);
+        page.parentElement.insertBefore(clone, page);
+    }
+}
+
+let items = Array.from(document.querySelectorAll(".item"));
+let parent = document.querySelector("#items");
+groupInPages(items, parent);
+
+duplicatePages();
+
+let maxNameHeight = Array.from(document.querySelectorAll(".name"))
+    .reduce((maxHeight, el) => Math.max(maxHeight, el.offsetHeight), 0);
+console.log("Max name height: ", maxNameHeight);
+        </script>
+    </body>
+</html>
