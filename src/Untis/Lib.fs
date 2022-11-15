@@ -148,7 +148,13 @@ type UntisExport(config) =
                         |> function
                         | Some r -> { ShortName = r.ShortName; FullName = Some r.FullName }
                         | None -> { ShortName = timetableEntry.Room; FullName = None }
-                    Informant (TeacherShortName row.Teacher, room, WorkingDay.tryFromOrdinal timetableEntry.Day |> Option.get, tryGetTimeFrameFromPeriodNumber timetableEntry.Period |> Option.get)
+                    let workingDay =
+                        WorkingDay.tryFromOrdinal timetableEntry.Day
+                        |> Option.defaultWith (fun () -> failwith $"Unknown working day in timetable entry %A{timetableEntry}")
+                    let timeFrame =
+                        tryGetTimeFrameFromPeriodNumber timetableEntry.Period
+                        |> Option.defaultWith (fun () -> failwith $"Unknown time frame \"%d{timetableEntry.Period}\" in timetable entry %A{timetableEntry}. Time frames: %A{config.TimeFrames}")
+                    Informant (TeacherShortName row.Teacher, room, workingDay, timeFrame)
                 )
             elif String.IsNullOrEmpty row.Class && not <| String.IsNullOrEmpty row.Subject then
                 Custodian (TeacherShortName row.Teacher, Map.find (CIString row.Subject) subjectMap)
