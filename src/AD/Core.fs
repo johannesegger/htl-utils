@@ -173,6 +173,10 @@ type internal ADHelper(config) =
         fn adUser
         adUser.CommitChanges()
 
+    member _.FindComputers adCtx properties =
+        use searcher = new DirectorySearcher(adCtx, "(objectCategory=computer)", properties, PageSize = 1024)
+        searcher.FindAll()
+
 
 type ADApi(config) =
     let adHelper = ADHelper(config)
@@ -555,9 +559,8 @@ type ADApi(config) =
         |> Seq.toList
 
     member _.GetComputers () =
-        use computerCtx = adHelper.FetchDirectoryEntry [||] config.ComputerContainer
-        use searcher = new DirectorySearcher(computerCtx, "(objectCategory=computer)", [| "dNSHostName" |], PageSize = 1024)
-        use searchResults = searcher.FindAll()
+        use adCtx = adHelper.FetchDirectoryEntry [||] config.ComputerContainer
+        use searchResults = adHelper.FindComputers adCtx [| "dNSHostName" |]
         searchResults
         |> Seq.cast<SearchResult>
         |> Seq.filter (fun adComputer -> adComputer.Properties.["dNSHostName"].Count > 0)
