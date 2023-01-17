@@ -118,6 +118,10 @@ type internal ADHelper(config) =
         use searcher = new DirectorySearcher(ctx, sprintf "(&(objectCategory=person)(objectClass=user)(sAMAccountName=%s))" userName, properties)
         searcher.FindOne()
 
+    member _.FindUsers ctx properties =
+        use searcher = new DirectorySearcher(ctx, "(&(objectCategory=person)(objectClass=user))", properties, PageSize = 1024)
+        searcher.FindAll()
+
     member _.TeacherGroupName =
         DN.tryCN config.TeacherGroup
         |> Option.defaultWith (fun () -> failwith "Can't get teacher group name: AD:TeacherGroup must be a distinguished name with CN at the beginning")
@@ -512,9 +516,7 @@ type ADApi(config) =
         [ config.TeacherContainer; config.ClassContainer ]
         |> List.collect (fun userContainerPath ->
             use userCtx = adHelper.FetchDirectoryEntry [||] userContainerPath
-            let userProperties = userProperties
-            use searcher = new DirectorySearcher(userCtx, "(&(objectCategory=person)(objectClass=user))", userProperties, PageSize = 1024)
-            use searchResults = searcher.FindAll()
+            use searchResults = adHelper.FindUsers userCtx userProperties
             searchResults
             |> Seq.cast<SearchResult>
             |> Seq.choose (fun adUser ->
@@ -526,6 +528,15 @@ type ADApi(config) =
             )
             |> Seq.toList
         )
+
+    member _.GetUsers userType =
+        use adCtx = adHelper.FetchUserOu userType
+        let userProperties = userProperties
+        use searchResult = adHelper.FindUsers adCtx userProperties
+        searchResult
+        |> Seq.cast<SearchResult>
+        |> Seq.map (userFromADUserSearchResult userType config.SokratesIdAttributeName)
+        |> Seq.toList
 
     member _.GetUser userName userType =
         use adCtx = adHelper.FetchUserOu userType
