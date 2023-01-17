@@ -71,7 +71,7 @@ let updatePhotos existingPhotosPath newPhotosPath names =
     |> Seq.filter (fun file ->
         let fileName = Path.GetFileNameWithoutExtension(file)
         names
-        |> List.exists (fun name -> CIString name = CIString fileName)
+        |> List.exists (fun name -> name = CIString fileName)
         |> not
     )
     |> Seq.iter (fun file ->
@@ -99,7 +99,7 @@ let main argv =
             | _ -> None
         )
     prepareTeacherPhotos newTeacherPhotosPath teachers
-    updatePhotos existingTeacherPhotosPath newTeacherPhotosPath (teachers |> List.map (fun t -> t.ShortName))
+    updatePhotos existingTeacherPhotosPath newTeacherPhotosPath (teachers |> List.map (fun t -> CIString t.ShortName))
 
     let newStudentPhotosPath = Environment.getEnvVarOrFail "NEW_STUDENT_PHOTOS_PATH"
     let existingStudentPhotosPath = Environment.getEnvVarOrFail "EXISTING_STUDENT_PHOTOS_PATH"
@@ -117,5 +117,5 @@ let main argv =
             | _ -> None
         )
     prepareStudentPhotos existingStudentPhotosPath students
-    updatePhotos existingStudentPhotosPath newStudentPhotosPath (students |> List.map (fun t -> t.Id))
+    updatePhotos existingStudentPhotosPath newStudentPhotosPath (students |> List.map (fun t -> CIString t.Id))
     0
