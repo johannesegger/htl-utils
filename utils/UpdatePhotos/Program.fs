@@ -1,5 +1,7 @@
 open System.IO
 
+let dryRun = false
+
 let adApi = AD.ADApi.FromEnvironment()
 
 type Teacher = {
@@ -27,7 +29,8 @@ let prepareTeacherPhotos baseDir teachers =
     )
     |> Seq.iter (fun (source, destination) ->
         printfn "%s -> %s" source destination
-        File.Move(Path.Combine(baseDir, source), Path.Combine(baseDir, destination))
+        if not dryRun then
+            File.Move(Path.Combine(baseDir, source), Path.Combine(baseDir, destination))
     )
 
 let prepareStudentPhotos baseDir students =
@@ -51,14 +54,16 @@ let prepareStudentPhotos baseDir students =
     )
     |> Seq.iter (fun (source, destination) ->
         printfn "%s -> %s" source destination
-        File.Move(Path.Combine(baseDir, source), Path.Combine(baseDir, destination))
+        if not dryRun then
+            File.Move(Path.Combine(baseDir, source), Path.Combine(baseDir, destination))
     )
 
 let updatePhotos existingPhotosPath newPhotosPath names =
     Directory.GetFiles(newPhotosPath)
     |> Seq.iter (fun file ->
         printfn "Update photo of %s" (Path.GetFileNameWithoutExtension(file))
-        File.Move(file, Path.Combine(existingPhotosPath, Path.GetFileName(file)), overwrite=true)
+        if not dryRun then
+            File.Move(file, Path.Combine(existingPhotosPath, Path.GetFileName(file)), overwrite=true)
     )
 
     Directory.GetFiles(existingPhotosPath)
@@ -70,7 +75,8 @@ let updatePhotos existingPhotosPath newPhotosPath names =
     )
     |> Seq.iter (fun file ->
         printfn "Remove photo of %s" (Path.GetFileNameWithoutExtension(file))
-        File.Delete(file)
+        if not dryRun then
+            File.Delete(file)
     )
 
 [<EntryPoint>]
