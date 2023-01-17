@@ -10,6 +10,11 @@ open System.Xml
 open System.Xml.Linq
 open System.Xml.XPath
 
+module Option =
+    let ofString (v: string) =
+        if v.Trim() = "" then None
+        else Some v
+
 type Config = {
     WebServiceUrl: string
     UserName: string
@@ -236,13 +241,13 @@ type SokratesApi(config: Config) =
                 | Some token ->
                     Some {
                         Id = SokratesId teacher.PersonId
-                        Title = teacher.XElement.Element(XName.Get "title") |> Option.ofObj |> Option.map (fun n -> n.Value)
+                        Title = teacher.XElement.Element(XName.Get "title") |> Option.ofObj |> Option.map (fun n -> n.Value) |> Option.bind Option.ofString
                         LastName = teacher.LastName
                         FirstName = teacher.FirstName
                         ShortName = token
                         DateOfBirth = DateTimeOffset(teacher.DateOfBirth).DateTime.Date
-                        DegreeFront = teacher.XElement.Element(XName.Get "degree") |> Option.ofObj |> Option.map (fun n -> n.Value)
-                        DegreeBack = teacher.XElement.Element(XName.Get "degree2") |> Option.ofObj |> Option.map (fun n -> n.Value)
+                        DegreeFront = teacher.XElement.Element(XName.Get "degree") |> Option.ofObj |> Option.map (fun n -> n.Value) |> Option.bind Option.ofString
+                        DegreeBack = teacher.XElement.Element(XName.Get "degree2") |> Option.ofObj |> Option.map (fun n -> n.Value) |> Option.bind Option.ofString
                         Phones = phones
                         Address = address
                     }

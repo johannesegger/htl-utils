@@ -1,4 +1,6 @@
 ﻿open System.IO
+open System.Net.Http
+open System.Net.Http.Json
 open System.Text.RegularExpressions
 
 let generateNamePlates templateDir dataRows replaceTemplateParams =
@@ -9,6 +11,84 @@ let generateNamePlates templateDir dataRows replaceTemplateParams =
     |> String.concat ""
     |> fun items -> documentTemplate.Replace("%Zeilen%", items)
     |> fun content -> File.WriteAllText(Path.Combine(templateDir, "result.html"), content)
+
+type GenderizeResult = {
+    Count: int
+    Gender: string
+    Name: string
+    Probability: float
+}
+
+type Gender = Male | Female
+module Gender =
+    let tryParse v =
+        if CIString v = CIString "male" then Some Male
+        elif CIString v = CIString "female" then Some Female
+        else None
+
+let fetchGenders (teachers: Sokrates.Teacher list) =
+    teachers
+    |> List.map (fun v -> v.FirstName)
+    |> List.distinct
+    |> List.chunkBySize 10
+    |> List.map (fun names -> async {
+        let namesParams =
+            names
+            |> List.map (fun v -> $"name[]=%s{v}")
+            |> String.concat "&"
+        use httpClient = new HttpClient()
+        let url = $"https://api.genderize.io/?%s{namesParams}&country_id=AT"
+        let! genders = httpClient.GetFromJsonAsync<GenderizeResult list>(url) |> Async.AwaitTask
+        return
+            genders
+            |> List.map (fun v ->
+                let gender =
+                    match Gender.tryParse v.Gender with
+                    | Some v -> v
+                    | None when v.Name = "Ehrenfried" -> Male
+                    | None -> failwith $"Invalid gender for \"%s{v.Name}\": \"%s{v.Gender}\""
+                v.Name, gender
+            )
+    })
+    |> Async.Parallel
+    |> Async.map (Seq.collect id >> Map.ofSeq)
+
+let genderTitle gender (v: string) =
+    match gender with
+    | Male -> v
+    | Female ->
+        v.Split(' ')
+        |> Array.map (fun v ->
+            if CIString v = CIString "Dr." then "Dr.ⁱⁿ"
+            elif CIString v = CIString "DI" then "DIⁱⁿ"
+            elif CIString v = CIString "DI(FH)" then "DIⁱⁿ(FH)"
+            elif CIString v = CIString "(FH)" then "(FH)" // e.g. "DI (FH)"
+            elif CIString v = CIString "DDI" then "DDIⁱⁿ"
+            elif CIString v = CIString "Mag." then "Mag.ᵃ"
+            elif CIString v = CIString "MMag." then "MMag.ᵃ"
+            elif CIString v = CIString "Ing." then "Ing.ⁱⁿ"
+            elif CIString v = CIString "Priv.-Doz." then "Priv.-Doz.ⁱⁿ"
+            elif CIString v = CIString "Prof." then "Prof.ⁱⁿ"
+            elif CIString v = CIString "Professor" then "Professorin"
+            elif CIString v = CIString "OStR" then "OStRⁱⁿ"
+            elif CIString v = CIString "AV" then "AVⁱⁿ"
+            elif CIString v = CIString "Direktor" then "Direktorin"
+            elif CIString v = CIString "VL" then "VLⁱⁿ"
+            elif CIString v = CIString "FOL" then "FOLⁱⁿ"
+            elif CIString v = CIString "Dipl.-Päd." then "Dipl.-Päd.ⁱⁿ"
+            elif CIString v = CIString "BSc" then "BSc"
+            elif CIString v = CIString "BSc." then "BSc."
+            elif CIString v = CIString "MSc" then "MSc"
+            elif CIString v = CIString "MSc." then "MSc."
+            elif CIString v = CIString "BEd" then "BEd"
+            elif CIString v = CIString "BEd." then "BEd."
+            elif CIString v = CIString "MEd." then "MEd."
+            elif CIString v = CIString "BA" then "BA"
+            elif CIString v = CIString "MA" then "MA"
+            elif CIString v = CIString "MLBT" then "MLBT"
+            else failwith $"Unknown title \"%s{v}\""
+        )
+        |> String.concat " "
 
 let generateTeacherNamePlates templateDir = async {
     let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
@@ -28,7 +108,7 @@ let generateTeacherNamePlates templateDir = async {
         sokratesTeachers
         |> List.map (fun v -> CIString v.ShortName, v)
         |> Map.ofList
-    return
+    let teachers =
         activeTeachers
         |> List.choose (fun teacherName ->
             match sokratesTeachersByShortName |> Map.tryFind (CIString teacherName) with
@@ -37,18 +117,20 @@ let generateTeacherNamePlates templateDir = async {
                 printfn $"WARNING: Can't find %s{teacherName} in Sokrates"
                 None
         )
-        |> fun v ->
-            generateNamePlates templateDir v (fun template (teacher: Sokrates.Teacher) ->
-                let degreeFront =
-                    let title = teacher.Title |> Option.defaultValue ""
-                    let degreeFront = teacher.DegreeFront |> Option.defaultValue ""
-                    $"%s{title} %s{degreeFront}".Trim()
-                template
-                    .Replace("%DegreeFront%", degreeFront)
-                    .Replace("%DegreeBack%", teacher.DegreeBack |> Option.defaultValue "")
-                    .Replace("%LastName%", teacher.LastName)
-                    .Replace("%FirstName%", teacher.FirstName)
-            )
+    let! nameToGender = fetchGenders teachers
+    generateNamePlates templateDir teachers (fun template (teacher: Sokrates.Teacher) ->
+        let gender = nameToGender |> Map.tryFind teacher.FirstName |> Option.defaultWith (fun () -> failwith $"Can't find gender of \"%A{teacher}\"")
+        let degreeFront =
+            let title = teacher.Title |> Option.map (genderTitle gender) |> Option.defaultValue ""
+            let degreeFront = teacher.DegreeFront |> Option.map (genderTitle gender) |> Option.defaultValue ""
+            $"%s{title} %s{degreeFront}".Trim()
+        let degreeBack = teacher.DegreeBack |> Option.map (genderTitle gender) |> Option.defaultValue ""
+        template
+            .Replace("%DegreeFront%", degreeFront)
+            .Replace("%DegreeBack%", degreeBack)
+            .Replace("%LastName%", teacher.LastName)
+            .Replace("%FirstName%", teacher.FirstName)
+    )
 }
 
 let getYear (className: string) =
@@ -85,22 +167,22 @@ let getLongDepartment className =
 
 let generateStudentNamePlates templateDir = async {
     let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
-    let! students = sokratesApi.FetchStudents None None
-    return
-        students
+    let! sokratesStudents = sokratesApi.FetchStudents None None
+    let students =
+        sokratesStudents
         |> List.filter (fun v -> not <| Regex.IsMatch(v.SchoolClass, "BMB$|VMB$"))
+        |> List.filter (fun v -> getYear v.SchoolClass > 2)
         |> List.sortBy(fun v -> v.SchoolClass, v.LastName, v.FirstName1)
-        |> fun v ->
-            generateNamePlates templateDir v (fun template student ->
-                template
-                    .Replace("%ClassName%", student.SchoolClass)
-                    .Replace("%ClassGrade%", getYear student.SchoolClass |> string)
-                    .Replace("%DepartmentId%", getDepartment student.SchoolClass)
-                    .Replace("%DepartmentShort%", getShortDepartment student.SchoolClass)
-                    .Replace("%DepartmentLong%", getLongDepartment student.SchoolClass)
-                    .Replace("%LastName%", student.LastName)
-                    .Replace("%FirstName%", student.FirstName1)
-            )
+    generateNamePlates templateDir students (fun template student ->
+        template
+            .Replace("%ClassName%", student.SchoolClass)
+            .Replace("%ClassGrade%", getYear student.SchoolClass |> string)
+            .Replace("%DepartmentId%", getDepartment student.SchoolClass)
+            .Replace("%DepartmentShort%", getShortDepartment student.SchoolClass)
+            .Replace("%DepartmentLong%", getLongDepartment student.SchoolClass)
+            .Replace("%LastName%", student.LastName)
+            .Replace("%FirstName%", student.FirstName1)
+    )
 }
 
 [<EntryPoint>]
