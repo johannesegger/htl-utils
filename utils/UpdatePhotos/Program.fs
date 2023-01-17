@@ -60,6 +60,7 @@ let prepareStudentPhotos baseDir students =
 
 let updatePhotos existingPhotosPath newPhotosPath names =
     Directory.GetFiles(newPhotosPath)
+    |> Seq.filter (fun file -> Path.GetFileNameWithoutExtension(file) |> CIString |> flip List.contains names)
     |> Seq.iter (fun file ->
         printfn "Update photo of %s" (Path.GetFileNameWithoutExtension(file))
         if not dryRun then
