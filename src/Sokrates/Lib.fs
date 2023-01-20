@@ -180,8 +180,11 @@ type SokratesApi(config: Config) =
         let faultCode = dataExchangeFault.Element(XName.Get "faultCode").Value
         let faultText = dataExchangeFault.Element(XName.Get "faultText").Value
         if faultCode <> "0" then
-            failwith $"Data exchange fault: Code %s{faultCode}: %s{faultText}"
-        return dataExchangeFault.ElementsAfterSelf() |> Seq.exactlyOne
+            failwith $"Sokrates returned error response: Code %s{faultCode}: %s{faultText}"
+        return
+            dataExchangeFault.ElementsAfterSelf()
+            |> Seq.tryExactlyOne
+            |> Option.defaultWith (fun () -> failwith $"Sokrates returned empty response: %A{doc}")
     }
 
     let tryGetAddress street streetNumber zip city country =
