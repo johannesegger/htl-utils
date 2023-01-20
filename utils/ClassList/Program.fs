@@ -16,15 +16,7 @@ let main argv =
             printf "Class: "
             Console.ReadLine()
         )
-    let sokratesConfig = {
-        WebServiceUrl = getEnvVarOrFail "SOKRATES_URL"
-        UserName = getEnvVarOrFail "SOKRATES_USER_NAME"
-        Password = getEnvVarOrFail "SOKRATES_PASSWORD"
-        SchoolId = getEnvVarOrFail "SOKRATES_SCHOOL_ID"
-        ClientCertificatePath = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PATH"
-        ClientCertificatePassphrase = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE"
-    }
-    let sokratesApi = SokratesApi(sokratesConfig)
+    let sokratesApi = SokratesApi.FromEnvironment()
     let students = sokratesApi.FetchStudents (Some className) None |> Async.RunSynchronously
     students
     |> List.sortBy (fun student -> student.LastName, student.FirstName1, student.FirstName2)

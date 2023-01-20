@@ -178,15 +178,7 @@ let syncStudentContactInfos (sokratesApi: SokratesApi) =
 
 [<EntryPoint>]
 let main argv =
-    let sokratesConfig = {
-        WebServiceUrl = getEnvVarOrFail "SOKRATES_URL"
-        UserName = getEnvVarOrFail "SOKRATES_USER_NAME"
-        Password = getEnvVarOrFail "SOKRATES_PASSWORD"
-        SchoolId = getEnvVarOrFail "SOKRATES_SCHOOL_ID"
-        ClientCertificatePath = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PATH"
-        ClientCertificatePassphrase = getEnvVarOrFail "SOKRATES_CLIENT_CERTIFICATE_PASSPHRASE"
-    }
-    let sokratesApi = SokratesApi(sokratesConfig)
+    let sokratesApi = SokratesApi.FromEnvironment()
 
     printfn "== Syncing students"
     syncStudents sokratesApi
