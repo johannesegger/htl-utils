@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaflet Marker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin=""/>
+    <style>
+        body {
+            margin: 0;
+        }
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+</head>
+<body>
+    <div id="map"></div>
+    <script type="module">
+        const persons = []
+
+        const center = [
+            persons.map(v => v.location.lat).reduce((a, b) => a + b) / persons.length,
+            persons.map(v => v.location.lon).reduce((a, b) => a + b) / persons.length
+        ]
+
+        const map = L.map('map').setView(center, 9)
+
+        const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map)
+
+        // const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
+        //     maxZoom: 20,
+        //     subdomains:['mt0','mt1','mt2','mt3']
+        // }).addTo(map)
+
+        for (let person of persons) {
+            const marker = L.marker([person.location.lat, person.location.lon]).addTo(map)
+            marker.bindPopup(`<h3>${person.name}</h3>${person.address.street}<br />${person.address.city}`)
+        }
+    </script>
+</body>
+</html>
