@@ -58,7 +58,7 @@ type internal ADHelper(config) =
     member _.FetchDirectoryEntry properties (DistinguishedName dn) =
         let path = $"LDAP://%s{config.DomainControllerHostName}/%s{dn}"
         try
-            let entry = new DirectoryEntry(path, config.UserName, config.Password, AuthenticationTypes.SecureSocketsLayer)
+            let entry = new DirectoryEntry(path, config.UserName, config.Password)
             entry.RefreshCache(properties)
             entry
         with e ->
