@@ -14,6 +14,7 @@ module private Sokrates =
             FirstName2 = None
             DateOfBirth = teacher.DateOfBirth
             SchoolClass = className
+            Gender = Male
         }
 
     let withId sokratesId (user: Teacher) =

@@ -114,7 +114,7 @@ let configureApp (app : IApplicationBuilder) =
         .UseGiraffe(webApp)
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
-    services.AddOptions<UntisConfig>().BindConfiguration("Untis") |> ignore
+    services.AddOptions<Untis.Config.UntisConfig>().BindConfiguration("Untis") |> ignore
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =
