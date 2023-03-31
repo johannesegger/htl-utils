@@ -29,16 +29,16 @@ module ComputerInfo =
                             lookup "NetAdapter" properties id (fun adapterEntries ->
                                 lookup "NetworkAdapterConfiguration" properties id (fun adapterConfigEntries ->
                                     adapterEntries
-                                    |> List.filter (fun entry -> tryFindOptional "ConnectorPresent" entry |> Option.map DataStore.Core.toBool |> Option.defaultValue false)
-                                    |> List.choose (fun entry -> tryFindOptional "InterfaceIndex" entry |> Option.map (DataStore.Core.toUInt32 >> int))
+                                    |> List.filter (fun entry -> tryFindOptional "ConnectorPresent" entry |> Option.map DataStore.Json.toBool |> Option.defaultValue false)
+                                    |> List.choose (fun entry -> tryFindOptional "InterfaceIndex" entry |> Option.map (DataStore.Json.toUInt32 >> int))
                                     |> List.choose (fun interfaceIndex ->
                                         adapterConfigEntries
-                                        |> List.tryFind (fun entry -> tryFindOptional "InterfaceIndex" entry |> Option.map (DataStore.Core.toUInt32 >> int) = Some interfaceIndex)
+                                        |> List.tryFind (fun entry -> tryFindOptional "InterfaceIndex" entry |> Option.map (DataStore.Json.toUInt32 >> int) = Some interfaceIndex)
                                     )
                                     |> List.map (fun entry ->
                                         {
-                                            MACAddress = tryFindOptional "MACAddress" entry |> Option.map DataStore.Core.toString
-                                            IPAddresses = tryFindOptional "IPAddress" entry |> Option.map (DataStore.Core.toList DataStore.Core.toString >> List.choose tryParseIPAddress) |> Option.defaultValue []
+                                            MACAddress = tryFindOptional "MACAddress" entry |> Option.map DataStore.Json.toString
+                                            IPAddresses = tryFindOptional "IPAddress" entry |> Option.map (DataStore.Json.toList DataStore.Json.toString >> List.choose tryParseIPAddress) |> Option.defaultValue []
                                         }
                                     )
                                     |> Ok
@@ -49,8 +49,8 @@ module ComputerInfo =
                                 let list =
                                     entries
                                     |> List.map (fun entry ->
-                                        let manufacturer = tryFindOptional "Manufacturer" entry |> Option.map DataStore.Core.toString
-                                        let model = tryFindOptional "Model" entry |> Option.map DataStore.Core.toString
+                                        let manufacturer = tryFindOptional "Manufacturer" entry |> Option.map DataStore.Json.toString
+                                        let model = tryFindOptional "Model" entry |> Option.map DataStore.Json.toString
                                         (manufacturer, model)
                                     )
                                 Ok {
@@ -63,11 +63,11 @@ module ComputerInfo =
                                 entries
                                 |> List.map (fun entry ->
                                     // see https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/win32-physicalmemory
-                                    let capacity = tryFindOptional "Capacity" entry |> Option.map (DataStore.Core.toUInt64 >> int64 >> Bytes)
+                                    let capacity = tryFindOptional "Capacity" entry |> Option.map (DataStore.Json.toUInt64 >> int64 >> Bytes)
                                     let memoryType =
                                         tryFindOptional "SMBIOSMemoryType" entry
                                         |> Option.map (fun v ->
-                                            match DataStore.Core.toUInt32 v |> int with
+                                            match DataStore.Json.toUInt32 v |> int with
                                             | 0x13 -> PhysicalMemoryTypeDDR2
                                             | 0x18 -> PhysicalMemoryTypeDDR3
                                             | 0x1A -> PhysicalMemoryTypeDDR4
@@ -84,9 +84,9 @@ module ComputerInfo =
                             lookup "Processor" properties id (fun entries ->
                                 entries
                                 |> List.map (fun entry ->
-                                    let name = tryFindOptional "Name" entry |> Option.map DataStore.Core.toString
-                                    let numberOfCores = tryFindOptional "NumberOfCores" entry |> Option.map (DataStore.Core.toUInt32 >> int)
-                                    let numberOfLogicalProcessors = tryFindOptional "NumberOfLogicalProcessors" entry |> Option.map (DataStore.Core.toUInt32 >> int)
+                                    let name = tryFindOptional "Name" entry |> Option.map DataStore.Json.toString
+                                    let numberOfCores = tryFindOptional "NumberOfCores" entry |> Option.map (DataStore.Json.toUInt32 >> int)
+                                    let numberOfLogicalProcessors = tryFindOptional "NumberOfLogicalProcessors" entry |> Option.map (DataStore.Json.toUInt32 >> int)
                                     {
                                         Name = name
                                         NumberOfCores = numberOfCores
@@ -99,8 +99,8 @@ module ComputerInfo =
                             lookup "VideoController" properties id (fun entries ->
                                 entries
                                 |> List.map (fun entry ->
-                                    let name = tryFindOptional "Name" entry |> Option.map DataStore.Core.toString
-                                    let adapterRam = tryFindOptional "AdapterRAM" entry |> Option.map (DataStore.Core.toUInt32 >> int64 >> Bytes)
+                                    let name = tryFindOptional "Name" entry |> Option.map DataStore.Json.toString
+                                    let adapterRam = tryFindOptional "AdapterRAM" entry |> Option.map (DataStore.Json.toUInt32 >> int64 >> Bytes)
                                     {
                                         Name = name
                                         AdapterRAM = adapterRam
@@ -110,7 +110,7 @@ module ComputerInfo =
                             )
                         BIOSSettings =
                             lookup "BIOS" properties QueryError (fun entries ->
-                                let manufacturer = entries |> List.tryPick (tryFindOptional "Manufacturer" >> Option.map DataStore.Core.toString)
+                                let manufacturer = entries |> List.tryPick (tryFindOptional "Manufacturer" >> Option.map DataStore.Json.toString)
                                 match manufacturer with
                                 | Some "Hewlett-Packard"
                                 | Some "HP" ->
@@ -133,24 +133,24 @@ module ComputerInfo =
                                             | _ -> None
                                         let tryFindEntry name valueKey tryParse =
                                             entries
-                                            |> List.tryFind (fun entry -> tryFindOptional "Name" entry |> Option.map DataStore.Core.toString = Some name)
+                                            |> List.tryFind (fun entry -> tryFindOptional "Name" entry |> Option.map DataStore.Json.toString = Some name)
                                             |> Option.bind (fun entry -> tryFindOptional valueKey entry)
                                             |> Option.bind tryParse
                                         let bootOrder =
                                             [
-                                                tryFindEntry "Boot Order" "Elements" (DataStore.Core.toList DataStore.Core.toString >> Some) |> Option.map (fun devices -> { Type = Legacy; Devices = devices })
-                                                tryFindEntry "Legacy Boot Order" "Elements" (DataStore.Core.toList DataStore.Core.toString >> Some) |> Option.map (fun devices -> { Type = Legacy; Devices = devices })
-                                                tryFindEntry "UEFI Boot Order" "Elements" (DataStore.Core.toList DataStore.Core.toString >> Some) |> Option.map (fun devices -> { Type = UEFI; Devices = devices })
+                                                tryFindEntry "Boot Order" "Elements" (DataStore.Json.toList DataStore.Json.toString >> Some) |> Option.map (fun devices -> { Type = Legacy; Devices = devices })
+                                                tryFindEntry "Legacy Boot Order" "Elements" (DataStore.Json.toList DataStore.Json.toString >> Some) |> Option.map (fun devices -> { Type = Legacy; Devices = devices })
+                                                tryFindEntry "UEFI Boot Order" "Elements" (DataStore.Json.toList DataStore.Json.toString >> Some) |> Option.map (fun devices -> { Type = UEFI; Devices = devices })
                                             ]
                                             |> List.choose id
                                         let networkServiceBootEnabled =
-                                            tryFindEntry "Network Service Boot" "CurrentValue" (DataStore.Core.toString >> tryParseEnableDisable)
-                                            |> Option.orElse (tryFindEntry "Network (PXE) Boot" "CurrentValue" (DataStore.Core.toString >> tryParseEnableDisable))
-                                        let vtxEnabled = tryFindEntry "Virtualization Technology (VTx)" "CurrentValue" (DataStore.Core.toString >> tryParseEnableDisable)
-                                        let afterPowerLossBehavior = tryFindEntry "After Power Loss" "CurrentValue" (DataStore.Core.toString >> tryParseAfterPowerLossBehavior)
+                                            tryFindEntry "Network Service Boot" "CurrentValue" (DataStore.Json.toString >> tryParseEnableDisable)
+                                            |> Option.orElse (tryFindEntry "Network (PXE) Boot" "CurrentValue" (DataStore.Json.toString >> tryParseEnableDisable))
+                                        let vtxEnabled = tryFindEntry "Virtualization Technology (VTx)" "CurrentValue" (DataStore.Json.toString >> tryParseEnableDisable)
+                                        let afterPowerLossBehavior = tryFindEntry "After Power Loss" "CurrentValue" (DataStore.Json.toString >> tryParseAfterPowerLossBehavior)
                                         let wakeOnLanEnabled =
-                                            tryFindEntry "S5 Wake on LAN" "CurrentValue" (DataStore.Core.toString >> tryParseEnableDisable)
-                                            |> Option.orElse (tryFindEntry "Wake On LAN" "CurrentValue" (DataStore.Core.toString >> tryParseWakeOnLan))
+                                            tryFindEntry "S5 Wake on LAN" "CurrentValue" (DataStore.Json.toString >> tryParseEnableDisable)
+                                            |> Option.orElse (tryFindEntry "Wake On LAN" "CurrentValue" (DataStore.Json.toString >> tryParseWakeOnLan))
                                         Ok {
                                             BootOrder = bootOrder
                                             NetworkServiceBootEnabled = networkServiceBootEnabled

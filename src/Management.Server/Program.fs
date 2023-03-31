@@ -47,7 +47,7 @@ let logRequest : HttpHandler =
 #endif
 
 let private aadConfig = AAD.Configuration.Config.fromEnvironment ()
-let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
+let private dataStoreApi = DataStore.DataStoreApi.FromEnvironment ()
 let private finalThesesConfig = FinalTheses.Configuration.Config.fromEnvironment ()
 let private generateItInformationSheetConfig = GenerateITInformationSheet.Configuration.Config.fromEnvironment ()
 let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Config.fromEnvironment ()
@@ -68,7 +68,7 @@ let webApp = fun next (ctx: HttpContext) ->
                     route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig
                     route "/it-information/users" >=> requiresAdmin >=> GenerateITInformationSheet.HttpHandler.getUsers adApi
                     route "/consultation-hours" >=> ConsultationHours.HttpHandler.getConsultationHours sokratesApi untisExport
-                    route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreConfig
+                    route "/computer-info" >=> ComputerInfo.HttpHandler.getComputerInfo dataStoreApi
                     #if DEBUG
                     route "/auth-test" >=> authTest
                     #endif

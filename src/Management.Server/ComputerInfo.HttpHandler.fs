@@ -3,11 +3,10 @@ module ComputerInfo.HttpHandler
 open Giraffe
 open ComputerInfo.Mapping
 
-let getComputerInfo dataStoreConfig : HttpHandler =
+let getComputerInfo (dataStoreApi: DataStore.DataStoreApi) : HttpHandler =
     fun next ctx -> task {
         let computerInfo =
-            DataStore.Core.readComputerInfo
-            |> Reader.run dataStoreConfig
+            dataStoreApi.ReadComputerInfo ()
             |> QueryResult.fromDataStoreDto
         return! Successful.OK computerInfo next ctx
     }

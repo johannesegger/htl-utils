@@ -8,8 +8,8 @@ open System.Threading.Tasks
 open Quartz
 
 let private adApi = AD.ADApi.FromEnvironment ()
-let private cimConfig = CIM.Configuration.Config.fromEnvironment ()
-let private dataStoreConfig = DataStore.Configuration.Config.fromEnvironment ()
+let private cimApi = CIM.CIMApi.FromEnvironment ()
+let private dataStoreApi = DataStore.DataStoreApi.FromEnvironment ()
 
 type QueryResult = {
     Timestamp: DateTimeOffset
@@ -20,7 +20,7 @@ let queryComputerInfo = async {
     let timestamp = DateTimeOffset.Now
     let! computerInfo =
         adApi.GetComputers ()
-        |> List.map (CIM.Core.getComputerInfo >> Reader.run cimConfig)
+        |> List.map cimApi.GetComputerInfo
         |> Async.Parallel
     return {
         Timestamp = timestamp
@@ -52,13 +52,12 @@ type QueryComputerInfoJob(logger: ILogger<QueryComputerInfoJob>) =
                 logger.LogInformation("{time}: Querying computer info.", DateTimeOffset.Now)
                 let! queryResult = queryComputerInfo
                 logger.LogInformation("{time}: Storing computer info.", DateTimeOffset.Now)
-                DataStore.Core.updateComputerInfo {
+                dataStoreApi.UpdateComputerInfo {
                     DataStore.Domain.QueryResult.Timestamp = queryResult.Timestamp
                     DataStore.Domain.QueryResult.ComputerInfo =
                         queryResult.ComputerInfo
                         |> List.map computerInfoToDbDto
                 }
-                |> Reader.run dataStoreConfig
                 logger.LogInformation("{time}: Done.", DateTimeOffset.Now)
             }
             |> fun wf -> Async.StartAsTask(wf, cancellationToken = ctx.CancellationToken) :> Task
