@@ -1,22 +1,25 @@
 open Sokrates
 open System
 
-let private getEnvVarOrFail name =
-    let value = Environment.GetEnvironmentVariable name
-    if isNull value
-    then failwithf "Environment variable \"%s\" not set" name
-    else value
+let listClasses (sokratesApi: SokratesApi) =
+    printfn "Classes:"
+    sokratesApi.FetchClasses(None)
+    |> Async.RunSynchronously
+    |> List.sort
+    |> List.iter (printfn "  * %s")
 
 [<EntryPoint>]
 let main argv =
+    let sokratesApi = SokratesApi.FromEnvironment()
+
     let className =
         argv
         |> Array.tryItem 0
         |> Option.defaultWith (fun () ->
+            listClasses sokratesApi
             printf "Class: "
             Console.ReadLine()
         )
-    let sokratesApi = SokratesApi.FromEnvironment()
     let students = sokratesApi.FetchStudents (Some className) None |> Async.RunSynchronously
     students
     |> List.sortBy (fun student -> student.LastName, student.FirstName1, student.FirstName2)
