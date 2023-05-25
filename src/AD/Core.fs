@@ -356,9 +356,6 @@ type ADApi(config) =
         use adCtx = adHelper.FetchUserOu userType
         let searchResult = adHelper.FindUser adCtx userName [| "homeDirectory" |]
 
-        use adUser = searchResult.GetDirectoryEntry()
-        adUser.DeleteTree()
-
         match searchResult.Properties.["homeDirectory"] |> Seq.cast<string> |> Seq.tryItem 0 with
         | Some homeDirectory ->
             use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword homeDirectory
@@ -371,6 +368,9 @@ type ADApi(config) =
             use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword exercisePath
             Directory.delete exercisePath
         | Student _ -> ()
+
+        use adUser = searchResult.GetDirectoryEntry()
+        adUser.DeleteTree()
 
     let createGroup userType =
         do
