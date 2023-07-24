@@ -55,7 +55,7 @@ module private DN =
         |> Option.bind (fun v -> if CIString v.ComponentType = CIString "CN" then Some v.ComponentValue else None)
 
 type internal ADHelper(config) =
-    member _.FetchDirectoryEntry properties (DistinguishedName dn) =
+    member this.FetchDirectoryEntry properties (DistinguishedName dn) =
         let path = $"LDAP://%s{config.DomainControllerHostName}/%s{dn}"
         try
             let entry = new DirectoryEntry(path, config.UserName, config.Password)
@@ -63,7 +63,14 @@ type internal ADHelper(config) =
             entry
         with e ->
             let properties = String.concat ", " properties
-            failwith $"Can't fetch AD entry \"%s{path}\" (Properties: \"%s{properties}\"): %s{e.Message}"
+            raise (Exception($"Can't fetch AD entry \"%s{path}\" (Properties: \"%s{properties}\")", e))
+
+    member this.TryFetchDirectoryEntry(properties, dn) =
+        try
+            this.FetchDirectoryEntry properties dn
+            |> Some
+        with e ->
+            None
 
     member _.GetGroupHomePath userType =
         match userType with
@@ -161,6 +168,16 @@ type internal ADHelper(config) =
         fn adEntry
         adEntry.CommitChanges()
 
+    member x.CreateOrUpdateDirectoryEntry path createFn updateProperties updateFn =
+        use adEntry =
+            x.TryFetchDirectoryEntry(updateProperties, path)
+            |> Option.defaultWith (fun () ->
+                createFn ()
+                x.FetchDirectoryEntry updateProperties path
+            )
+        updateFn adEntry
+        adEntry.CommitChanges()
+
     member x.UpdateGroup userType properties fn =
         let path = x.GetGroupPathFromUserType userType
         x.UpdateDirectoryEntry path properties fn
@@ -216,7 +233,7 @@ type ADApi(config) =
             group.Properties.["member"].Add(adUser.Properties.["distinguishedName"].Value) |> ignore
         )
 
-        use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword userHomePath
+        use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword userHomePath
 
         let adUserSid = adHelper.FetchSid adUser
 
@@ -308,8 +325,8 @@ type ADApi(config) =
 
             // TODO handle if oldHomeDirectory doesn't exist
             if CIString oldHomeDirectory <> CIString newHomeDirectory then
-                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldHomeDirectory
-                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newHomeDirectory
+                use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword oldHomeDirectory
+                use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword newHomeDirectory
                 Directory.Move(oldHomeDirectory, newHomeDirectory)
 
             match userType with
@@ -317,8 +334,8 @@ type ADApi(config) =
                 let oldExercisePath = adHelper.GetTeacherExercisePath userName
                 let newExercisePath = adHelper.GetTeacherExercisePath (UserName newUserName)
                 if CIString oldExercisePath <> CIString newExercisePath then
-                    use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldExercisePath
-                    use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newExercisePath
+                    use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword oldExercisePath
+                    use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword newExercisePath
                     Directory.Move(oldExercisePath, newExercisePath)
             | Student _ -> ()
         )
@@ -343,8 +360,8 @@ type ADApi(config) =
 
             // TODO handle if oldHomeDirectory doesn't exist
             if CIString oldHomeDirectory <> CIString newHomeDirectory then
-                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldHomeDirectory
-                use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newHomeDirectory
+                use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword oldHomeDirectory
+                use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword newHomeDirectory
                 Directory.Move(oldHomeDirectory, newHomeDirectory)
 
             let distinguishedName = adUser.Properties.["distinguishedName"].Value :?> string
@@ -358,14 +375,14 @@ type ADApi(config) =
 
         match searchResult.Properties.["homeDirectory"] |> Seq.cast<string> |> Seq.tryItem 0 with
         | Some homeDirectory ->
-            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword homeDirectory
+            use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword homeDirectory
             Directory.delete homeDirectory
         | None -> ()
 
         match userType with
         | Teacher ->
             let exercisePath = adHelper.GetTeacherExercisePath userName
-            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword exercisePath
+            use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword exercisePath
             Directory.delete exercisePath
         | Student _ -> ()
 
@@ -379,7 +396,7 @@ type ADApi(config) =
 
         do
             let groupHomePath = adHelper.GetGroupHomePath userType
-            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword groupHomePath
+            use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword groupHomePath
             Directory.CreateDirectory(groupHomePath) |> ignore
 
         let groupPath = adHelper.GetGroupPathFromUserType userType
@@ -392,9 +409,20 @@ type ADApi(config) =
 
         match userType with
         | Student _ ->
-            adHelper.UpdateDirectoryEntry config.StudentGroup [| "member" |] (fun parentGroup ->
-                parentGroup.Properties.["member"].Add(adGroup.Properties.["distinguishedName"].Value) |> ignore
-            )
+            adHelper.CreateOrUpdateDirectoryEntry
+                config.StudentGroup
+                (fun () ->
+                    let groupName = DN.head config.StudentGroup |> snd
+                    use adGroup = adHelper.CreateGroupEntry config.StudentGroup
+                    adGroup.Properties.["sAMAccountName"].Value <- groupName
+                    adGroup.Properties.["displayName"].Value <- groupName
+                    adGroup.Properties.["mail"].Value <- sprintf "%s@%s" groupName config.MailDomain
+                    adGroup.CommitChanges()
+                )
+                [| "member" |]
+                (fun parentGroup ->
+                    parentGroup.Properties.["member"].Add(adGroup.Properties.["distinguishedName"].Value) |> ignore
+                )
         | Teacher -> ()
 
     let changeStudentGroupName (GroupName oldClassName) (GroupName newClassName) =
@@ -409,8 +437,8 @@ type ADApi(config) =
         do
             let oldGroupHomePath = adHelper.GetGroupHomePath oldUserType
             let newGroupHomePath = adHelper.GetGroupHomePath newUserType
-            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword oldGroupHomePath
-            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword newGroupHomePath
+            use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword oldGroupHomePath
+            use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword newGroupHomePath
             Directory.Move(oldGroupHomePath, newGroupHomePath)
 
         adHelper.UpdateGroup oldUserType [| "member" |] (fun adGroup ->
@@ -439,7 +467,7 @@ type ADApi(config) =
 
         do
             let groupHomePath = adHelper.GetGroupHomePath userType
-            use __ = NetworkConnection.create config.NetworkShareUser config.NetworkSharePassword groupHomePath
+            use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword groupHomePath
             try Directory.Delete(groupHomePath) with _ -> ()
 
         do

@@ -58,12 +58,14 @@ module private Win32 =
     [<DllImport("mpr.dll")>]
     extern int WNetCancelConnection2(string name, int flags, bool force)
 
-let create userName password path =
+let tryCreate userName password path =
     let networkName =
         let m = Regex.Match(path, @"^\\\\[^\\]+\\[^\\]+")
-        if m.Success then m.Value
-        else failwithf "Can't get share name from path \"%s\"" path
-    let result = Win32.WNetAddConnection2(NetResource(networkName), password, userName, 0)
-    if result <> 0 then raise (Win32Exception(result, $"Error connecting to remote share %s{networkName} as \"%s{userName}\""))
-
-    { new IDisposable with member _.Dispose() = Win32.WNetCancelConnection2(networkName, 0, true) |> ignore }
+        if m.Success then Some m.Value
+        else None
+    match networkName with
+    | Some networkName ->
+        let result = Win32.WNetAddConnection2(NetResource(networkName), password, userName, 0)
+        if result <> 0 then raise (Win32Exception(result, $"Error connecting to remote share %s{networkName} as \"%s{userName}\""))
+        { new IDisposable with member _.Dispose() = Win32.WNetCancelConnection2(networkName, 0, true) |> ignore }
+    | None -> { new IDisposable with member _.Dispose() = () }
