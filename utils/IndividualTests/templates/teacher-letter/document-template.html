@@ -1,0 +1,49 @@
+﻿<!DOCTYPE html>
+<html>
+    <head>
+        <title>Serienbrief</title>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.0/css/bulma.min.css">
+        <style>
+            body
+            {
+                font-family: 'Segoe UI Light', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+            }
+            body, .title, .table thead th, .table td {
+                color: black;
+            }
+            .school
+            {
+                float: right;
+                zoom: 50%;
+            }
+            .letter
+            {
+                page-break-after: always;
+            }
+            .letter .title
+            {
+                font-variant: small-caps;
+            }
+            .letter table tr.is-pruefer
+            {
+                background: #E3FFE0;
+            }
+            .letter table td.grade div
+            {
+                padding: .5em 0.7em;
+                background: #ddd;
+                text-align: center;
+            }
+            .letter table td
+            {
+                vertical-align: middle;
+                white-space: nowrap;
+            }
+        </style>
+    </head>
+    <body>
+        {{content}}
+    </body>
+</html>

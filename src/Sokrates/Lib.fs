@@ -302,8 +302,16 @@ type SokratesApi(config: Config) =
         SokratesWebService.PupilList(xmlElement).PupilEntries
         |> Seq.collect (fun n ->
             match n.Pupil with
-            | Some student -> n.AddressHomes |> Seq.map (fun address -> student, address)
-            | None -> Seq.empty
+            | Some student ->
+                [
+                    yield! n.AddressHomes
+                    |> Seq.map (fun address -> {| Street = address.Street; StreetNumber = address.StreetNumber; Plz = address.Plz; City = address.City; Country = address.Country; Phone1 = address.Phone1; Phone2 = address.Phone2; From = address.From; Till = address.Till; UpdateDate = address.UpdateDate |})
+                    yield! n.AddressPayments
+                    |> Seq.map (fun address -> {| Street = address.Street; StreetNumber = address.StreetNumber; Plz = address.Plz; City = address.City; Country = address.Country; Phone1 = address.Phone1; Phone2 = address.Phone2; From = address.From; Till = address.Till; UpdateDate = address.UpdateDate |})
+                ]
+                |> List.distinct
+                |> List.map (fun address -> (student, address))
+            | None -> []
         )
         |> Seq.map (fun (student, address) ->
             {
