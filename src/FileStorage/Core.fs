@@ -27,7 +27,7 @@ let private createStudentDirectories parentDirectory names =
         with e ->
             Error { DirectoryName = name; ErrorMessage = e.Message }
     )
-    |> Result.sequence
+    |> Result.sequenceA
     |> Result.mapError CreatingSomeDirectoriesFailed
 
 let private fileInfo path =

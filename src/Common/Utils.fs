@@ -11,3 +11,8 @@ let tryDo fn arg =
     match fn arg with
     | (true, value) -> Some value
     | (false, _) -> None
+
+let tryCast<'a> (v: obj) =
+    match v with
+    | :? 'a as v -> Some v
+    | _ -> None

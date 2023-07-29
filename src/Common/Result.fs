@@ -11,7 +11,18 @@ let bindAsync fn = function
     | Ok v -> fn v
     | Error v -> async { return Error v }
 
-let sequence list =
+let traverseM fn list =
+    (list, Ok [])
+    ||> Seq.foldBack (fun item state ->
+        match state with
+        | Ok vs ->
+            match fn item with
+            | Ok v -> Ok (v :: vs)
+            | Error e -> Error e
+        | Error e -> Error e
+    )
+
+let sequenceA list =
     (list, Ok [])
     ||> Seq.foldBack (fun item state ->
         match item, state with
@@ -20,7 +31,3 @@ let sequence list =
         | Ok _, Error es -> Error es
         | Error e, Error es -> Error (e :: es)
     )
-
-let ofOption error = function
-    | Some v -> Ok v
-    | None -> Error error
