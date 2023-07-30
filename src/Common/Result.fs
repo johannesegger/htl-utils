@@ -31,3 +31,13 @@ let sequenceA list =
         | Ok _, Error es -> Error es
         | Error e, Error es -> Error (e :: es)
     )
+
+let sequenceAFull list =
+    (list, Ok [])
+    ||> Seq.foldBack (fun item state ->
+        match item, state with
+        | Ok v, Ok vs -> Ok (v :: vs)
+        | Ok v, Error vs
+        | Error v, Ok vs
+        | Error v, Error vs -> Error (v :: vs)
+    )

@@ -302,7 +302,7 @@ type ADApi(config: Config) =
             UserPrincipalName = SearchResultEntry.getStringAttributeValue "userPrincipalName" adUser
         }
 
-    member _.GetADOperations (modification: DirectoryModification) =
+    let getADOperations (modification: DirectoryModification) =
         match modification with
         | CreateUser newUser -> createUser newUser
         | UpdateUser (userName, userType, ChangeUserName (newUserName, newFirstName, newLastName, newMailAliasNames)) -> changeUserName userName userType (newUserName, newFirstName, newLastName, newMailAliasNames)
@@ -314,6 +314,33 @@ type ADApi(config: Config) =
         | UpdateGroup (Teacher, ChangeGroupName _) -> failwith "Can't rename teacher group"
         | UpdateGroup (Student oldClassName, ChangeGroupName newClassName) -> changeStudentGroupName oldClassName newClassName
         | DeleteGroup userType -> deleteGroup userType
+
+    let applyDirectoryModification modification = async {
+        let! result =
+            getADOperations modification
+            |> List.map (fun v -> async {
+                try
+                    do! Operation.run config.ConnectionConfig v
+                    return Ok $"Successfully applied operation {v}"
+                with e -> return Error $"Error while applying operation {v}: {e.Message}"
+            })
+            |> Async.Sequential
+        return result |> Result.sequenceAFull
+    }
+
+    member _.ApplyDirectoryModifications (modifications: DirectoryModification list) =
+        modifications
+        |> List.map (fun modification -> async {
+            let! result = applyDirectoryModification modification
+            return
+                result
+                |> Result.mapError (
+                    List.map (sprintf "* %s")
+                    >> List.append [ $"Error while applying modification {modification}" ]
+                )
+        })
+        |> Async.Sequential
+        |> Async.map Array.toList
 
     member _.GetUsers () = async {
         use connection = Ldap.connect config.ConnectionConfig.Ldap
