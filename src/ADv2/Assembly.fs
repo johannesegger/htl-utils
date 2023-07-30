@@ -2,5 +2,5 @@ namespace global
 
 open System.Runtime.CompilerServices
 
-[<assembly:InternalsVisibleTo("AD.Test")>]
+[<assembly:InternalsVisibleTo("ADv2.Test")>]
 do ()
