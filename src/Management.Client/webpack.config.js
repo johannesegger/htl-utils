@@ -68,7 +68,8 @@ module.exports = {
     // to prevent browser caching if code changes
     output: {
         path: resolve(CONFIG.outputDir),
-        filename: isProduction ? '[name].[hash].js' : '[name].js'
+        filename: isProduction ? '[name].[hash].js' : '[name].js',
+        hashFunction: 'xxhash64'
     },
     mode: isProduction ? "production" : "development",
     devtool: isProduction ? "source-map" : "eval-source-map",
@@ -97,21 +98,20 @@ module.exports = {
             new MiniCssExtractPlugin({ filename: 'style.css' }),
             new CopyWebpackPlugin([{ from: resolve(CONFIG.assetsDir) }]),
         ])
-        : commonPlugins.concat([
-            new webpack.HotModuleReplacementPlugin(),
-        ]),
+        : commonPlugins,
     resolve: {
         // See https://github.com/fable-compiler/Fable/issues/1490
         symlinks: false
     },
     // Configuration for webpack-dev-server
     devServer: {
-        publicPath: "/",
-        contentBase: resolve(CONFIG.assetsDir),
+        devMiddleware: {
+            publicPath: "/"
+        },
+        static: resolve(CONFIG.assetsDir),
         port: CONFIG.devServerPort,
         proxy: CONFIG.devServerProxy,
-        hot: true,
-        inline: true
+        hot: true
     },
     // - fable-loader: transforms F# into JS
     // - babel-loader: transforms JS to old syntax (compatible with old browsers)
@@ -139,10 +139,6 @@ module.exports = {
                       options: { implementation: require("sass") }
                     }
                 ],
-            },
-            {
-                test: /\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/,
-                use: ["file-loader"]
             }
         ]
     }
