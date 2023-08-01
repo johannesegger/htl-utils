@@ -338,19 +338,24 @@ type ADApi(config: Config) =
         return result |> Result.sequenceAFull
     }
 
-    member _.ApplyDirectoryModifications (modifications: DirectoryModification list) =
-        modifications
-        |> List.map (fun modification -> async {
-            let! result = applyDirectoryModification modification
-            return
-                result
-                |> Result.mapError (
-                    List.map (sprintf "* %s")
-                    >> List.append [ $"Error while applying modification {modification}" ]
-                )
-        })
-        |> Async.Sequential
-        |> Async.map Array.toList
+    member _.ApplyDirectoryModifications (modifications: DirectoryModification list) = async {
+        let! results =
+            modifications
+            |> List.map (fun modification -> async {
+                let! result = applyDirectoryModification modification
+                match result with
+                | Ok _ -> return Ok ()
+                | Error msgs ->
+                    return Error [
+                        yield $"* Error while applying modification {modification}"
+                        for msg in msgs -> $"  * %s{msg}"
+                    ]
+            })
+            |> Async.Sequential
+        match Result.sequenceA results with
+        | Ok _ -> return Ok ()
+        | Error msgs -> return Error (List.concat msgs)
+    }
 
     member _.GetUsers () = async {
         use connection = Ldap.connect config.ConnectionConfig.Ldap
