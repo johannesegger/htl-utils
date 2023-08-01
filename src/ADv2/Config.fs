@@ -1,5 +1,7 @@
 namespace AD.Configuration
 
+open Microsoft.Extensions.Configuration
+
 type DistinguishedName = DistinguishedName of string
 
 type LdapConnectionConfig = {
@@ -35,32 +37,65 @@ type Config = {
     Properties: Properties
 }
 module Config =
-    let fromEnvironment () =
-        {
-            ConnectionConfig = {
-                Ldap = {
-                    HostName = Environment.getEnvVarOrFail "AD_SERVER"
-                    UserName = Environment.getEnvVarOrFail "AD_USER"
-                    Password = Environment.getEnvVarOrFail "AD_PASSWORD"
-                }
-                NetworkShare = {
-                    UserName = Environment.getEnvVarOrFail "NETWORKSHARE_USER"
-                    Password = Environment.getEnvVarOrFail "NETWORKSHARE_PASSWORD"
-                }
-            }
-            Properties = {
-                ComputerContainer = Environment.getEnvVarOrFail "AD_COMPUTER_CONTAINER" |> DistinguishedName
-                TeacherContainer = Environment.getEnvVarOrFail "AD_TEACHER_CONTAINER" |> DistinguishedName
-                ClassContainer = Environment.getEnvVarOrFail "AD_CLASS_CONTAINER" |> DistinguishedName
-                TeacherGroup = Environment.getEnvVarOrFail "AD_TEACHER_GROUP" |> DistinguishedName
-                StudentGroup = Environment.getEnvVarOrFail "AD_STUDENT_GROUP" |> DistinguishedName
-                ClassGroupsContainer = Environment.getEnvVarOrFail "AD_CLASS_GROUPS_CONTAINER" |> DistinguishedName
-                TestUserGroup = Environment.getEnvVarOrFail "AD_TEST_USER_GROUP" |> DistinguishedName
-                SokratesIdAttributeName = Environment.getEnvVarOrFail "AD_SOKRATES_ID_ATTRIBUTE_NAME"
-                MailDomain = Environment.getEnvVarOrFail "AD_MAIL_DOMAIN"
-                TeacherHomePath = Environment.getEnvVarOrFail "AD_TEACHER_HOME_PATH"
-                TeacherExercisePath = Environment.getEnvVarOrFail "AD_TEACHER_EXERCISE_PATH"
-                StudentHomePath = Environment.getEnvVarOrFail "AD_STUDENT_HOME_PATH"
-                HomeDrive = Environment.getEnvVarOrFail "AD_HOME_DRIVE"
-            }
+    type LdapConnectionConfig() =
+        member val HostName= "" with get, set
+        member val UserName= "" with get, set
+        member val Password= "" with get, set
+        member x.Build() = {
+            HostName = x.HostName
+            UserName = x.UserName
+            Password = x.Password
         }
+    type NetworkShareConnectionConfig() =
+        member val UserName= "" with get, set
+        member val Password= "" with get, set
+        member x.Build() = {
+            UserName = x.UserName
+            Password = x.Password
+        }
+    type ConnectionConfig() =
+        member val Ldap = LdapConnectionConfig() with get, set
+        member val NetworkShare = NetworkShareConnectionConfig() with get, set
+        member x.Build() = {
+            Ldap = x.Ldap.Build()
+            NetworkShare = x.NetworkShare.Build()
+        }
+    type Properties() =
+        member val ComputerContainer = "" with get, set
+        member val TeacherContainer = "" with get, set
+        member val ClassContainer = "" with get, set
+        member val TeacherGroup = "" with get, set
+        member val StudentGroup = "" with get, set
+        member val ClassGroupsContainer = "" with get, set
+        member val TestUserGroup = "" with get, set
+        member val SokratesIdAttributeName = "" with get, set
+        member val MailDomain = "" with get, set
+        member val TeacherHomePath = "" with get, set
+        member val TeacherExercisePath = "" with get, set
+        member val StudentHomePath = "" with get, set
+        member val HomeDrive = "" with get, set
+        member x.Build() = {
+            ComputerContainer = DistinguishedName x.ComputerContainer
+            TeacherContainer = DistinguishedName x.TeacherContainer
+            ClassContainer = DistinguishedName x.ClassContainer
+            TeacherGroup = DistinguishedName x.TeacherGroup
+            StudentGroup = DistinguishedName x.StudentGroup
+            ClassGroupsContainer = DistinguishedName x.ClassGroupsContainer
+            TestUserGroup = DistinguishedName x.TestUserGroup
+            SokratesIdAttributeName = x.SokratesIdAttributeName
+            MailDomain = x.MailDomain
+            TeacherHomePath = x.TeacherHomePath
+            TeacherExercisePath = x.TeacherExercisePath
+            StudentHomePath = x.StudentHomePath
+            HomeDrive = x.HomeDrive
+        }
+    type Config() =
+        member val ConnectionConfig = ConnectionConfig() with get, set
+        member val Properties = Properties() with get, set
+        member x.Build() = {
+            ConnectionConfig = x.ConnectionConfig.Build()
+            Properties = x.Properties.Build()
+        }
+    let fromEnvironment () =
+        let config = ConfigurationBuilder().AddEnvironmentVariables().Build()
+        ConfigurationBinder.Get<Config>(config.GetSection("AD")).Build()
