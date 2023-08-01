@@ -71,16 +71,15 @@ module Ldap =
         connection.SessionOptions.ProtocolVersion <- 3 // v2 e.g. doesn't allow ModifyDNRequest to move object to different OU
         connection
     let private sendRequest<'req, 'res when 'req :> DirectoryRequest and 'res :> DirectoryResponse> (connection: LdapConnection) (request: 'req) = async {
-        // #if DEBUG
-        // let response = connection.SendRequest(request)
-        // #else
+        #if DEBUG
+        let response = connection.SendRequest(request)
+        #else
         let! response =
             Async.FromBeginEnd(
                 (fun (callback, state) -> connection.BeginSendRequest(request, PartialResultProcessing.NoPartialResultSupport, callback, state)),
                 connection.EndSendRequest,
                 ignore)
-        // #endif
-        // if response.ResultCode <> ResultCode.Success then failwith $"Request didn't succeed: {response.ResultCode} - {response.ErrorMessage}"
+        #endif
         return response :?> 'res
     }
     let private search = sendRequest<SearchRequest, SearchResponse>
