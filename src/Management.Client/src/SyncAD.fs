@@ -28,33 +28,32 @@ module UIDirectoryModification =
     let fromDto modification =
         let description =
             match modification with
-            | CreateUser ({ Type = Teacher } as user, _, _) ->
+            | CreateUser ({ Type = Teacher } as user) ->
                 let (UserName userName) = user.Name
-                sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
-            | CreateUser ({ Type = Student _ } as user, _, _) ->
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{userName})"
+            | CreateUser ({ Type = Student _ } as user) ->
                 let (UserName userName) = user.Name
-                sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{userName})"
             | UpdateUser ({ Type = Teacher } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
-                sprintf "%s %s (%s) -> %s %s (%s)" (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{oldUserName}) -> %s{newLastName.ToUpper()} %s{newFirstName} (%s{newUserName})"
             | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
-                sprintf "%s: %s %s (%s) -> %s %s (%s)" className (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
+                $"%s{className}: %s{user.LastName.ToUpper()} %s{user.FirstName} (%s{oldUserName}) -> %s{newLastName.ToUpper()} %s{newFirstName} (%s{newUserName})"
             | UpdateUser ({ Type = Teacher } as user, SetSokratesId (SokratesId sokratesId)) ->
                 let (UserName userName) = user.Name
-                sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName userName sokratesId
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{userName}): %s{sokratesId}"
             | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, SetSokratesId (SokratesId sokratesId)) ->
-                let (UserName userName) = user.Name
-                sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName className sokratesId
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{className}): %s{sokratesId}"
             | UpdateUser ({ Type = Student (ClassName.ClassName oldClassName) } as user, MoveStudentToClass (ClassName.ClassName newClassName)) ->
-                sprintf "%s %s: %s -> %s" (user.LastName.ToUpper()) user.FirstName oldClassName newClassName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName}: %s{oldClassName} -> %s{newClassName}"
             | UpdateUser ({ Type = Teacher }, MoveStudentToClass _) ->
                 "<invalid>"
             | DeleteUser ({ Type = Teacher } as user) ->
                 let (UserName userName) = user.Name
-                sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{userName})"
             | DeleteUser ({ Type = Student _ } as user) ->
-                sprintf "%s %s" (user.LastName.ToUpper()) user.FirstName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName}"
             | CreateGroup Teacher ->
                 "Teachers"
             | CreateGroup (Student (ClassName.ClassName className)) ->
@@ -87,10 +86,10 @@ module DirectoryModificationGroup =
         |> List.groupBy (function
             | CreateGroup _ ->
                 "Create user group", Create
-            | CreateUser ({ Type = Teacher }, _, _) ->
+            | CreateUser { Type = Teacher } ->
                 "Create teacher", Create
-            | CreateUser ({ Type = Student (ClassName.ClassName className) }, _, _) ->
-                sprintf "Create student of %s" className, Create
+            | CreateUser { Type = Student (ClassName.ClassName className) } ->
+                $"Create student of %s{className}", Create
             | UpdateUser ({ Type = Teacher }, ChangeUserName _) ->
                 "Rename teacher", Update
             | UpdateUser (_, SetSokratesId _) ->
@@ -98,11 +97,11 @@ module DirectoryModificationGroup =
             | UpdateUser ({ Type = Student _ }, ChangeUserName _) ->
                 "Rename student", Update
             | UpdateUser (_, MoveStudentToClass (ClassName.ClassName className)) ->
-                sprintf "Move student to %s" className, Update
-            | DeleteUser ({ Type = Teacher }) ->
+                $"Move student to %s{className}", Update
+            | DeleteUser { Type = Teacher } ->
                 "Delete teacher", Delete
-            | DeleteUser ({ Type = Student (ClassName.ClassName className) }) ->
-                sprintf "Delete student of %s" className, Delete
+            | DeleteUser { Type = Student (ClassName.ClassName className) } ->
+                $"Delete student of %s{className}", Delete
             | UpdateStudentClass (_, ChangeStudentClassName _) ->
                 "Rename class", Update
             | DeleteGroup _ ->
@@ -185,7 +184,7 @@ let rec update msg (model: Model) =
     | LoadModifications -> { model with Modifications = LoadingModifications }
     | LoadModificationsResponse (Ok directoryModifications) ->
         { model with ModificationsState = Drafting; Modifications = LoadedModifications (DirectoryModificationGroup.fromDtoList directoryModifications) }
-    | LoadModificationsResponse (Error ex) ->
+    | LoadModificationsResponse (Error _ex) ->
         { model with Modifications = FailedToLoadModifications }
     | SelectAllModifications value ->
         updateDirectoryModificationGroups (fun _ -> true) (fun p -> { p with IsEnabled = value })
@@ -219,7 +218,7 @@ let view model dispatch =
             Button.button
                 [
                     Button.Disabled isLocked
-                    Button.OnClick (fun e -> dispatch (SelectAllModifications true))
+                    Button.OnClick (fun _e -> dispatch (SelectAllModifications true))
                 ]
                 [
                     Icon.icon [] [ Fa.i [ Fa.Solid.CheckSquare ] [] ]
@@ -228,7 +227,7 @@ let view model dispatch =
             Button.button
                 [
                     Button.Disabled isLocked
-                    Button.OnClick (fun e -> dispatch (SelectAllModifications false))
+                    Button.OnClick (fun _e -> dispatch (SelectAllModifications false))
                 ]
                 [
                     Icon.icon [] [ Fa.i [ Fa.Regular.CheckSquare ] [] ]
@@ -316,7 +315,7 @@ let view model dispatch =
                     Button.button
                         [
                             Button.Color IsInfo
-                            Button.OnClick (fun e -> dispatch LoadModifications)
+                            Button.OnClick (fun _e -> dispatch LoadModifications)
                         ]
                         [
                             Icon.icon [] [ Fa.i [ Fa.Solid.Sync ] [] ]
@@ -330,7 +329,7 @@ let view model dispatch =
                         Button.Disabled (ModificationsState.isApplied model.ModificationsState || LoadableDirectoryModifications.isLoading model.Modifications)
                         Button.IsLoading (ModificationsState.isApplying model.ModificationsState)
                         Button.Color IsSuccess
-                        Button.OnClick (fun _ -> dispatch ApplyModifications)
+                        Button.OnClick (fun _e -> dispatch ApplyModifications)
                     ]
                     [
                         Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
@@ -377,7 +376,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                 let applyModifications (modifications: DirectoryModification list) =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofAsync (async {
-                            let url = sprintf "/api/ad/updates/apply"
+                            let url = "/api/ad/updates/apply"
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             let coders = Extra.empty |> Thoth.addCoders

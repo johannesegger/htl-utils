@@ -27,38 +27,37 @@ module UIDirectoryModification =
     let fromDto modification =
         let description =
             match modification with
-            | CreateUser ({ Type = Teacher } as user, _, _) ->
+            | CreateUser ({ Type = Teacher } as user) ->
                 let (UserName userName) = user.Name
-                sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
-            | CreateUser ({ Type = Student _ } as user, _, _) ->
-                sprintf "%s %s" (user.LastName.ToUpper()) user.FirstName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{userName})"
+            | CreateUser ({ Type = Student _ } as user) ->
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName}"
             | UpdateUser ({ Type = Teacher } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
-                sprintf "%s %s (%s) -> %s %s (%s)" (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{oldUserName}) -> %s{newLastName.ToUpper()} %s{newFirstName} (%s{newUserName})"
             | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, ChangeUserName (UserName newUserName, newFirstName, newLastName, _)) ->
                 let (UserName oldUserName) = user.Name
-                sprintf "%s: %s %s (%s) -> %s %s (%s)" className (user.LastName.ToUpper()) user.FirstName oldUserName (newLastName.ToUpper()) newFirstName newUserName
+                $"%s{className}: %s{user.LastName.ToUpper()} %s{user.FirstName} (%s{oldUserName}) -> %s{newLastName.ToUpper()} %s{newFirstName} (%s{newUserName})"
             | UpdateUser ({ Type = Teacher } as user, SetSokratesId (SokratesId sokratesId)) ->
                 let (UserName userName) = user.Name
-                sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName userName sokratesId
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{userName}): %s{sokratesId}"
             | UpdateUser ({ Type = Student (ClassName.ClassName className) } as user, SetSokratesId (SokratesId sokratesId)) ->
-                let (UserName userName) = user.Name
-                sprintf "%s %s (%s): %s" (user.LastName.ToUpper()) user.FirstName className sokratesId
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{className}): %s{sokratesId}"
             | UpdateUser ({ Type = Student (ClassName.ClassName oldClassName) } as user, MoveStudentToClass (ClassName.ClassName newClassName)) ->
-                sprintf "%s %s: %s -> %s" (user.LastName.ToUpper()) user.FirstName oldClassName newClassName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName}: %s{oldClassName} -> %s{newClassName}"
             | UpdateUser ({ Type = Teacher }, MoveStudentToClass _) ->
                 "<invalid>"
             | DeleteUser ({ Type = Teacher } as user) ->
                 let (UserName userName) = user.Name
-                sprintf "%s %s (%s)" (user.LastName.ToUpper()) user.FirstName userName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName} (%s{userName})"
             | DeleteUser ({ Type = Student _ } as user) ->
-                sprintf "%s %s" (user.LastName.ToUpper()) user.FirstName
+                $"%s{user.LastName.ToUpper()} %s{user.FirstName}"
             | CreateGroup Teacher ->
                 "Teachers"
             | CreateGroup (Student (ClassName.ClassName className)) ->
                 className
             | UpdateStudentClass (ClassName.ClassName oldClassName, ChangeStudentClassName (ClassName.ClassName newClassName)) ->
-                sprintf "%s -> %s" oldClassName newClassName
+                $"%s{oldClassName} -> %s{newClassName}"
             | DeleteGroup Teacher ->
                 "Teachers"
             | DeleteGroup (Student (ClassName.ClassName className)) ->
@@ -108,9 +107,9 @@ let private validateModificationDraft directoryModification =
         ValidationErrors =
             [
                 match directoryModification with
-                | CreateUser ({ Name = UserName userName; Type = Teacher }, _, _) ->
+                | CreateUser { Name = UserName userName; Type = Teacher } ->
                     if String.IsNullOrWhiteSpace userName then "User name must not be empty."
-                | CreateUser ({ Name = UserName userName; Type = Student (ClassName.ClassName className) }, _, _) ->
+                | CreateUser { Name = UserName userName; Type = Student (ClassName.ClassName className) } ->
                     if String.IsNullOrWhiteSpace className then "Class name must not be empty."
                     if String.IsNullOrWhiteSpace userName then "User name must not be empty."
                 | DeleteUser { Name = UserName userName } ->
@@ -125,10 +124,24 @@ let private validateModificationDraft directoryModification =
 let private clearModificationDraft modificationDraft =
     let clearedModification =
         match modificationDraft.Modification with
-        | CreateUser (user, _, _) ->
-            CreateUser ({ user with Name = UserName ""; FirstName = ""; LastName = "" }, [], "")
+        | CreateUser user ->
+            CreateUser {
+                Name = UserName ""
+                SokratesId = None
+                FirstName = ""
+                LastName = ""
+                Type = user.Type
+                MailAliases = []
+                Password = ""
+            }
         | DeleteUser user ->
-            DeleteUser { user with Name = UserName "" }
+            DeleteUser {
+                Name = UserName ""
+                SokratesId = None
+                FirstName = ""
+                LastName = ""
+                Type = user.Type
+            }
         | UpdateUser _
         | CreateGroup _
         | UpdateStudentClass _
@@ -144,7 +157,7 @@ let rec update msg model =
         }
 
     match msg with
-    | ToggleEnableModification (directoryModification) ->
+    | ToggleEnableModification directoryModification ->
         updateDirectoryModification directoryModification (fun p -> { p with IsEnabled = not p.IsEnabled })
     | ApplyModifications ->
         match model.ModificationsState with
@@ -172,15 +185,16 @@ let init =
         ModificationsState = Drafting
         Modifications = []
         ModificationDraft =
-            let user =
-                {
-                    Name = UserName ""
-                    SokratesId = None
-                    FirstName = ""
-                    LastName = ""
-                    Type = Teacher
-                }
-            CreateUser (user, [], "") |> validateModificationDraft
+            CreateUser {
+                Name = UserName ""
+                SokratesId = None
+                FirstName = ""
+                LastName = ""
+                Type = Teacher
+                MailAliases = []
+                Password = ""
+            }
+            |> validateModificationDraft
     }
 
 let view model dispatch =
@@ -200,7 +214,7 @@ let view model dispatch =
             Panel.icon [] []
             Button.button
                 [
-                    Button.Disabled (isLocked)
+                    Button.Disabled isLocked
                     Button.Size IsSmall
                     Button.Color (if directoryModification.IsEnabled then color else NoColor)
                     Button.Props [ Style [ MarginRight "0.5rem" ] ]
@@ -220,11 +234,11 @@ let view model dispatch =
             ]
         ]
 
-    let userTypeSelection (user: User) typeChangedMsg =
+    let userTypeSelection userType typeChangedMsg =
         [
             Field.div [] [
                 Control.div [] [
-                    let radioButtonName = System.Guid.NewGuid().ToString()
+                    let radioButtonName = Guid.NewGuid().ToString()
                     yield!
                         [
                             "Teacher", Teacher
@@ -232,7 +246,7 @@ let view model dispatch =
                         ]
                         |> List.map (fun (title, data) ->
                             let isSelected =
-                                match user.Type, data with
+                                match userType, data with
                                 | Teacher, Teacher -> true
                                 | Teacher, _ -> false
                                 | Student _, Student _ -> true
@@ -250,7 +264,7 @@ let view model dispatch =
                         )
                 ]
             ]
-            match user.Type with
+            match userType with
             | Teacher -> ()
             | Student (ClassName.ClassName className) ->
                 Field.div [] [
@@ -270,7 +284,7 @@ let view model dispatch =
                 Control.div [] [
                     yield!
                         [
-                            "Create user", CreateUser ({ Name = UserName ""; SokratesId = None; FirstName = ""; LastName = ""; Type = Teacher }, [], "")
+                            "Create user", CreateUser { Name = UserName ""; SokratesId = None; FirstName = ""; LastName = ""; Type = Teacher; MailAliases = []; Password = "" }
                             "Delete user", DeleteUser { Name = UserName ""; SokratesId = None; FirstName = ""; LastName = ""; Type = Teacher }
                         ]
                         |> List.map (fun (title, data) ->
@@ -298,14 +312,14 @@ let view model dispatch =
                 ]
             ]
             match model.ModificationDraft.Modification with
-            | CreateUser (user, mailAliases, password) ->
-                yield! userTypeSelection user (fun userType -> SetModificationDraft (CreateUser ({ user with Type = userType }, mailAliases, password)))
+            | CreateUser user ->
+                yield! userTypeSelection user.Type (fun userType -> SetModificationDraft (CreateUser { user with Type = userType }))
                 Field.div [] [
                     Control.div [] [
                         Input.text [
                             Input.Placeholder "User name"
                             Input.Value (let (UserName userName) = user.Name in userName)
-                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser ({ user with Name = UserName ev.Value }, mailAliases, password))))
+                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser { user with Name = UserName ev.Value })))
                         ]
                     ]
                 ]
@@ -314,7 +328,7 @@ let view model dispatch =
                         Input.text [
                             Input.Placeholder "First name"
                             Input.Value user.FirstName
-                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser ({ user with FirstName = ev.Value }, mailAliases, password))))
+                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser { user with FirstName = ev.Value })))
                         ]
                     ]
                 ]
@@ -323,7 +337,7 @@ let view model dispatch =
                         Input.text [
                             Input.Placeholder "Last name"
                             Input.Value user.LastName
-                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser ({ user with LastName = ev.Value }, mailAliases, password))))
+                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser { user with LastName = ev.Value })))
                         ]
                     ]
                 ]
@@ -331,18 +345,18 @@ let view model dispatch =
                     Control.div [] [
                         Input.text [
                             Input.Placeholder "Password"
-                            Input.Value password
-                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser (user, mailAliases, ev.Value))))
+                            Input.Value user.Password
+                            Input.OnChange (fun _ev -> dispatch (SetModificationDraft (CreateUser user)))
                         ]
                     ]
                     Help.help [ Help.Color IsInfo ] [
                         str "For automatic modifications this defaults to the user's birthday in the format "
                         b [] [ str "dd.mm.yyyy" ]
-                        str (sprintf ", e.g. 17.03.%d" (System.DateTime.Today.Year - 30))
+                        str $", e.g. 17.03.%d{DateTime.Today.Year - 30}"
                     ]
                 ]
             | DeleteUser user ->
-                yield! userTypeSelection user (fun userType -> SetModificationDraft (DeleteUser { user with Type = userType }))
+                yield! userTypeSelection user.Type (fun userType -> SetModificationDraft (DeleteUser { user with Type = userType }))
                 Field.div [] [
                     Control.div [] [
                         Input.text [
@@ -383,7 +397,7 @@ let view model dispatch =
                         Button.Disabled (ModificationsState.isApplied model.ModificationsState || List.isEmpty model.Modifications)
                         Button.IsLoading (ModificationsState.isApplying model.ModificationsState)
                         Button.Color IsSuccess
-                        Button.OnClick (fun _ -> dispatch ApplyModifications)
+                        Button.OnClick (fun _ev -> dispatch ApplyModifications)
                     ]
                     [
                         Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]

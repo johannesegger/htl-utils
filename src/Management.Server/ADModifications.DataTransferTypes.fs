@@ -36,6 +36,16 @@ type MailAlias = {
     UserName: string
 }
 
+type NewUser = {
+    Name: UserName
+    SokratesId: SokratesId option
+    FirstName: string
+    LastName: string
+    Type: UserType
+    MailAliases: MailAlias list
+    Password: string
+}
+
 type UserUpdate =
     | ChangeUserName of UserName * firstName: string * lastName: string * MailAlias list
     | SetSokratesId of SokratesId
@@ -45,7 +55,7 @@ type StudentClassUpdate =
     | ChangeStudentClassName of ClassName
 
 type DirectoryModification =
-    | CreateUser of User * MailAlias list * password: string
+    | CreateUser of NewUser
     | UpdateUser of User * UserUpdate
     | DeleteUser of User
     | CreateGroup of UserType

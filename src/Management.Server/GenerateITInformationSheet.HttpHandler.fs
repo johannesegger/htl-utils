@@ -13,23 +13,24 @@ open System
 open System.IO
 open System.Text.RegularExpressions
 
-let getUsers (adApi: AD.ADApi) : HttpHandler =
+let getUsers (adApi: AD.Core.ADApi) : HttpHandler =
     fun next ctx -> task {
+        let! teachers = adApi.GetUsers ()
         let teachers =
-            adApi.GetUsers ()
-            |> List.filter (fun user -> user.Type = AD.Teacher)
+            teachers
+            |> List.filter (fun user -> user.Type = AD.Domain.Teacher)
             |> List.map User.fromADDto
         return! Successful.OK teachers next ctx
     }
 
-let private getFileName template (user: AD.ExistingUser) =
+let private getFileName template (user: AD.Domain.ExistingUser) =
     init
-    |> add "shortName" (let (AD.UserName userName) = user.Name in userName)
+    |> add "shortName" (let (AD.Domain.UserName userName) = user.Name in userName)
     |> add "firstName" user.FirstName
     |> add "lastName" user.LastName
     |> fromText template
 
-let private replacePlaceholders template (user: AD.ExistingUser) =
+let private replacePlaceholders template (user: AD.Domain.ExistingUser) =
     let (mailAddress, mailAliases) =
         let primaryAddress =
             user.ProxyAddresses
@@ -50,7 +51,7 @@ let private replacePlaceholders template (user: AD.ExistingUser) =
 
     let template = Regex.Replace(template, "\r?\n?(?=<fs-template |</fs-template>)", "")
     init
-    |> add "shortName" (let (AD.UserName userName) = user.Name in userName)
+    |> add "shortName" (let (AD.Domain.UserName userName) = user.Name in userName)
     |> add "firstName" user.FirstName
     |> add "lastName" user.LastName
     |> add "mailAddress" mailAddress
@@ -99,17 +100,17 @@ let private htmlToPdf header footer content =
     pdfStream.CopyToAsync(stream) |> Async.AwaitTask |> Async.RunSynchronously
     stream.ToArray()
 
-let generateSheet (adApi: AD.ADApi) config : HttpHandler =
+let generateSheet (adApi: AD.Core.ADApi) config : HttpHandler =
     fun next ctx -> task {
         let! user = ctx.BindJsonAsync<User>()
-        let adUser = adApi.GetUser (AD.UserName user.ShortName) AD.Teacher
+        let! adUser = adApi.GetUser(AD.Domain.UserName user.ShortName, AD.Domain.Teacher)
         let result = {
             Title = getFileName config.FileNameTemplate adUser |> sprintf "%s.pdf"
             Content =
                 let readFile path =
                     try
                         File.ReadAllText path
-                    with :? IOException as e -> failwithf "Can't read %s: %s" path e.Message
+                    with :? IOException as e -> failwithf $"Can't read %s{path}: %s{e.Message}"
                 let headerTemplate = readFile config.HeaderTemplatePath
                 let header = replacePlaceholders headerTemplate adUser
                 let footerTemplate = readFile config.FooterTemplatePath

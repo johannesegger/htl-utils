@@ -11,7 +11,7 @@ type ExistingUser = {
     MailAddressNames: string list
 }
 module ExistingUser =
-    let fromADDto (adUser: AD.ExistingUser) =
+    let fromADDto (adUser: AD.Domain.ExistingUser) =
         {
             User = User.fromADDto adUser
             MailAddressNames = [
@@ -34,11 +34,11 @@ let uniqueUserName existingUserNames (UserName rawUserName) =
     |> Seq.find (fun name -> not <| List.exists (fun (UserName v) -> CIString name = CIString v) existingUserNames)
     |> UserName
 
-let rawMailAliases user =
+let rawMailAliases (user: User) =
     [
         {
             IsPrimary = true
-            UserName = sprintf "%s.%s" user.FirstName user.LastName
+            UserName = $"%s{user.FirstName}.%s{user.LastName}"
         }
     ]
 
@@ -83,7 +83,7 @@ let tryFindExistingUser (users: ExistingUser list) sokratesId userName =
         )
     )
 
-let getMailAddressNames (adUser: AD.ExistingUser) =
+let getMailAddressNames (adUser: AD.Domain.ExistingUser) =
     [
         adUser.UserPrincipalName.UserName
         yield! adUser.ProxyAddresses |> List.map (fun v -> v.Address.UserName)
@@ -125,7 +125,7 @@ let calculateCreateTeacherModification users (teacher: User) password =
     | Some _existingUser -> None
     | None ->
         let mailAliases = uniqueMailAliases teacher users
-        let modification = CreateUser (teacher, mailAliases, password)
+        let modification = CreateUser (NewUser.fromUser teacher mailAliases password)
         let newUser = {
             User = teacher
             MailAddressNames = [
@@ -148,7 +148,7 @@ let calculateCreateStudentModification users (student: User) password =
                 |> uniqueUserName existingUserNames
             { student with Name = userName }
         let mailAliases = uniqueMailAliases student users
-        let modification = CreateUser (student, mailAliases, password)
+        let modification = CreateUser (NewUser.fromUser student mailAliases password)
         let newUser = {
             User = student
             MailAddressNames = [
@@ -158,7 +158,7 @@ let calculateCreateStudentModification users (student: User) password =
         }
         Some (modification, newUser :: users)
 
-let calculateTeacherSokratesIdUpdateModification users teacher =
+let calculateTeacherSokratesIdUpdateModification users (teacher: User) =
     match tryFindExistingUser users teacher.SokratesId (Some teacher.Name), teacher.SokratesId with
     | Some existingUser, Some newSokratesId when existingUser.User.SokratesId <> Some newSokratesId ->
         let modification = UpdateUser (existingUser.User, SetSokratesId newSokratesId)
@@ -238,7 +238,7 @@ let calculateChangeStudentNameModification (users: ExistingUser list) (student: 
         Some (modification, users)
     | _ -> None
 
-let calculateMoveStudentToClassModifications users student =
+let calculateMoveStudentToClassModifications users (student: User) =
     match tryFindExistingUser users student.SokratesId None, student.Type with
     | Some user, Student group when user.User.Type <> student.Type ->
         let modification = UpdateUser (user.User, MoveStudentToClass group)
@@ -381,7 +381,7 @@ let modifications sokratesTeachers sokratesStudents adUsers =
     let (_, modifications) = state in
     List.rev modifications
 
-let getADModifications (adApi: AD.ADApi) (sokratesApi: Sokrates.SokratesApi) : HttpHandler =
+let getADModifications (adApi: AD.Core.ADApi) (sokratesApi: Sokrates.SokratesApi) : HttpHandler =
     fun next ctx -> task {
         let! sokratesTeachers = sokratesApi.FetchTeachers |> Async.StartChild
         let timestamp =
@@ -391,53 +391,55 @@ let getADModifications (adApi: AD.ADApi) (sokratesApi: Sokrates.SokratesApi) : H
                 |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\"" date)
             )
         let! sokratesStudents = sokratesApi.FetchStudents None timestamp |> Async.StartChild
-        let adUsers = adApi.GetUsers () |> List.sortBy (fun v -> v.Type, v.LastName, v.FirstName)
+        let! adUsers = adApi.GetUsers() |> Async.StartChild
 
         let! sokratesTeachers = sokratesTeachers |> Async.map (List.sortBy (fun v -> v.LastName, v.FirstName))
         let! sokratesStudents = sokratesStudents |> Async.map (List.sortBy (fun v -> v.SchoolClass, v.LastName, v.FirstName1))
+        let! adUsers = adUsers |> Async.map (List.sortBy (fun v -> v.Type, v.LastName, v.FirstName))
 
         let modifications = modifications sokratesTeachers sokratesStudents adUsers
         return! Successful.OK modifications next ctx
     }
 
-let verifyADModification (adApi: AD.ADApi) : HttpHandler =
+let verifyADModification (adApi: AD.Core.ADApi) : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<DirectoryModification>()
         match data with
-        | CreateUser (user, [], password) ->
-            let users =
+        | CreateUser newUser ->
+            let! users =
                 adApi.GetUsers ()
-                |> List.map ExistingUser.fromADDto
+                |> Async.map (List.map ExistingUser.fromADDto)
+            let user = NewUser.toUser newUser
             let mailAliases = uniqueMailAliases user users
-            let modification = CreateUser (user, mailAliases, password)
+            let modification = CreateUser { newUser with MailAliases = mailAliases }
             return! Successful.OK modification next ctx
         | _ -> return! RequestErrors.BAD_REQUEST "Can't verify modification" next ctx
     }
 
-let applyADModifications (adApi: AD.ADApi) : HttpHandler =
+let applyADModifications (adApi: AD.Core.ADApi) : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<DirectoryModification list>()
-        data
-        |> List.map DirectoryModification.toADDto
-        |> adApi.ApplyDirectoryModifications
-        return! Successful.OK () next ctx
+        match! data |> List.map DirectoryModification.toADDto |> adApi.ApplyDirectoryModifications with
+        | Ok () -> return! Successful.OK () next ctx
+        | Error msgs -> return! ServerErrors.INTERNAL_ERROR (String.concat "\n" msgs) next ctx
     }
 
-let getADIncrementClassGroupUpdates (adApi: AD.ADApi) incrementClassGroupsConfig : HttpHandler =
+let getADIncrementClassGroupUpdates (adApi: AD.Core.ADApi) incrementClassGroupsConfig : HttpHandler =
     fun next ctx -> task {
-        let classGroups =
-            adApi.GetClassGroups ()
-            |> List.map (ClassName.fromADDto >> (fun (ClassName groupName) -> groupName))
+        let! classGroups = adApi.GetClassGroups ()
+        let classGroups = classGroups |> List.map (ClassName.fromADDto >> (fun (ClassName groupName) -> groupName))
 
         let modifications = IncrementClassGroups.Core.modifications classGroups |> Reader.run incrementClassGroupsConfig
         return! Successful.OK modifications next ctx
     }
 
-let applyADIncrementClassGroupUpdates (adApi: AD.ADApi) : HttpHandler =
+let applyADIncrementClassGroupUpdates (adApi: AD.Core.ADApi) : HttpHandler =
     fun next ctx -> task {
         let! data = ctx.BindJsonAsync<IncrementClassGroups.DataTransferTypes.ClassGroupModification list>()
-        data
-        |> List.map (ClassGroupModification.toDirectoryModification >> DirectoryModification.toADDto)
-        |> adApi.ApplyDirectoryModifications
-        return! Successful.OK () next ctx
+        let modifications =
+            data
+            |> List.map (ClassGroupModification.toDirectoryModification >> DirectoryModification.toADDto)
+        match! modifications |> adApi.ApplyDirectoryModifications with
+        | Ok () -> return! Successful.OK () next ctx
+        | Error msgs -> return! ServerErrors.INTERNAL_ERROR (String.concat "\n" msgs) next ctx
     }

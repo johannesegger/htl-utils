@@ -40,7 +40,7 @@
     <ProjectReference Include="..\Common\Common.fsproj" />
     <ProjectReference Include="..\Common.Server\Common.Server.fsproj" />
     <ProjectReference Include="..\AAD\AAD.fsproj" />
-    <ProjectReference Include="..\AD\AD.fsproj" />
+    <ProjectReference Include="..\ADv2\ADv2.fsproj" />
     <ProjectReference Include="..\FinalTheses\FinalTheses.fsproj" />
     <ProjectReference Include="..\Sokrates\Sokrates.fsproj" />
     <ProjectReference Include="..\Untis\Untis.fsproj" />

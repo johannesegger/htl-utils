@@ -55,7 +55,7 @@ let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Conf
 let private requiresAdmin = AAD.Auth.requiresAdmin
 
 let webApp = fun next (ctx: HttpContext) ->
-    let adApi = AD.ADApi.FromEnvironment()
+    let adApi = AD.Core.ADApi.FromEnvironment()
     let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
     let untisExport = Untis.UntisExport.FromEnvironment()
     choose [

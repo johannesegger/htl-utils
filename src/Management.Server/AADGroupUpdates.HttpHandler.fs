@@ -2,6 +2,7 @@ module AADGroupUpdates.HttpHandler
 
 open AADGroupUpdates.DataTransferTypes
 open AADGroupUpdates.Mapping
+open AD.Core
 open Giraffe
 
 let private calculateMemberUpdates teacherIds aadGroupMemberIds =
@@ -37,11 +38,11 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
             )
     ]
 
-let getAADGroupUpdates (adApi: AD.ADApi) (aadConfig: AAD.Configuration.Config) finalThesesConfig (sokratesApi: Sokrates.SokratesApi) (untis: Untis.UntisExport) : HttpHandler =
+let getAADGroupUpdates (adApi: ADApi) (aadConfig: AAD.Configuration.Config) finalThesesConfig (sokratesApi: Sokrates.SokratesApi) (untis: Untis.UntisExport) : HttpHandler =
     fun next ctx -> task {
         let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
         let teachingData = untis.GetTeachingData()
-        let adUsers = adApi.GetUsers()
+        let! adUsers = adApi.GetUsers()
         let finalThesesMentors = FinalTheses.Core.getMentors |> Reader.run finalThesesConfig
         let! sokratesStudents = sokratesApi.FetchStudents None None
         let sokratesStudentIdToGender =
@@ -83,45 +84,45 @@ let getAADGroupUpdates (adApi: AD.ADApi) (aadConfig: AAD.Configuration.Config) f
             adUsers
             |> List.choose (fun user ->
                 match user.Type with
-                | AD.Teacher ->
-                    let (AD.UserName userName) = user.Name
+                | AD.Domain.Teacher ->
+                    let (AD.Domain.UserName userName) = user.Name
                     Map.tryFind userName aadUserLookupByUserName
-                | AD.Student _ -> None
+                | AD.Domain.Student _ -> None
             )
 
         let students =
             adUsers
             |> List.choose (fun user ->
                 match user.Type with
-                | AD.Student _ ->
-                    let (AD.UserName userName) = user.Name
+                | AD.Domain.Student _ ->
+                    let (AD.Domain.UserName userName) = user.Name
                     Map.tryFind userName aadUserLookupByUserName
-                | AD.Teacher -> None
+                | AD.Domain.Teacher -> None
             )
 
         let femaleStudents =
             adUsers
             |> List.choose (fun user ->
                 match user.Type with
-                | AD.Student _ ->
+                | AD.Domain.Student _ ->
                     match user.SokratesId |> Option.bind (SokratesId.fromADDto >> flip Map.tryFind sokratesStudentIdToGender) with
                     | Some Sokrates.Gender.Female ->
-                        let (AD.UserName userName) = user.Name
+                        let (AD.Domain.UserName userName) = user.Name
                         Map.tryFind userName aadUserLookupByUserName
                     | _ -> None
-                | AD.Teacher-> None
+                | AD.Domain.Teacher-> None
             )
 
         let studentsPerClass =
             adUsers
             |> List.choose (fun user ->
                 match user.Type with
-                | AD.Student (AD.GroupName className) ->
-                    let (AD.UserName userName) = user.Name
+                | AD.Domain.Student (AD.Domain.GroupName className) ->
+                    let (AD.Domain.UserName userName) = user.Name
                     match Map.tryFind userName aadUserLookupByUserName with
                     | Some aadUser -> Some (className, aadUser)
                     | None -> None
-                | AD.Teacher -> None
+                | AD.Domain.Teacher -> None
             )
             |> List.groupBy fst
             |> List.map (Tuple.mapSnd (List.map snd))

@@ -57,36 +57,36 @@ module private AD =
 
     let mailDomain = "htl.at"
 
-    let toExistingADUser mailAliases (user: AD.NewUser) =
+    let toExistingADUser mailAliases (user: User) =
         let mail =
-            let (AD.UserName userName) = user.Name
+            let (UserName userName) = user.Name
             { UserName = userName; Domain = mailDomain }
-        let user : AD.ExistingUser = {
-            Name = user.Name
-            SokratesId = user.SokratesId
+        let user : AD.Domain.ExistingUser = {
+            Name = UserName.toADDto user.Name
+            SokratesId = user.SokratesId |> Option.map SokratesId.toADDto
             FirstName = user.FirstName
             LastName = user.LastName
-            Type = user.Type
+            Type = UserType.toADDto user.Type
             CreatedAt = System.DateTime.Today
             Mail = Some mail
-            ProxyAddresses = mailAliases |> List.map (AD.MailAlias.toProxyAddress mailDomain)
+            ProxyAddresses = mailAliases |> List.map (AD.Domain.MailAlias.toProxyAddress mailDomain)
             UserPrincipalName = mail
         }
         user
 
     let toExistingDomainUser mailAliases user =
-        toExistingADUser (mailAliases |> List.map MailAlias.toADDto) (User.toADDto user)
+        toExistingADUser (mailAliases |> List.map MailAlias.toADDto) user
 
-    let asStudent className user =
+    let asStudent className (user: User) =
         { user with Name = userNameFromName user.FirstName user.LastName; Type = Student (ClassName className) }
 
-    let withId sokratesId user =
+    let withId sokratesId (user: User) =
         { user with SokratesId = Some (SokratesId sokratesId) }
 
-    let withUserName userName user =
+    let withUserName userName (user: User) =
         { user with Name = UserName userName }
 
-    let withName firstName lastName user =
+    let withName firstName lastName (user: User) =
         { user with FirstName = firstName; LastName = lastName }
 
     let einstein =
@@ -125,7 +125,7 @@ module private AD =
 
     let deleteStudentGroup className = DeleteGroup (Student (ClassName className))
 
-    let createUser user mailAliasNames password = CreateUser (user, mailAliasNames, password)
+    let createUser user mailAliasNames password = CreateUser (NewUser.fromUser user mailAliasNames password)
 
     let changeUserName user shortName firstName lastName mailAliasNames = UpdateUser (user, ChangeUserName (UserName shortName, firstName, lastName, mailAliasNames))
 
