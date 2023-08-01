@@ -2,21 +2,10 @@ namespace AD.Configuration
 
 type DistinguishedName = DistinguishedName of string
 
-type AuthType =
-    | Basic
-    | Ntlm
-
-module AuthType =
-    let fromString v =
-        if v = "Basic" then Basic
-        elif v = "Ntlm" then Ntlm
-        else failwithf "Can't parse AD auth type \"%s\"" v
-
 type LdapConnectionConfig = {
     HostName: string
     UserName: string
     Password: string
-    AuthType: AuthType
 }
 type NetworkShareConnectionConfig = {
     UserName: string
@@ -53,7 +42,6 @@ module Config =
                     HostName = Environment.getEnvVarOrFail "AD_SERVER"
                     UserName = Environment.getEnvVarOrFail "AD_USER"
                     Password = Environment.getEnvVarOrFail "AD_PASSWORD"
-                    AuthType = Environment.getEnvVar "AD_AUTH_TYPE" |> Option.ofObj |> Option.map AuthType.fromString |> Option.defaultValue Ntlm
                 }
                 NetworkShare = {
                     UserName = Environment.getEnvVarOrFail "NETWORKSHARE_USER"
