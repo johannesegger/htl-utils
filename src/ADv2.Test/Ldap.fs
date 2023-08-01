@@ -85,10 +85,18 @@ let tests =
             use connection = Ldap.connect connectionConfig.Ldap
             use! group = createTemporaryGroup connection "EINF"
 
-            let! actualMembers = Ldap.findGroupMembers connection group.Dn
+            let! actualMembers = Ldap.findGroupMembersIfGroupExists connection group.Dn
 
             Expect.isNonEmpty actualMembers "Member list should not be empty"
             Expect.all actualMembers (fun (DistinguishedName v) -> not <| String.IsNullOrEmpty v) "Group members should be stored"
+        })
+
+        testCaseTask "Find group members when group doesn't exist" (fun () -> task {
+            use connection = Ldap.connect connectionConfig.Ldap
+
+            let! actualMembers = Ldap.findGroupMembersIfGroupExists connection (DistinguishedName "CN=NoGroup,OU=HTLVB-Groups,DC=htlvb,DC=intern")
+
+            Expect.isEmpty actualMembers "Member list is not empty"
         })
 
         testCaseTask "Find full group members" (fun () -> task {

@@ -117,12 +117,15 @@ module Ldap =
             |> Option.defaultWith (fun () -> failwith $"Object \"{objectDn}\" not found")
     }
 
-    let findGroupMembers (connection: LdapConnection) groupDn = async {
-        let! group = findObjectByDn connection groupDn [| "member" |]
-        return
-            group
-            |> SearchResultEntry.getStringAttributeValues "member"
-            |> List.map DistinguishedName
+    let findGroupMembersIfGroupExists (connection: LdapConnection) groupDn = async {
+        try
+            let! group = findObjectByDn connection groupDn [| "member" |]
+            return
+                group
+                |> SearchResultEntry.getStringAttributeValues "member"
+                |> List.map DistinguishedName
+        with :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.NoSuchObject ->
+            return []
     }
 
     let findFullGroupMembers (connection: LdapConnection) (DistinguishedName groupDn) attributes = async {
@@ -138,13 +141,16 @@ module Ldap =
             |> Seq.toList
     }
     let private findDescendants (connection: LdapConnection) (DistinguishedName parentDn) ldapFilter attributes = async {
-        let! response =
-            SearchRequest(parentDn, ldapFilter, SearchScope.Subtree, attributes)
-            |> search connection
-        return
-            response.Entries
-            |> Seq.cast<SearchResultEntry>
-            |> Seq.toList
+        try
+            let! response =
+                SearchRequest(parentDn, ldapFilter, SearchScope.Subtree, attributes)
+                |> search connection
+            return
+                response.Entries
+                |> Seq.cast<SearchResultEntry>
+                |> Seq.toList
+        with :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.NoSuchObject ->
+            return []
     }
     let findDescendantUsers connection parentOU attributes =
         findDescendants connection parentOU "(&(objectCategory=person)(objectClass=user))" attributes

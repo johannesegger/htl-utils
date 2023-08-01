@@ -344,7 +344,7 @@ type ADApi(config: Config) =
 
     member _.GetUsers () = async {
         use connection = Ldap.connect config.ConnectionConfig.Ldap
-        let! teachers = Ldap.findGroupMembers connection config.Properties.TeacherGroup
+        let! teachers = Ldap.findGroupMembersIfGroupExists connection config.Properties.TeacherGroup
 
         let! classGroups = async {
             let! groups = Ldap.findFullGroupMembers connection config.Properties.StudentGroup [| "sAMAccountName"; "member" |]
