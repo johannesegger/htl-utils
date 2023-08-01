@@ -402,22 +402,21 @@ type ADApi(config: Config) =
             |> List.map (SearchResultEntry.getStringAttributeValue "dNSHostName")
     }
 
-    static member FromEnvironment () = ADApi(Config.fromEnvironment ())
+    member _.GetUser(userName, userType) = async {
+        let groupDn = getGroupPathFromUserType userType
+        let userDn = (let (UserName userName) = userName in DN.childCN userName groupDn)
 
-    // let getUser config userName userType = async {
-    //     let groupDn = getGroupPathFromUserType userType
-    //     let userDn = (let (UserName userName) = userName in DN.childCN userName groupDn)
-    //
-    //     use connection = Ldap.connect config.ConnectionConfig.Ldap
-    //     let! adUser = Ldap.findObjectByDn connection userDn userProperties
-    //     return getUserFromSearchResult userType adUser
-    // }
-    //
-    // let getClassGroups = async {
-    //     use connection = Ldap.connect config.ConnectionConfig.Ldap
-    //     let! classGroups = Ldap.findFullGroupMembers connection config.Properties.StudentGroup [| "sAMAccountName" |]
-    //     return
-    //         classGroups
-    //         |> List.map (SearchResultEntry.getStringAttributeValue "sAMAccountName" >> GroupName)
-    // }
-    //
+        use connection = Ldap.connect config.ConnectionConfig.Ldap
+        let! adUser = Ldap.findObjectByDn connection userDn userProperties
+        return getUserFromSearchResult userType adUser
+    }
+
+    member _.GetClassGroups() = async {
+        use connection = Ldap.connect config.ConnectionConfig.Ldap
+        let! classGroups = Ldap.findFullGroupMembers connection config.Properties.StudentGroup [| "sAMAccountName" |]
+        return
+            classGroups
+            |> List.map (SearchResultEntry.getStringAttributeValue "sAMAccountName" >> GroupName)
+    }
+
+    static member FromEnvironment () = ADApi(Config.fromEnvironment ())
