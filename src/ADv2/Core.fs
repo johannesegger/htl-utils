@@ -291,7 +291,13 @@ type ADApi(config: Config) =
             LastName = SearchResultEntry.getStringAttributeValue "sn" adUser
             Type = userType
             CreatedAt = SearchResultEntry.getDateTimeAttributeValue "whenCreated" adUser
-            Mail = SearchResultEntry.getOptionalStringAttributeValue "mail" adUser
+            Mail =
+                SearchResultEntry.getOptionalStringAttributeValue "mail" adUser
+                |> Option.map (fun value ->
+                    value
+                    |> MailAddress.tryParse
+                    |> Option.defaultWith (fun () -> failwithf $"Can't parse mail property \"%s{value}\" as mail address (User \"%s{adUser.DistinguishedName}\")")
+                )
             ProxyAddresses =
                 adUser
                 |> SearchResultEntry.getStringAttributeValues "proxyAddresses"
@@ -299,7 +305,11 @@ type ADApi(config: Config) =
                     ProxyAddress.tryParse v
                     |> Option.defaultWith (fun () -> failwith $"Failed to parse proxy address \"{v}\" of user \"{adUser.DistinguishedName}\"")
                 )
-            UserPrincipalName = SearchResultEntry.getStringAttributeValue "userPrincipalName" adUser
+            UserPrincipalName =
+                let value = SearchResultEntry.getStringAttributeValue "userPrincipalName" adUser
+                value
+                |> MailAddress.tryParse
+                |> Option.defaultWith (fun () -> failwithf $"Can't parse user principal name \"%s{value}\" as mail address (User \"%s{adUser.DistinguishedName}\")")
         }
 
     let getADOperations (modification: DirectoryModification) =

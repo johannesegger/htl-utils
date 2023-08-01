@@ -77,9 +77,9 @@ type ExistingUser = {
     LastName: string
     Type: UserType
     CreatedAt: DateTime
-    Mail: string option
+    Mail: MailAddress option
     ProxyAddresses: ProxyAddress list
-    UserPrincipalName: string
+    UserPrincipalName: MailAddress
 }
 
 type UserUpdate =
