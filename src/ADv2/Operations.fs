@@ -31,6 +31,7 @@ type Operation =
             Node: DistinguishedName
             Properties: {| Name: string; Pattern: Regex; Replacement: string |} list
         |}
+    | DisableAccount of DistinguishedName
     | AddObjectToGroup of
         {|
             Object: DistinguishedName
@@ -232,6 +233,9 @@ module Operation =
         | ReplaceTextInNodePropertyValues v ->
             use connection = Ldap.connect config.Ldap
             do! Ldap.replaceTextInNodePropertyValues connection v.Node v.Properties
+        | DisableAccount userDn ->
+            use connection = Ldap.connect config.Ldap
+            do! Ldap.disableAccount connection userDn
         | DeleteNode node ->
             use connection = Ldap.connect config.Ldap
             do! Ldap.deleteNode connection node

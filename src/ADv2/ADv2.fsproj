@@ -13,7 +13,7 @@
     <Compile Include="NetworkConnection.fs" />
     <Compile Include="Ldap.fs" />
     <Compile Include="Operations.fs" />
-    <Compile Include="Core.fs" />
+    <Compile Include="ADApi.fs" />
   </ItemGroup>
 
   <ItemGroup>

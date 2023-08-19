@@ -163,11 +163,21 @@ type ADApi(config: Config) =
         let userDn = (let (UserName userName) = userName in DN.childCN userName parentNode)
         [
             yield DeleteUserHomePath userDn
+
             match userType with
             | Teacher ->
                 yield DeleteDirectory (getTeacherExercisePath config.Properties.TeacherExercisePath userName)
             | Student _ -> ()
-            yield DeleteNode userDn
+
+            yield DisableAccount userDn
+
+            match userType with
+            | Teacher ->
+                let targetDn = (let (UserName userName) = userName in DN.childCN userName config.Properties.ExTeacherContainer)
+                yield MoveNode {| Source = userDn; Target = targetDn |}
+            | Student _ ->
+                let targetDn = (let (UserName userName) = userName in DN.childCN userName config.Properties.ExStudentContainer)
+                yield MoveNode {| Source = userDn; Target = targetDn |}
         ]
 
     let createGroup userType =

@@ -21,6 +21,8 @@ type Properties = {
     ComputerContainer: DistinguishedName
     TeacherContainer: DistinguishedName
     ClassContainer: DistinguishedName
+    ExTeacherContainer: DistinguishedName
+    ExStudentContainer: DistinguishedName
     TeacherGroup: DistinguishedName
     StudentGroup: DistinguishedName
     ClassGroupsContainer: DistinguishedName
@@ -64,6 +66,8 @@ module Config =
         member val ComputerContainer = "" with get, set
         member val TeacherContainer = "" with get, set
         member val ClassContainer = "" with get, set
+        member val ExTeacherContainer = "" with get, set
+        member val ExStudentContainer = "" with get, set
         member val TeacherGroup = "" with get, set
         member val StudentGroup = "" with get, set
         member val ClassGroupsContainer = "" with get, set
@@ -78,6 +82,8 @@ module Config =
             ComputerContainer = DistinguishedName x.ComputerContainer
             TeacherContainer = DistinguishedName x.TeacherContainer
             ClassContainer = DistinguishedName x.ClassContainer
+            ExTeacherContainer = DistinguishedName x.ExTeacherContainer
+            ExStudentContainer = DistinguishedName x.ExStudentContainer
             TeacherGroup = DistinguishedName x.TeacherGroup
             StudentGroup = DistinguishedName x.StudentGroup
             ClassGroupsContainer = DistinguishedName x.ClassGroupsContainer

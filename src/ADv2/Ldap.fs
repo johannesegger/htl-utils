@@ -15,6 +15,13 @@ module SearchResultEntry =
             | :? string as value -> Some value
             | :? (byte[]) as content -> Some <| Encoding.UTF8.GetString content
             | _ -> None
+        let toInt (v: obj) =
+            match toString v with
+            | Some v ->
+                match Int32.TryParse v with
+                | (true, v) -> Some v
+                | (false, _) -> None
+            | None -> None
         let toByteArray (v: obj) =
             match v with
             | :? (byte[]) as content -> Some content
@@ -54,7 +61,9 @@ module SearchResultEntry =
     let getDateTimeAttributeValue attributeName object =
         getSingleAttributeValue attributeName object TryConvert.toDateTime
         |> Option.defaultWith (fun () -> failwith $"Attribute \"{attributeName}\" of object \"{object.DistinguishedName}\" is not a timestamp")
-
+    let getIntAttributeValue attributeName object =
+        getSingleAttributeValue attributeName object TryConvert.toInt
+        |> Option.defaultWith (fun () -> failwith $"Attribute \"{attributeName}\" of object \"{object.DistinguishedName}\" is not a single int")
     let getOptionalStringAttributeValue attributeName object =
         getOptionalAttributeValue attributeName object TryConvert.toString
         |> Option.defaultWith (fun () -> failwith $"Attribute \"{attributeName}\" of object \"{object.DistinguishedName}\" is neither empty nor a single string")
@@ -245,6 +254,18 @@ module Ldap =
             | :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.NoSuchObject -> ()
             | e -> failwith $"Error while deleting \"%s{node}\": {e.Message}"
     }
+
+    let disableAccount connection userDn = async {
+        let! user = findObjectByDn connection userDn [| "userAccountControl" |]
+        let userAccountControl =
+            SearchResultEntry.getIntAttributeValue "userAccountControl" user
+        let accountDisableFlag = 0x2
+        let properties = [
+            ("userAccountControl", Text $"{userAccountControl ||| accountDisableFlag}")
+        ]
+        do! setNodeProperties connection userDn properties
+    }
+
     let addObjectToGroup connection (DistinguishedName group) (DistinguishedName object) = async {
         let modification = directoryAttributeModification "member" DirectoryAttributeOperation.Add (Text object)
         try

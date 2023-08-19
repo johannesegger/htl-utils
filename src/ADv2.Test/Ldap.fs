@@ -30,6 +30,16 @@ let private createTemporaryGroup connection name = task {
     return TemporaryGroup(groupDn, AsyncDisposable.combine [ createdGroupNodes; createdMemberNodes ])
 }
 
+let private userPassword = "Test123"
+let private createUser connection userDn properties = async {
+    return! createNodeAndParents connection userDn ADUser [
+        yield! properties
+        yield! DN.tryCN userDn |> Option.map (fun userName -> "sAMAccountName", Text userName) |> Option.toList
+        ("userAccountControl", Text $"{0x10220}") // PASSWD_NOTREQD | NORMAL_ACCOUNT | DONT_EXPIRE_PASSWORD
+        ("unicodePwd", Bytes (AD.password userPassword))
+    ]
+}
+
 let tests =
     testList "Ldap" [
         testCaseTask "Create node" (fun () -> task {
@@ -217,11 +227,25 @@ let tests =
             Expect.equal actualHomePath @"C:\Users\Students\Einstein.Konrad" "Should have new home path"
         })
 
+        testCaseTask "Disable account" (fun () -> task {
+            use connection = Ldap.connect connectionConfig.Ldap
+            let userDn = DistinguishedName "CN=EINL,CN=Users,DC=htlvb,DC=intern"
+            use! __ = createUser connection userDn []
+
+            do! Ldap.disableAccount connection userDn
+
+            Expect.throws (fun () ->
+                let userName = let (DistinguishedName v) = userDn in v
+                use c = Ldap.connect { connectionConfig.Ldap with UserName = userName; Password = userPassword }
+                c.Bind()
+            ) "Login succeeded for disabled account"
+        })
+
         testCaseTask "Add object to group" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
-            let userDn = DistinguishedName "CN=EINL9,CN=Users,DC=htlvb,DC=intern"
+            let userDn = DistinguishedName "CN=EINM9,CN=Users,DC=htlvb,DC=intern"
             use! __ = createNodeAndParents connection userDn ADUser []
-            use! temporaryGroup = createTemporaryGroup connection "EINL"
+            use! temporaryGroup = createTemporaryGroup connection "EINM"
             let! group = Ldap.findObjectByDn connection temporaryGroup.Dn [| "member" |]
             let membersBefore = SearchResultEntry.getStringAttributeValues "member" group |> List.map DistinguishedName
 
@@ -234,7 +258,7 @@ let tests =
 
         testCaseTask "Add member-object to group" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
-            use! temporaryGroup = createTemporaryGroup connection "EINM"
+            use! temporaryGroup = createTemporaryGroup connection "EINN"
             let! group = Ldap.findObjectByDn connection temporaryGroup.Dn [| "member" |]
             let membersBefore = SearchResultEntry.getStringAttributeValues "member" group |> List.map DistinguishedName
             let addedMember = membersBefore |> List.head
@@ -248,7 +272,7 @@ let tests =
 
         testCaseTask "Remove object from group" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
-            use! temporaryGroup = createTemporaryGroup connection "EINN"
+            use! temporaryGroup = createTemporaryGroup connection "EINO"
             let! group = Ldap.findObjectByDn connection temporaryGroup.Dn [| "member" |]
             let membersBefore = SearchResultEntry.getStringAttributeValues "member" group |> List.map DistinguishedName
             let removedMember = membersBefore |> List.head
@@ -262,9 +286,9 @@ let tests =
 
         testCaseTask "Remove non-member-object from group" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
-            let userDn = DistinguishedName "CN=EINO9,CN=Users,DC=htlvb,DC=intern"
+            let userDn = DistinguishedName "CN=EINP9,CN=Users,DC=htlvb,DC=intern"
             use! __ = createNodeAndParents connection userDn ADUser []
-            use! temporaryGroup = createTemporaryGroup connection "EINO"
+            use! temporaryGroup = createTemporaryGroup connection "EINP"
             let! group = Ldap.findObjectByDn connection temporaryGroup.Dn [| "member" |]
             let membersBefore = SearchResultEntry.getStringAttributeValues "member" group |> List.map DistinguishedName
 
