@@ -32,6 +32,7 @@ type Operation =
             Properties: {| Name: string; Pattern: Regex; Replacement: string |} list
         |}
     | DisableAccount of DistinguishedName
+    | RemoveGroupMemberships of DistinguishedName
     | AddObjectToGroup of
         {|
             Object: DistinguishedName
@@ -236,6 +237,9 @@ module Operation =
         | DisableAccount userDn ->
             use connection = Ldap.connect config.Ldap
             do! Ldap.disableAccount connection userDn
+        | RemoveGroupMemberships userDn ->
+            use connection = Ldap.connect config.Ldap
+            do! Ldap.removeGroupMemberships connection userDn
         | DeleteNode node ->
             use connection = Ldap.connect config.Ldap
             do! Ldap.deleteNode connection node

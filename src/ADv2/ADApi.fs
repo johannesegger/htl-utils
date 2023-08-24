@@ -170,6 +170,7 @@ type ADApi(config: Config) =
             | Student _ -> ()
 
             yield DisableAccount userDn
+            yield RemoveGroupMemberships userDn
 
             match userType with
             | Teacher ->
@@ -389,6 +390,7 @@ type ADApi(config: Config) =
                 |> Seq.toList
         }
 
+        // TODO doesn't work if OUs contain other (e.g. inactive) nodes, querying groups might be better
         let! adUsers =
             [ config.Properties.TeacherContainer; config.Properties.ClassContainer ]
             |> List.map (fun userContainerPath ->
@@ -402,6 +404,27 @@ type ADApi(config: Config) =
                 tryGetUserType teachers classGroups (DistinguishedName user.DistinguishedName)
                 |> Option.map (fun userType -> getUserFromSearchResult userType user)
             )
+    }
+
+    member _.GetAllUniqueUserProperties () = async {
+        use connection = Ldap.connect config.ConnectionConfig.Ldap
+        let attributes = [| "sAMAccountName"; "userPrincipalName"; "proxyAddresses" |]
+        let! users =
+            [
+                Ldap.findRecursiveGroupMembersIfGroupExists connection config.Properties.TeacherGroup attributes
+                Ldap.findRecursiveGroupMembersIfGroupExists connection config.Properties.StudentGroup attributes
+                Ldap.findDescendantUsers connection config.Properties.ExTeacherContainer attributes
+                Ldap.findDescendantUsers connection config.Properties.ExStudentContainer attributes
+            ]
+            |> Async.Sequential
+            |> Async.map List.concat
+        return {
+            UserNames = users |> List.map (SearchResultEntry.getStringAttributeValue "sAMAccountName" >> UserName)
+            MailAddressUserNames = [
+                yield! users |> List.map (SearchResultEntry.getStringAttributeValue "userPrincipalName")
+                yield! users |> List.collect (SearchResultEntry.getStringAttributeValues "proxyAddresses")
+            ]
+        }
     }
 
     member _.GetComputers () = async {

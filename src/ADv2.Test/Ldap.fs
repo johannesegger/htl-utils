@@ -299,6 +299,28 @@ let tests =
             Expect.equal (Set.ofList membersAfter) (Set.ofList membersBefore) "Members should not have changed"
         })
 
+        testCaseTask "Remove multiple group memberships" (fun () -> task {
+            use connection = Ldap.connect connectionConfig.Ldap
+            use! temporaryGroup1 = createTemporaryGroup connection "EINQ1"
+            use! temporaryGroup2 = createTemporaryGroup connection "EINQ2"
+            use! temporaryGroup3 = createTemporaryGroup connection "EINQ3"
+            let! group1 = Ldap.findObjectByDn connection temporaryGroup1.Dn [| "member" |]
+            let members1Before = SearchResultEntry.getStringAttributeValues "member" group1 |> List.map DistinguishedName
+            let removedMember = members1Before |> List.head
+            do! Ldap.addObjectToGroup connection temporaryGroup2.Dn removedMember
+
+            do! Ldap.removeGroupMemberships connection removedMember
+
+            let! group1 = Ldap.findObjectByDn connection temporaryGroup1.Dn [| "member" |]
+            let members1After = SearchResultEntry.getStringAttributeValues "member" group1 |> List.map DistinguishedName
+            let! group2 = Ldap.findObjectByDn connection temporaryGroup2.Dn [| "member" |]
+            let members2After = SearchResultEntry.getStringAttributeValues "member" group2 |> List.map DistinguishedName
+            let! group3 = Ldap.findObjectByDn connection temporaryGroup3.Dn [| "member" |]
+            let members3After = SearchResultEntry.getStringAttributeValues "member" group3 |> List.map DistinguishedName
+
+            Expect.isFalse (List.concat [ members1After; members2After; members3After ] |> List.contains removedMember) "User still has a group membership"
+        })
+
         testCaseTask "Read string attribute value" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
             let userDn = DistinguishedName "CN=EINZ,CN=Users,DC=htlvb,DC=intern"

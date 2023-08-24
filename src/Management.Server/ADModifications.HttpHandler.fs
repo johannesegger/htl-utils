@@ -20,6 +20,22 @@ module ExistingUser =
             ]
         }
 
+type UniqueUserAttributes = {
+    UserNames: UserName list
+    MailAddressUserNames: string list
+}
+module UniqueUserAttributes =
+    let fromADDto (v: AD.Domain.UniqueUserAttributes) =
+        {
+            UserNames = v.UserNames |> List.map UserName.fromADDto
+            MailAddressUserNames = v.MailAddressUserNames
+        }
+    let merge v1 v2 =
+        {
+            UserNames = v1.UserNames @ v2.UserNames
+            MailAddressUserNames = v1.MailAddressUserNames @ v2.MailAddressUserNames
+        }
+
 let userNameFromName (firstName: string) (lastName: string) =
     [String.cut 1 firstName; lastName]
     |> List.map String.asAlphaNumeric
@@ -42,17 +58,14 @@ let rawMailAliases (user: User) =
         }
     ]
 
-let uniqueMailAliases user (existingUsers: ExistingUser list) =
-    let existingMailAddressNames =
-        existingUsers
-        |> List.collect (fun v -> v.MailAddressNames)
+let uniqueMailAliases user existingMailAddressUserNames =
     rawMailAliases user
     |> List.map (fun rawMailAliasName ->
         Seq.initInfinite (fun i -> i + 2)
         |> Seq.map string
         |> Seq.append [ "" ]
-        |> Seq.map (fun number -> { rawMailAliasName with UserName = sprintf "%s%s" rawMailAliasName.UserName number } )
-        |> Seq.find (fun name -> not <| List.contains name.UserName existingMailAddressNames)
+        |> Seq.map (fun number -> { rawMailAliasName with UserName = $"%s{rawMailAliasName.UserName}%s{number}" } )
+        |> Seq.find (fun name -> not <| List.contains name.UserName existingMailAddressUserNames)
     )
 
 let tryFindUser (users: User list) sokratesId userName =
@@ -89,21 +102,18 @@ let getMailAddressNames (adUser: AD.Domain.ExistingUser) =
         yield! adUser.ProxyAddresses |> List.map (fun v -> v.Address.UserName)
     ]
 
-let calculateDeleteTeacherModification sokratesTeachers (existingUser: ExistingUser) existingUsers =
+let calculateDeleteTeacherModification sokratesTeachers (existingUser: ExistingUser) =
     match existingUser.User.Type with
     | Teacher ->
         let sokratesUsers =
             sokratesTeachers
             |> List.map User.fromSokratesTeacherDto
         match tryFindUser sokratesUsers existingUser.User.SokratesId (Some existingUser.User.Name) with
-        | None ->
-            let existingUsers = existingUsers |> List.except [ existingUser ]
-            let modification = DeleteUser existingUser.User
-            Some (modification, existingUsers)
+        | None -> Some (DeleteUser existingUser.User)
         | Some _ -> None
     | _ -> None
 
-let calculateDeleteStudentModification sokratesStudents (existingUser: ExistingUser) existingUsers =
+let calculateDeleteStudentModification sokratesStudents (existingUser: ExistingUser) =
     match existingUser.User.Type with
     | Student _ ->
         let sokratesUsers =
@@ -113,91 +123,63 @@ let calculateDeleteStudentModification sokratesStudents (existingUser: ExistingU
                 User.fromSokratesStudentDto v rawUserName
             )
         match tryFindUser sokratesUsers existingUser.User.SokratesId None with
-        | None ->
-            let existingUsers = existingUsers |> List.except [ existingUser ]
-            let modification = DeleteUser existingUser.User
-            Some (modification, existingUsers)
+        | None -> Some (DeleteUser existingUser.User)
         | Some _ -> None
     | _ -> None
 
-let calculateCreateTeacherModification users (teacher: User) password =
+let calculateCreateTeacherModification users (teacher: User) password uniqueUserAttributes =
     match tryFindExistingUser users teacher.SokratesId (Some teacher.Name) with
     | Some _existingUser -> None
     | None ->
-        let mailAliases = uniqueMailAliases teacher users
+        let mailAliases = uniqueMailAliases teacher uniqueUserAttributes.MailAddressUserNames
         let modification = CreateUser (NewUser.fromUser teacher mailAliases password)
-        let newUser = {
-            User = teacher
-            MailAddressNames = [
+        let newUniqueUserAttributes = {
+            UserNames = [ teacher.Name ]
+            MailAddressUserNames = [
                 let (UserName v) = teacher.Name in v // TODO assuming username becomes a mail address is not clean
                 yield! mailAliases |> List.map (fun v -> v.UserName)
             ]
         }
-        Some (modification, newUser :: users)
+        Some (modification, newUniqueUserAttributes)
 
-let calculateCreateStudentModification users (student: User) password =
-    match tryFindExistingUser users student.SokratesId None with
+let calculateCreateStudentModification users newUser =
+    match tryFindExistingUser users newUser.SokratesId None with
     | Some _existingUser -> None
     | None ->
-        let student =
-            let existingUserNames =
-                users
-                |> List.map (fun v -> v.User.Name)
-            let userName =
-                userNameFromName student.FirstName student.LastName
-                |> uniqueUserName existingUserNames
-            { student with Name = userName }
-        let mailAliases = uniqueMailAliases student users
-        let modification = CreateUser (NewUser.fromUser student mailAliases password)
-        let newUser = {
-            User = student
-            MailAddressNames = [
-                let (UserName v) = student.Name in v // TODO assuming username becomes a mail address is not clean
-                yield! mailAliases |> List.map (fun v -> v.UserName)
+        let modification = CreateUser newUser
+        let newUniqueUserAttributes = {
+            UserNames = [ newUser.Name ]
+            MailAddressUserNames = [
+                let (UserName v) = newUser.Name in v // TODO assuming username becomes a mail address is not clean
+                yield! newUser.MailAliases |> List.map (fun v -> v.UserName)
             ]
         }
-        Some (modification, newUser :: users)
+        Some (modification, newUniqueUserAttributes)
 
 let calculateTeacherSokratesIdUpdateModification users (teacher: User) =
     match tryFindExistingUser users teacher.SokratesId (Some teacher.Name), teacher.SokratesId with
     | Some existingUser, Some newSokratesId when existingUser.User.SokratesId <> Some newSokratesId ->
-        let modification = UpdateUser (existingUser.User, SetSokratesId newSokratesId)
-        let users =
-            users
-            |> List.map (fun v ->
-                if v = existingUser then { v with User = { v.User with SokratesId = Some newSokratesId } }
-                else v
-            )
-        Some (modification, users)
+        Some (UpdateUser (existingUser.User, SetSokratesId newSokratesId))
     | _ -> None
 
-let calculateChangeTeacherNameModification (users: ExistingUser list) (teacher: User) =
+let calculateChangeTeacherNameModification (users: ExistingUser list) (teacher: User) uniqueUserAttributes =
     match tryFindExistingUser users teacher.SokratesId (Some teacher.Name) with
     | Some user when user.User.Name <> teacher.Name || user.User.FirstName <> teacher.FirstName || user.User.LastName <> teacher.LastName ->
-        let mailAliases = [
-            yield! uniqueMailAliases teacher (users |> List.except [ user ])
-            yield! user.MailAddressNames |> List.map (fun v -> { IsPrimary = false; UserName = v })
-        ]
+        let mailAliases =
+            [
+                yield! uniqueMailAliases teacher (uniqueUserAttributes.MailAddressUserNames |> List.except user.MailAddressNames)
+                yield! user.MailAddressNames |> List.map (fun v -> { IsPrimary = false; UserName = v })
+            ]
+            |> List.distinctBy (fun v -> v.UserName)
         let modification = UpdateUser (user.User, ChangeUserName (teacher.Name, teacher.FirstName, teacher.LastName, mailAliases))
-        let users =
-            users
-            |> List.map (fun v ->
-                if v = user then
-                    { v with
-                        User = {
-                            v.User with
-                                Name = teacher.Name
-                                FirstName = teacher.FirstName
-                                LastName = teacher.LastName
-                        }
-                        MailAddressNames = [
-                            let (UserName v) = teacher.Name in v // TODO assuming username becomes a mail address is not clean
-                            yield! mailAliases |> List.map (fun v -> v.UserName)
-                        ]
-                    }
-                else v
-            )
-        Some (modification, users)
+        let newUniqueUserAttributes = {
+            UserNames = [ teacher.Name ]
+            MailAddressUserNames = [
+                let (UserName v) = teacher.Name in v // TODO assuming username becomes a mail address is not clean
+                yield! mailAliases |> List.map (fun v -> v.UserName)
+            ]
+        }
+        Some (modification, newUniqueUserAttributes)
     | _ -> None
 
 let calculateChangeStudentNameModification (users: ExistingUser list) (student: User) =
@@ -281,83 +263,90 @@ let calculateDeleteGroupModifications existingUsers sokratesTeachers sokratesStu
     |> Seq.map (fun userType -> (DeleteGroup userType))
     |> Seq.toList
 
-let modifications sokratesTeachers sokratesStudents adUsers =
-    let existingAdUsers =
+let modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes =
+    let existingUsers =
         adUsers
         |> List.map ExistingUser.fromADDto
     let modifications = []
-    let state = (existingAdUsers, modifications)
+    let state = (uniqueUserAttributes, modifications)
 
     let state =
-        let (existingUsers, modifications) = state
+        let (uniqueUserAttributes, modifications) = state
         let modifications =
-            (modifications, calculateCreateGroupModifications existingAdUsers sokratesTeachers sokratesStudents)
+            (modifications, calculateCreateGroupModifications existingUsers sokratesTeachers sokratesStudents)
             ||> List.fold (fun list item -> item :: list)
-        (existingUsers, modifications)
+        (uniqueUserAttributes, modifications)
 
     let state =
-        (state, existingAdUsers)
-        ||> List.fold (fun (existingUsers, modifications) existingUser ->
-            match calculateDeleteTeacherModification sokratesTeachers existingUser existingUsers with
-            | Some (modification, existingUsers) -> (existingUsers, modification :: modifications)
-            | None -> (existingUsers, modifications)
-        )
+        let (uniqueUserAttributes, modifications) = state
+        let newModifications =
+            existingUsers
+            |> List.choose (calculateDeleteTeacherModification sokratesTeachers)
+        (uniqueUserAttributes, modifications @ newModifications)
 
     let state =
-        (state, existingAdUsers)
-        ||> List.fold (fun (existingUsers, modifications) existingUser ->
-            match calculateDeleteStudentModification sokratesStudents existingUser existingUsers with
-            | Some (modification, existingUsers) -> (existingUsers, modification :: modifications)
-            | None -> (existingUsers, modifications)
-        )
-
-    let state =
-        (state, sokratesTeachers)
-        ||> List.fold (fun (existingUsers, modifications) sokratesTeacher ->
-            let teacher = User.fromSokratesTeacherDto sokratesTeacher
-            match calculateCreateTeacherModification existingUsers teacher (sokratesTeacher.DateOfBirth.ToString("dd.MM.yyyy")) with
-            | Some (modification, existingUsers) -> (existingUsers, modification :: modifications)
-            | None -> (existingUsers, modifications)
-        )
+        let (uniqueUserAttributes, modifications) = state
+        let newModifications =
+            existingUsers
+            |> List.choose (calculateDeleteStudentModification sokratesStudents)
+        (uniqueUserAttributes, modifications @ newModifications)
 
     let state =
         (state, sokratesTeachers)
-        ||> List.fold (fun (existingUsers, modifications) sokratesTeacher ->
+        ||> List.fold (fun (uniqueUserAttributes, modifications) sokratesTeacher ->
             let teacher = User.fromSokratesTeacherDto sokratesTeacher
-            match calculateTeacherSokratesIdUpdateModification existingUsers teacher with
-            | Some (modification, existingUsers) -> (existingUsers, modification :: modifications)
-            | None -> (existingUsers, modifications)
+            match calculateCreateTeacherModification existingUsers teacher (sokratesTeacher.DateOfBirth.ToString("dd.MM.yyyy")) uniqueUserAttributes with
+            | Some (modification, newUniqueUserAttributes) ->
+                let newUniqueUserAttributes = UniqueUserAttributes.merge uniqueUserAttributes newUniqueUserAttributes
+                (newUniqueUserAttributes, modifications @ [ modification ])
+            | None -> (uniqueUserAttributes, modifications)
         )
 
     let state =
+        let (uniqueUserAttributes, modifications) = state
+        let newModifications =
+            sokratesTeachers
+            |> List.choose (User.fromSokratesTeacherDto >> calculateTeacherSokratesIdUpdateModification existingUsers)
+        (uniqueUserAttributes, modifications @ newModifications)
+
+    let state =
         (state, sokratesTeachers)
-        ||> List.fold (fun (existingUsers, modifications) sokratesTeacher ->
+        ||> List.fold (fun (uniqueUserAttributes, modifications) sokratesTeacher ->
             let teacher = User.fromSokratesTeacherDto sokratesTeacher
-            match calculateChangeTeacherNameModification existingUsers teacher with
-            | Some (modification, existingUsers) -> (existingUsers, modification :: modifications)
-            | None -> (existingUsers, modifications)
+            match calculateChangeTeacherNameModification existingUsers teacher uniqueUserAttributes with
+            | Some (modification, newUniqueUserAttributes) ->
+                // TODO remove old username if changed
+                let newUniqueUserAttributes = UniqueUserAttributes.merge uniqueUserAttributes newUniqueUserAttributes
+                (newUniqueUserAttributes, modifications @ [ modification ])
+            | None -> (uniqueUserAttributes, modifications)
         )
 
     let state =
         (state, sokratesStudents)
-        ||> List.fold (fun (existingUsers, modifications) sokratesStudent ->
-            let student =
-                let rawUserName = userNameFromName sokratesStudent.FirstName1 sokratesStudent.LastName
-                User.fromSokratesStudentDto sokratesStudent rawUserName // UserName is not important here, because we'll update it anyways
-            match calculateCreateStudentModification existingUsers student (sokratesStudent.DateOfBirth.ToString("dd.MM.yyyy")) with
-            | Some (modification, existingUsers) -> (existingUsers, modification :: modifications)
-            | None -> (existingUsers, modifications)
+        ||> List.fold (fun (uniqueUserAttributes, modifications) sokratesStudent ->
+            let userName =
+                userNameFromName sokratesStudent.FirstName1 sokratesStudent.LastName
+                |> uniqueUserName uniqueUserAttributes.UserNames
+            let student = User.fromSokratesStudentDto sokratesStudent userName
+            let mailAliases = uniqueMailAliases student uniqueUserAttributes.MailAddressUserNames
+            let password = sokratesStudent.DateOfBirth.ToString("dd.MM.yyyy")
+            let newUser = NewUser.fromUser student mailAliases password
+            match calculateCreateStudentModification existingUsers newUser with
+            | Some (modification: DirectoryModification, newUniqueUserAttributes) ->
+                let newUniqueUserAttributes = UniqueUserAttributes.merge uniqueUserAttributes newUniqueUserAttributes
+                (newUniqueUserAttributes, modifications @ [ modification ])
+            | None -> (uniqueUserAttributes, modifications)
         )
 
     let state =
         (state, sokratesStudents)
-        ||> List.fold (fun (existingUsers, modifications) sokratesStudent ->
+        ||> List.fold (fun (uniqueUserAttributes, modifications) sokratesStudent ->
             let student =
                 let rawUserName = userNameFromName sokratesStudent.FirstName1 sokratesStudent.LastName
                 User.fromSokratesStudentDto sokratesStudent rawUserName // UserName is not important here, because we'll update it anyways
             match calculateChangeStudentNameModification existingUsers student with
             | Some (modification, existingUsers) -> (existingUsers, modification :: modifications)
-            | None -> (existingUsers, modifications)
+            | None -> (uniqueUserAttributes, modifications)
         )
 
     let state =
@@ -374,7 +363,7 @@ let modifications sokratesTeachers sokratesStudents adUsers =
     let state =
         let (existingUsers, modifications) = state
         let modifications =
-            (modifications, calculateDeleteGroupModifications existingAdUsers sokratesTeachers sokratesStudents)
+            (modifications, calculateDeleteGroupModifications existingUsers sokratesTeachers sokratesStudents)
             ||> List.fold (fun list item -> item :: list)
         (existingUsers, modifications)
 
@@ -392,12 +381,14 @@ let getADModifications (adApi: AD.Core.ADApi) (sokratesApi: Sokrates.SokratesApi
             )
         let! sokratesStudents = sokratesApi.FetchStudents None timestamp |> Async.StartChild
         let! adUsers = adApi.GetUsers() |> Async.StartChild
+        let! uniqueUserAttributes = adApi.GetAllUniqueUserProperties() |> Async.StartChild
 
         let! sokratesTeachers = sokratesTeachers |> Async.map (List.sortBy (fun v -> v.LastName, v.FirstName))
         let! sokratesStudents = sokratesStudents |> Async.map (List.sortBy (fun v -> v.SchoolClass, v.LastName, v.FirstName1))
         let! adUsers = adUsers |> Async.map (List.sortBy (fun v -> v.Type, v.LastName, v.FirstName))
+        let! uniqueUserAttributes = uniqueUserAttributes
 
-        let modifications = modifications sokratesTeachers sokratesStudents adUsers
+        let modifications = modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes
         return! Successful.OK modifications next ctx
     }
 

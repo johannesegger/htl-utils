@@ -136,6 +136,19 @@ module Ldap =
             return []
     }
 
+    let findRecursiveGroupMembersIfGroupExists (connection: LdapConnection) (DistinguishedName groupDn) attributes = async {
+        let! (response: SearchResponse) = async {
+            let (DistinguishedName baseDn) = DN.domainBase (DistinguishedName groupDn)
+            return!
+                SearchRequest(baseDn, $"(&(objectClass=user)(memberof:1.2.840.113556.1.4.1941:=%s{groupDn}))", SearchScope.Subtree, attributes)
+                |> search connection
+        }
+        return
+            response.Entries
+            |> Seq.cast<SearchResultEntry>
+            |> Seq.toList
+    }
+
     let findFullGroupMembers (connection: LdapConnection) (DistinguishedName groupDn) attributes = async {
         let! response = async {
             let (DistinguishedName baseDn) = DN.domainBase (DistinguishedName groupDn)
@@ -287,4 +300,15 @@ module Ldap =
         with
             | :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.UnwillingToPerform -> ()
             | e -> failwith $"Error while removing \"%s{object}\" from group \"%s{group}\": {e.Message}"
+    }
+
+    let removeGroupMemberships connection nodeDn = async {
+        let! node = findObjectByDn connection nodeDn [| "memberOf" |]
+        do!
+            SearchResultEntry.getStringAttributeValues "memberOf" node
+            |> List.map (DistinguishedName >> fun groupDn -> async {
+                do! removeObjectFromGroup connection groupDn nodeDn
+            })
+            |> Async.Sequential
+            |> Async.Ignore
     }

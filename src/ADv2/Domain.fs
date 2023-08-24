@@ -82,6 +82,11 @@ type ExistingUser = {
     UserPrincipalName: MailAddress
 }
 
+type UniqueUserAttributes = {
+    UserNames: UserName list
+    MailAddressUserNames: string list
+}
+
 type UserUpdate =
     | ChangeUserName of UserName * firstName: string * lastName: string * MailAlias list
     | SetSokratesId of SokratesId
