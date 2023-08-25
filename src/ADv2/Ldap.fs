@@ -36,8 +36,12 @@ module SearchResultEntry =
 
     let private getAttributeValues attributeName (object: SearchResultEntry) tryConvert =
         object.Attributes.[attributeName]
+        :> Collections.IEnumerable
         |> Option.ofObj
-        |> Option.bind (Seq.cast<obj> >> Seq.map tryConvert >> Option.sequence)
+        |> Option.defaultValue []
+        |> Seq.cast<obj> 
+        |> Seq.map tryConvert
+        |> Option.sequence
     let private getSingleAttributeValue attributeName object tryConvert =
         getAttributeValues attributeName object tryConvert
         |> Option.bind List.tryExactlyOne

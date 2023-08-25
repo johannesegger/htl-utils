@@ -344,9 +344,20 @@ let tests =
             Expect.all actualMembers (not << String.IsNullOrEmpty) "Group members should be stored"
         })
 
-        testCaseTask "Read optional string attribute value" (fun () -> task {
+        testCaseTask "Read empty string attribute values" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
             let userDn = DistinguishedName "CN=EINX,CN=Users,DC=htlvb,DC=intern"
+            use! __ = createNodeAndParents connection userDn ADUser []
+            let! node = Ldap.findObjectByDn connection userDn [| "proxyAddresses" |]
+
+            let actualProxyAddresses = SearchResultEntry.getStringAttributeValues "proxyAddresses" node
+
+            Expect.isEmpty actualProxyAddresses "Proxy addresses should be empty"
+        })
+
+        testCaseTask "Read optional string attribute value" (fun () -> task {
+            use connection = Ldap.connect connectionConfig.Ldap
+            let userDn = DistinguishedName "CN=EINW,CN=Users,DC=htlvb,DC=intern"
             use! __ = createNodeAndParents connection userDn ADUser []
             let! node = Ldap.findObjectByDn connection userDn [| "displayName" |]
 
@@ -357,7 +368,7 @@ let tests =
 
         testCaseTask "Read timestamp attribute value" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
-            let userDn = DistinguishedName "CN=EINW,CN=Users,DC=htlvb,DC=intern"
+            let userDn = DistinguishedName "CN=EINV,CN=Users,DC=htlvb,DC=intern"
             use! __ = createNodeAndParents connection userDn ADUser []
             let! node = Ldap.findObjectByDn connection userDn [| "createTimeStamp" |]
 
@@ -368,7 +379,7 @@ let tests =
 
         testCaseTask "Read bytes attribute value" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
-            let userDn = DistinguishedName "CN=EINV,CN=Users,DC=htlvb,DC=intern"
+            let userDn = DistinguishedName "CN=EINU,CN=Users,DC=htlvb,DC=intern"
             use! __ = createNodeAndParents connection userDn ADUser []
             let! node = Ldap.findObjectByDn connection userDn [||]
 
