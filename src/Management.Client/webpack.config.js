@@ -68,8 +68,7 @@ module.exports = {
     // to prevent browser caching if code changes
     output: {
         path: resolve(CONFIG.outputDir),
-        filename: isProduction ? '[name].[hash].js' : '[name].js',
-        hashFunction: 'xxhash64'
+        filename: isProduction ? '[name].[hash].js' : '[name].js'
     },
     mode: isProduction ? "production" : "development",
     devtool: isProduction ? "source-map" : "eval-source-map",
@@ -139,6 +138,10 @@ module.exports = {
                       options: { implementation: require("sass") }
                     }
                 ],
+            },
+            {
+                test: /\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/,
+                type: 'asset/resource'
             }
         ]
     }
