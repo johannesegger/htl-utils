@@ -157,7 +157,7 @@ module Ldap =
         let! response = async {
             let (DistinguishedName baseDn) = DN.domainBase (DistinguishedName groupDn)
             return!
-                SearchRequest(baseDn, $"(&(objectClass=user)(memberof={groupDn}))", SearchScope.Subtree, attributes)
+                SearchRequest(baseDn, $"(memberof={groupDn})", SearchScope.Subtree, attributes)
                 |> search connection
         }
         return

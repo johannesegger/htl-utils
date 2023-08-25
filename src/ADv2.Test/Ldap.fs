@@ -111,12 +111,24 @@ let tests =
 
         testCaseTask "Find full group members" (fun () -> task {
             use connection = Ldap.connect connectionConfig.Ldap
-            use! group = createTemporaryGroup connection "EING"
+            use! temporarySuperGroup = createTemporaryGroup connection "EINGParent"
+            use! temporarySubGroup = createTemporaryGroup connection "EINGChild"
+            do! Ldap.addObjectToGroup connection temporarySuperGroup.Dn temporarySubGroup.Dn
+            let! superGroup = Ldap.findObjectByDn connection temporarySuperGroup.Dn [| "member" |]
 
-            let! members = Ldap.findFullGroupMembers connection group.Dn [| "objectSid" |]
+            let! members = Ldap.findFullGroupMembers connection temporarySuperGroup.Dn [| "objectSid" |]
 
-            Expect.isNonEmpty members "Group should have members"
-            Expect.all members (fun m -> not <| Array.isEmpty (m.Attributes.["objectSid"][0] :?> byte[])) "Group members should be stored"
+            let actual =
+                members
+                |> List.map (fun v -> v.DistinguishedName, SearchResultEntry.getBytesAttributeValue "objectSid" v)
+                |> Set.ofList
+            let! expected =
+                SearchResultEntry.getStringAttributeValues "member" superGroup
+                |> List.map (DistinguishedName >> fun childDn -> Ldap.findObjectByDn connection childDn [| "objectSid" |])
+                |> List.append [ Ldap.findObjectByDn connection temporarySubGroup.Dn [| "objectSid" |] ]
+                |> Async.Parallel
+                |> Async.map (Seq.map (fun v -> (v.DistinguishedName, SearchResultEntry.getBytesAttributeValue "objectSid" v)) >> Set.ofSeq)
+            Expect.equal actual expected "Group should have members"
         })
 
         testCaseTask "Find descendant users" (fun () -> task {
