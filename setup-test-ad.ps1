@@ -2,6 +2,8 @@
 
 Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools -Restart:$false
 Install-ADDSForest -DomainName htlvb.intern -SafeModeAdministratorPassword (ConvertTo-SecureString -AsPlainText "Admin123" -Force) -NoRebootOnCompletion -Force
+Restart-Computer
+
 Install-WindowsFeature -Name AD-Certificate -IncludeManagementTools -Restart:$false
 Install-ADcsCertificationAuthority `
     -CAType EnterpriseRootCA `
@@ -18,5 +20,3 @@ Install-ADcsCertificationAuthority `
 
 New-Item C:\Shared -Type Directory | Out-Null
 New-SmbShare -Name data -Path C:\Shared -ChangeAccess BUILTIN\Users -FullAccess BUILTIN\Administrators | Out-Null
-
-Restart-Computer
