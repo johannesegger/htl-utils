@@ -117,7 +117,10 @@ let load (filePath: string) =
     let sheet = workbook.Worksheet(1)
     sheet.Rows()
     |> Seq.skip 2
-    |> Seq.filter (fun row -> row.Cell("A").GetValue<string>() |> String.IsNullOrEmpty |> not)
+    |> Seq.filter (fun row ->
+        row.Cell("A").GetValue<string>() |> String.IsNullOrEmpty |> not &&
+        row.Cell("B").GetValue<string>() |> String.IsNullOrEmpty |> not
+    )
     |> Seq.map (fun row ->
         {
             Id = row.Cell("A").GetValue<string>()
