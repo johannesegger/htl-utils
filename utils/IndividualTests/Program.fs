@@ -30,8 +30,8 @@ let getFullTests tests students =
             None
     )
 
-let run tenantId clientId studentsGroupId referenceDate testFilePath =
-    let students = StudentInfo.getLookup tenantId clientId studentsGroupId referenceDate
+let run tenantId clientId studentsGroupId sokratesReferenceDate testFilePath =
+    let students = StudentInfo.getLookup tenantId clientId studentsGroupId sokratesReferenceDate
     let tests = TestData.load testFilePath
     let fullTests = getFullTests tests students
     Letter.generateTeacherLetters fullTests
@@ -41,8 +41,8 @@ let run tenantId clientId studentsGroupId referenceDate testFilePath =
 [<EntryPoint>]
 let main argv =
     match argv with
-    | [| tenantId; clientId; studentsGroupId; referenceDate; testFilePath |] ->
-        let referenceDate = DateTime.Parse(referenceDate, CultureInfo.InvariantCulture)
+    | [| tenantId; clientId; studentsGroupId; sokratesReferenceDate; testFilePath |] ->
+        let referenceDate = DateTime.Parse(sokratesReferenceDate, CultureInfo.InvariantCulture)
         run tenantId clientId studentsGroupId referenceDate testFilePath
         0
     | _ ->

@@ -35,10 +35,10 @@ module private MSGraph =
         return result
     }
 
-let getLookup tenantId clientId studentsGroupId referenceDate =
+let getLookup tenantId clientId studentsGroupId sokratesReferenceDate =
     let sokratesApi = SokratesApi.FromEnvironment()
     let addressLookup =
-        sokratesApi.FetchStudentAddresses (Some referenceDate) |> Async.RunSynchronously
+        sokratesApi.FetchStudentAddresses (Some sokratesReferenceDate) |> Async.RunSynchronously
         |> List.map (fun s -> s.StudentId, s.Address)
         |> Map.ofList
     let mailLookup =
@@ -64,7 +64,7 @@ let getLookup tenantId clientId studentsGroupId referenceDate =
         |> Seq.map (fun v -> ((String.toLower v.Department, String.toLower v.Surname, String.toLower v.GivenName), v.Mail))
         |> Map.ofSeq
 
-    sokratesApi.FetchStudents None (Some referenceDate)
+    sokratesApi.FetchStudents None (Some sokratesReferenceDate)
     |> Async.RunSynchronously
     |> List.map (fun student ->
         let studentData =
