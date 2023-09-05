@@ -11,11 +11,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Common\Common.fsproj" />
-    <ProjectReference Include="..\..\src\AD\AD.fsproj" />
     <ProjectReference Include="..\..\src\Sokrates\Sokrates.fsproj" />
+    <ProjectReference Include="..\..\src\ADv2\ADv2.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.102.1" />
     <PackageReference Include="Dapper" Version="2.0.35" />
     <PackageReference Include="MySql.Data" Version="8.0.21" />
   </ItemGroup>
