@@ -1,11 +1,13 @@
 module Server
 
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Identity.Web
 
-let addAADAuth (services: IServiceCollection) config =
-    services.AddMicrosoftIdentityWebApiAuthentication(config)
+let addAADAuth (services: IServiceCollection) (config: IConfiguration) =
+    services
+        .AddMicrosoftIdentityWebApiAuthentication(config)
         .EnableTokenAcquisitionToCallDownstreamApi()
-        .AddMicrosoftGraph(config.GetSection("MicrosoftGraph"))
         .AddInMemoryTokenCaches()
+        .AddMicrosoftGraph(config.GetSection("MicrosoftGraph"))
     |> ignore

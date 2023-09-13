@@ -12,8 +12,9 @@
 
   <ItemGroup>
     <PackageReference Include="Giraffe" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="3.0.0" />
-    <PackageReference Include="Microsoft.Identity.Web.MicrosoftGraph" Version="1.9.2" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="2.13.4" />
+    <PackageReference Include="Microsoft.Identity.Web.GraphServiceClient" Version="2.13.4" />
     <PackageReference Include="Thoth.Json.Giraffe" Version="5.0.0" />
   </ItemGroup>
 
