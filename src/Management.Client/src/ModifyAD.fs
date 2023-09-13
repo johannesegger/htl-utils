@@ -346,7 +346,7 @@ let view model dispatch =
                         Input.text [
                             Input.Placeholder "Password"
                             Input.Value user.Password
-                            Input.OnChange (fun _ev -> dispatch (SetModificationDraft (CreateUser user)))
+                            Input.OnChange (fun ev -> dispatch (SetModificationDraft (CreateUser { user with Password = ev.Value })))
                         ]
                     ]
                     Help.help [ Help.Color IsInfo ] [
