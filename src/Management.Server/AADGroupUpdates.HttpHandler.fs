@@ -4,6 +4,7 @@ open AADGroupUpdates.DataTransferTypes
 open AADGroupUpdates.Mapping
 open AD.Core
 open Giraffe
+open Microsoft.Graph.Beta
 
 let private calculateMemberUpdates teacherIds aadGroupMemberIds =
     {
@@ -40,7 +41,7 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
 
 let getAADGroupUpdates (adApi: ADApi) (aadConfig: AAD.Configuration.Config) finalThesesConfig (sokratesApi: Sokrates.SokratesApi) (untis: Untis.UntisExport) : HttpHandler =
     fun next ctx -> task {
-        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
+        let graphServiceClient = ctx.GetService<GraphServiceClient>()
         let teachingData = untis.GetTeachingData()
         let! adUsers = adApi.GetUsers()
         let finalThesesMentors = FinalTheses.Core.getMentors |> Reader.run finalThesesConfig
@@ -205,7 +206,7 @@ let getAADGroupUpdates (adApi: ADApi) (aadConfig: AAD.Configuration.Config) fina
 
 let applyAADGroupUpdates : HttpHandler =
     fun next ctx -> task {
-        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
+        let graphServiceClient = ctx.GetService<GraphServiceClient>()
         let! input = ctx.BindJsonAsync<GroupUpdate list>()
         let modifications =
             input
@@ -216,7 +217,7 @@ let applyAADGroupUpdates : HttpHandler =
 
 let getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig : HttpHandler =
     fun next ctx -> task {
-        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
+        let graphServiceClient = ctx.GetService<GraphServiceClient>()
         let! classGroups = async {
             let! predefinedGroups =
                 AAD.Core.getPredefinedGroups graphServiceClient
@@ -232,7 +233,7 @@ let getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig : Http
 
 let applyAADIncrementClassGroupUpdates aadConfig : HttpHandler =
     fun next ctx -> task {
-        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
+        let graphServiceClient = ctx.GetService<GraphServiceClient>()
         let! aadGroupNameLookupByName = async {
             let! predefinedGroups =
                 AAD.Core.getPredefinedGroups graphServiceClient

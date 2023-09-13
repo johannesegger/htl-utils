@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <PackageReference Include="Giraffe" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Graph" Version="5.26.0" />
+    <PackageReference Include="Microsoft.Graph.Beta" Version="5.47.0-preview" />
     <PackageReference Include="Polly" Version="7.1.1" />
   </ItemGroup>
 

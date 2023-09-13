@@ -2,7 +2,7 @@ module AAD.Core
 
 open AAD.Configuration
 open AAD.Domain
-open Microsoft.Graph
+open Microsoft.Graph.Beta
 open Microsoft.Kiota.Abstractions.Serialization
 open System
 open System.IO
@@ -14,7 +14,7 @@ let readAll<'a, 'b when 'a: (new: unit -> 'a) and 'a :> IParsable and 'a :> IAdd
     let result = Collections.Generic.List<_>()
     let! firstResponse = query |> Async.AwaitTask
     let iterator =
-        PageIterator<'b, 'a>
+        Microsoft.Graph.PageIterator<'b, 'a>
             .CreatePageIterator(
                 graphClient,
                 firstResponse,
@@ -103,45 +103,18 @@ let getUsers (graphServiceClient: GraphServiceClient) = async {
     return users |> Seq.map User.toDomain |> Seq.toList
 }
 
-// see https://github.com/microsoftgraph/msgraph-sdk-dotnet/issues/528#issuecomment-523083170
-type ExtendedGroup() =
-    inherit Models.Group()
-        [<Newtonsoft.Json.JsonProperty(DefaultValueHandling = Newtonsoft.Json.DefaultValueHandling.Ignore, PropertyName = "resourceBehaviorOptions")>]
-        member val ResourceBehaviorOptions = [||] with get, set
-
 let private createGroup (graphServiceClient: GraphServiceClient) name = async {
     let group =
-        ExtendedGroup(
+        Models.Group(
             DisplayName = name,
             MailEnabled = Nullable true,
             MailNickname = name,
             SecurityEnabled = Nullable true,
             GroupTypes = Collections.Generic.List([ "Unified" ]),
             Visibility = "Private",
-            ResourceBehaviorOptions = [| "SubscribeNewGroupMembers"; "WelcomeEmailDisabled" |]
+            ResourceBehaviorOptions = Collections.Generic.List [ "SubscribeNewGroupMembers"; "WelcomeEmailDisabled" ]
         )
-    let! group = graphServiceClient.Groups.PostAsync(group) |> Async.AwaitTask
-    return group
-
-    // // `AutoSubscribeNewMembers` must be set separately, see https://docs.microsoft.com/en-us/graph/api/resources/group#properties
-    // let groupUpdate = Models.Group(AutoSubscribeNewMembers = Nullable true)
-    // let! group = retryRequest (graphServiceClient.Groups.[group.Id].Request()) (fun request -> request.UpdateAsync groupUpdate)
-
-    // let rec checkGroup i = async {
-    //     let! ct = Async.CancellationToken
-    //     let! group =
-    //         let request = graphServiceClient.Groups.[group.Id].Request().Select("autoSubscribeNewMembers,resourceBehaviorOptions,displayName") :?> BaseRequest
-    //         request.SendAsync<ExtendedGroup>(null, ct) |> Async.AwaitTask
-    //     if (group.AutoSubscribeNewMembers = Nullable true && group.ResourceBehaviorOptions |> Array.contains "WelcomeEmailDisabled") then
-    //         printfn $"Group validation succeeded (%s{group.DisplayName} - %s{group.Id}) (Retry count = %d{i})"
-    //         return group
-    //     elif i > 1 then
-    //         printfn $"Group validation failed (%s{group.DisplayName} - %s{group.Id}) (Retry count = %d{i})"
-    //         do! Async.Sleep (TimeSpan.FromSeconds 10.)
-    //         return! checkGroup (i - 1)
-    //     else return failwith $"Group validation failed (%s{group.DisplayName} - %s{group.Id})"
-    // }
-    // return! checkGroup (6 * 5)
+    return! graphServiceClient.Groups.PostAsync(group) |> Async.AwaitTask
 }
 
 let private deleteGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) = async {
@@ -242,15 +215,18 @@ let private addAutoContact (graphServiceClient: GraphServiceClient) userId conta
             |> Option.toNullable
         let mailAddresses =
             contact.MailAddresses
-            |> List.map (fun v -> Models.EmailAddress(Address = v))
+            |> List.map (fun v -> Models.TypedEmailAddress(Address = v, Type = Models.EmailType.Work))
         Models.Contact(
             GivenName = contact.FirstName,
             Surname = contact.LastName,
             DisplayName = contact.DisplayName,
             FileAs = sprintf "%s, %s" contact.LastName contact.FirstName,
             Birthday = birthday,
-            HomePhones = Collections.Generic.List(contact.HomePhones),
-            MobilePhone = Option.toObj contact.MobilePhone,
+            Phones =
+                Collections.Generic.List([
+                    yield! contact.HomePhones |> List.map (fun v -> Models.Phone(Number = v, Type = Models.PhoneType.Home))
+                    yield! contact.MobilePhone |> Option.map (fun v -> Models.Phone(Number = v, Type = Models.PhoneType.Mobile)) |> Option.toList
+                ]),
             EmailAddresses = Collections.Generic.List(mailAddresses),
             Categories = Collections.Generic.List([ "htl-utils-auto-generated" ])
         )

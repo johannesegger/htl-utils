@@ -145,8 +145,6 @@ let main args =
             "AzureAd:TenantId", aadConfig.OidcConfig.TenantId
             "AzureAd:ClientId", aadConfig.OidcConfig.AppId
             "AzureAd:ClientSecret", aadConfig.OidcConfig.AppSecret
-            "MicrosoftGraph:BaseUrl", "https://graph.microsoft.com/v1.0"
-            "MicrosoftGraph:Scopes", ""
         ]
         |> Seq.map KeyValuePair
     Host.CreateDefaultBuilder(args)
