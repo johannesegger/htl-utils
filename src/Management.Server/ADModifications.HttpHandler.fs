@@ -54,7 +54,7 @@ let rawMailAliases (user: User) =
     [
         {
             IsPrimary = true
-            UserName = $"%s{user.FirstName}.%s{user.LastName}"
+            UserName = $"%s{user.FirstName}.%s{user.LastName}" |> String.asAlphaNumeric
         }
     ]
 
