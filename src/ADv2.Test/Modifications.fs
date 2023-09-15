@@ -3,6 +3,7 @@ module AD.Test.Modifications
 open AD.Configuration
 open AD.Core
 open AD.Domain
+open AD.Test.Setup
 open Expecto
 open System
 
@@ -27,6 +28,52 @@ let private password = "!A1b2C3#"
 
 let tests =
     testList "Modifications" [
+        testCaseTask "Create user and query" (fun () -> task {
+            use adApi = new ADApi(config)
+            let user = {
+                Name = UserName "MOZA"
+                SokratesId = Some (SokratesId "MOZAID")
+                FirstName = "Albert"
+                LastName = "Mozart"
+                Type = Teacher
+                MailAliases = [ { IsPrimary = true; UserName = "Albert.Mozart"; Domain = DefaultDomain } ]
+                Password = "Test123"
+            }
+            let! result = adApi.ApplyDirectoryModifications([ CreateUser user ])
+
+            Expect.isOk result $"Error while creating user. Result = %A{result}"
+
+            let! adUser = adApi.GetUser(user.Name, user.Type)
+            let actualAdUser = {|
+                Name = adUser.Name
+                SokratesId = adUser.SokratesId
+                FirstName = adUser.FirstName
+                LastName = adUser.LastName
+                Type = adUser.Type
+                Mail = adUser.Mail
+                ProxyAddresses = adUser.ProxyAddresses
+                UserPrincipalName = adUser.UserPrincipalName
+            |}
+            let expectedAdUser = {|
+                Name = user.Name
+                SokratesId = user.SokratesId
+                FirstName = user.FirstName
+                LastName = user.LastName
+                Type = user.Type
+                Mail = Some { UserName = "MOZA"; Domain = "htlvb.at" }
+                ProxyAddresses = [ { Protocol = { Type = SMTP; IsPrimary = true }; Address = { UserName = "Albert.Mozart"; Domain = "htlvb.at" } } ]
+                UserPrincipalName = { UserName = "MOZA"; Domain = "htlvb.at" }
+            |}
+            Expect.equal actualAdUser expectedAdUser "User doesn't have expected attributes"
+
+            let! uniqueProperties = adApi.GetAllUniqueUserProperties()
+            let expectedUniqueProperties = {
+                UserNames = [ UserName "MOZA" ]
+                MailAddressUserNames = [ "MOZA"; "Albert.Mozart" ]
+            }
+            Expect.equal uniqueProperties expectedUniqueProperties "Expected user attributes as unique user properties"
+        })
+
         // testCase "Moving user changes user properties" (fun () ->
         //     reader {
         //         let group1Name = randomName "Group"
