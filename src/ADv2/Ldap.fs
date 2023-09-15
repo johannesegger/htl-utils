@@ -80,6 +80,7 @@ module Ldap =
                 Net.NetworkCredential(config.UserName, config.Password),
                 AuthType.Basic
             )
+        connection.SessionOptions.SecureSocketLayer <- true
         connection.SessionOptions.VerifyServerCertificate <- fun conn cert -> true
         connection.SessionOptions.ProtocolVersion <- 3 // v2 e.g. doesn't allow ModifyDNRequest to move object to different OU
         connection
