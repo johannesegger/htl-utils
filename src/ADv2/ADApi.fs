@@ -461,8 +461,22 @@ type ADApi(config: Config) =
         return {
             UserNames = users |> List.map (SearchResultEntry.getStringAttributeValue "sAMAccountName" >> UserName)
             MailAddressUserNames = [
-                yield! users |> List.map (SearchResultEntry.getStringAttributeValue "userPrincipalName")
-                yield! users |> List.collect (SearchResultEntry.getStringAttributeValues "proxyAddresses")
+                yield! users |> List.map (
+                    SearchResultEntry.getStringAttributeValue "userPrincipalName"
+                    >> (fun address ->
+                        MailAddress.tryParse address
+                        |> Option.defaultWith (fun () -> failwith $"Can't parse \"%s{address}\" as mail address.")
+                        |> fun v -> v.UserName
+                    )
+                )
+                yield!
+                    users
+                    |> List.collect (SearchResultEntry.getStringAttributeValues "proxyAddresses")
+                    |> List.map (fun address ->
+                        ProxyAddress.tryParse address
+                        |> Option.defaultWith (fun () -> failwith $"Can't parse \"%s{address}\" as mail address.")
+                        |> fun v -> v.Address.UserName
+                    )
             ]
         }
     }
