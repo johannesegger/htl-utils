@@ -341,7 +341,7 @@ let syncTeacherPhoneNumbers (excelDocPath: string) = async {
 [<EntryPoint>]
 let main argv =
     let sokratesApi = SokratesApi.FromEnvironment()
-    let adApi = ADApi.FromEnvironment()
+    use adApi = ADApi.FromEnvironment()
 
     printfn "== Syncing students"
     syncStudents sokratesApi adApi |> Async.RunSynchronously

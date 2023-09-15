@@ -36,8 +36,9 @@ let tests =
         testCaseTask "Create group home path" (fun () -> task {
             use folder = new TemporaryFolder()
             let groupFolderPath = Path.Combine(folder.Path, "1AHWIM")
+            use ldapConnection = Ldap.connect connectionConfig.Ldap
 
-            do! Operation.run connectionConfig (CreateGroupHomePath groupFolderPath)
+            do! Operation.run ldapConnection connectionConfig.NetworkShare (CreateGroupHomePath groupFolderPath)
 
             Expect.isTrue (Directory.Exists groupFolderPath) "Group folder path should exist"
         })
@@ -45,11 +46,11 @@ let tests =
         testCaseTask "Create user home path" (fun () -> task {
             use folder = new TemporaryFolder()
             let homePath = Path.Combine(folder.Path, "BOHN")
-            use connection = Ldap.connect connectionConfig.Ldap
+            use ldapConnection = Ldap.connect connectionConfig.Ldap
             let user1Dn = DistinguishedName "CN=BOHN1,CN=Users,DC=htlvb,DC=intern"
-            use! __ = createUser connection user1Dn [ ("homeDirectory", Text homePath) ]
+            use! __ = createUser ldapConnection user1Dn [ ("homeDirectory", Text homePath) ]
 
-            do! Operation.run connectionConfig (CreateUserHomePath user1Dn)
+            do! Operation.run ldapConnection connectionConfig.NetworkShare (CreateUserHomePath user1Dn)
 
             let! selfWriteResult =
                 async {
@@ -59,7 +60,7 @@ let tests =
                 |> Async.Catch
 
             let user2Dn = DistinguishedName "CN=BOHN2,CN=Users,DC=htlvb,DC=intern"
-            use! __ = createUser connection user2Dn []
+            use! __ = createUser ldapConnection user2Dn []
             let! otherWriteResult =
                 async {
                     use _ = NetworkConnection.create { UserName = "htlvb.intern\\BOHN2"; Password = userPassword } homePath

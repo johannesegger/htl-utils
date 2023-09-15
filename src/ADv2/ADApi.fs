@@ -5,10 +5,16 @@ open AD.Directory
 open AD.Domain
 open AD.Ldap
 open AD.Operations
+open System
 open System.IO
 open System.Text.RegularExpressions
 
 type ADApi(config: Config) =
+    let ldapConnection =
+        let v = Ldap.connect config.ConnectionConfig.Ldap
+        v.Bind() // Immediate bind is necessary, otherwise we get "System.DirectoryServices.Protocols.LdapException: A local error occurred."
+        v
+
     let getGroupHomePath userType =
         match userType with
         | Teacher -> config.Properties.TeacherHomePath
@@ -348,13 +354,16 @@ type ADApi(config: Config) =
             getADOperations modification
             |> List.map (fun v -> async {
                 try
-                    do! Operation.run config.ConnectionConfig v
+                    do! Operation.run ldapConnection config.ConnectionConfig.NetworkShare v
                     return Ok $"Successfully applied operation {v}"
                 with e -> return Error $"Error while applying operation {v}: {e.Message}"
             })
             |> Async.Sequential
         return result |> Result.sequenceAFull
     }
+
+    interface IDisposable with
+        member _.Dispose() = ldapConnection.Dispose()
 
     member _.ApplyDirectoryModifications (modifications: DirectoryModification list) = async {
         let! results =
@@ -376,11 +385,10 @@ type ADApi(config: Config) =
     }
 
     member _.GetUsers () = async {
-        use connection = Ldap.connect config.ConnectionConfig.Ldap
-        let! teachers = Ldap.findGroupMembersIfGroupExists connection config.Properties.TeacherGroup
+        let! teachers = Ldap.findGroupMembersIfGroupExists ldapConnection config.Properties.TeacherGroup
 
         let! classGroups = async {
-            let! groups = Ldap.findFullGroupMembers connection config.Properties.StudentGroup [| "sAMAccountName"; "member" |]
+            let! groups = Ldap.findFullGroupMembers ldapConnection config.Properties.StudentGroup [| "sAMAccountName"; "member" |]
             return
                 groups
                 |> Seq.map (fun group ->
@@ -401,7 +409,7 @@ type ADApi(config: Config) =
         let! adUsers =
             [ config.Properties.TeacherContainer; config.Properties.ClassContainer ]
             |> List.map (fun userContainerPath ->
-                Ldap.findDescendantUsers connection userContainerPath userProperties
+                Ldap.findDescendantUsers ldapConnection userContainerPath userProperties
             )
             |> Async.Sequential
             |> Async.map List.concat
@@ -414,14 +422,13 @@ type ADApi(config: Config) =
     }
 
     member _.GetAllUniqueUserProperties () = async {
-        use connection = Ldap.connect config.ConnectionConfig.Ldap
         let attributes = [| "sAMAccountName"; "userPrincipalName"; "proxyAddresses" |]
         let! users =
             [
-                Ldap.findRecursiveGroupMembersIfGroupExists connection config.Properties.TeacherGroup attributes
-                Ldap.findRecursiveGroupMembersIfGroupExists connection config.Properties.StudentGroup attributes
-                Ldap.findDescendantUsers connection config.Properties.ExTeacherContainer attributes
-                Ldap.findDescendantUsers connection config.Properties.ExStudentContainer attributes
+                Ldap.findRecursiveGroupMembersIfGroupExists ldapConnection config.Properties.TeacherGroup attributes
+                Ldap.findRecursiveGroupMembersIfGroupExists ldapConnection config.Properties.StudentGroup attributes
+                Ldap.findDescendantUsers ldapConnection config.Properties.ExTeacherContainer attributes
+                Ldap.findDescendantUsers ldapConnection config.Properties.ExStudentContainer attributes
             ]
             |> Async.Sequential
             |> Async.map List.concat
@@ -435,8 +442,7 @@ type ADApi(config: Config) =
     }
 
     member _.GetComputers () = async {
-        use connection = Ldap.connect config.ConnectionConfig.Ldap
-        let! adComputers = Ldap.findDescendantComputers connection config.Properties.ComputerContainer [| "dNSHostName" |]
+        let! adComputers = Ldap.findDescendantComputers ldapConnection config.Properties.ComputerContainer [| "dNSHostName" |]
         return
             adComputers
             |> List.map (SearchResultEntry.getStringAttributeValue "dNSHostName")
@@ -446,17 +452,15 @@ type ADApi(config: Config) =
         let groupDn = getGroupPathFromUserType userType
         let userDn = (let (UserName userName) = userName in DN.childCN userName groupDn)
 
-        use connection = Ldap.connect config.ConnectionConfig.Ldap
-        let! adUser = Ldap.findObjectByDn connection userDn userProperties
+        let! adUser = Ldap.findObjectByDn ldapConnection userDn userProperties
         return getUserFromSearchResult userType adUser
     }
 
     member _.GetClassGroups() = async {
-        use connection = Ldap.connect config.ConnectionConfig.Ldap
-        let! classGroups = Ldap.findFullGroupMembers connection config.Properties.StudentGroup [| "sAMAccountName" |]
+        let! classGroups = Ldap.findFullGroupMembers ldapConnection config.Properties.StudentGroup [| "sAMAccountName" |]
         return
             classGroups
             |> List.map (SearchResultEntry.getStringAttributeValue "sAMAccountName" >> GroupName)
     }
 
-    static member FromEnvironment () = ADApi(Config.fromEnvironment ())
+    static member FromEnvironment () = new ADApi(Config.fromEnvironment ())
