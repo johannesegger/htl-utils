@@ -75,7 +75,7 @@ type ADApi(config: Config) =
                         yield! newUser.SokratesId |> Option.map (fun (SokratesId v) -> config.Properties.SokratesIdAttributeName, Text v) |> Option.toList
                         yield "givenName", Text newUser.FirstName
                         yield "sn", Text newUser.LastName
-                        yield "displayName", Text (sprintf "%s %s" newUser.LastName newUser.FirstName)
+                        yield "displayName", Text $"%s{newUser.LastName} %s{newUser.FirstName}"
                         yield "sAMAccountName", (let (UserName userName) = newUser.Name in Text userName)
                         yield "department", Text department
                         yield "division", Text division
