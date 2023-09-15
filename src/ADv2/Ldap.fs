@@ -277,9 +277,8 @@ module Ldap =
         let! user = findObjectByDn connection userDn [| "userAccountControl" |]
         let userAccountControl =
             SearchResultEntry.getIntAttributeValue "userAccountControl" user
-        let accountDisableFlag = 0x2
         let properties = [
-            ("userAccountControl", Text $"{userAccountControl ||| accountDisableFlag}")
+            ("userAccountControl", Text $"{userAccountControl ||| UserAccountControl.ACCOUNTDISABLE}")
         ]
         do! setNodeProperties connection userDn properties
     }

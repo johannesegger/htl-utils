@@ -77,7 +77,7 @@ type ADApi(config: Config) =
                         yield "proxyAddresses", newUser.MailAliases |> List.map (MailAlias.toProxyAddress config.Properties.MailDomain >> ProxyAddress.toString) |> TextList
                         yield "homeDirectory", Text userHomePath
                         yield "homeDrive", Text config.Properties.HomeDrive
-                        yield "userAccountControl", Text (sprintf "%d" 0x220) // PASSWD_NOTREQD | NORMAL_ACCOUNT (see https://docs.microsoft.com/en-us/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties)
+                        yield "userAccountControl", Text $"{UserAccountControl.NORMAL_ACCOUNT ||| UserAccountControl.PASSWD_NOTREQD ||| UserAccountControl.DONT_EXPIRE_PASSWORD}"
                         yield "pwdLastSet", Text "0" // Expire password so the user must change it after first logon
                         yield "unicodePwd", Bytes (AD.password newUser.Password)
                     ]

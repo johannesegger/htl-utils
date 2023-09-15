@@ -26,7 +26,7 @@ let private createUser connection userDn properties = async {
     return! createNodeAndParents connection userDn ADUser [
         yield! properties
         yield! DN.tryCN userDn |> Option.map (fun userName -> "sAMAccountName", Text userName) |> Option.toList
-        ("userAccountControl", Text $"{0x10220}") // PASSWD_NOTREQD | NORMAL_ACCOUNT | DONT_EXPIRE_PASSWORD
+        ("userAccountControl", Text $"{UserAccountControl.NORMAL_ACCOUNT ||| UserAccountControl.DONT_EXPIRE_PASSWORD ||| UserAccountControl.PASSWD_NOTREQD}")
         ("unicodePwd", Bytes (AD.password userPassword))
     ]
 }
