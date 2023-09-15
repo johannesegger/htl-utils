@@ -10,6 +10,7 @@
     <Compile Include="Setup.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="DN.fs" />
+    <Compile Include="ConcurrentConnection.fs" />
     <Compile Include="Ldap.fs" />
     <Compile Include="Operations.fs" />
     <Compile Include="Modifications.fs" />

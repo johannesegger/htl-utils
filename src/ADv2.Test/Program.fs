@@ -5,6 +5,7 @@ open Expecto
 let tests =
     testList "All" [
         DN.tests
+        ConcurrentConnection.tests
         Ldap.tests
         Operations.tests
         Modifications.tests
