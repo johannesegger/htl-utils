@@ -163,6 +163,13 @@ type ADApi(config: Config) =
         let userDn = (let (UserName userName) = userName in DN.childCN userName parentNode)
         [
             yield DeleteUserHomePath userDn
+            yield SetNodeProperties {|
+                Node = userDn
+                Properties = [
+                    ("homeDirectory", Unset)
+                    ("homeDrive", Unset)
+                ]
+            |}
 
             match userType with
             | Teacher ->

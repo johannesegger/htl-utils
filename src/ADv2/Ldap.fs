@@ -103,6 +103,7 @@ module Ldap =
 
     let private directoryAttributeValues v =
         match v with
+        | Unset -> Array.zeroCreate<string> 0 :> obj :?> obj[]
         | Text v -> [| v |] :> obj :?> obj[]
         | Bytes v -> [| v |] :> obj :?> obj[]
         | TextList v -> v |> List.toArray :> obj :?> obj[]

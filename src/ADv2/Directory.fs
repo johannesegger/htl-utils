@@ -13,6 +13,7 @@ module NodeType =
         | ADComputer -> "computer"
 
 type PropertyValue =
+    | Unset
     | Text of string
     | Bytes of byte[]
     | TextList of string list
