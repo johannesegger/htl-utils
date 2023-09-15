@@ -194,6 +194,31 @@ type ADApi(config: Config) =
                 yield MoveNode {| Source = userDn; Target = targetDn |}
         ]
 
+    let restoreUser userName userType =
+        let sourceDn =
+            match userType with
+            | Teacher -> let (UserName userName) = userName in DN.childCN userName config.Properties.ExTeacherContainer
+            | Student _ -> let (UserName userName) = userName in DN.childCN userName config.Properties.ExStudentContainer
+        let targetDn =
+            let parentNode = getUserContainer userType
+            let (UserName userName) = userName in DN.childCN userName parentNode
+        [
+            EnableAccount sourceDn
+            MoveNode {| Source = sourceDn; Target = targetDn |}
+            SetNodeProperties {|
+                Node = targetDn
+                Properties = [
+                    "homeDirectory", Text (getUserHomePath userName userType)
+                    "homeDrive", Text config.Properties.HomeDrive
+                ]
+            |}
+            AddObjectToGroup {|
+                Object = targetDn
+                Group = getGroupPathFromUserType userType
+            |}
+            CreateUserHomePath targetDn
+        ]
+
     let createGroup userType =
         let ouDn = getUserContainer userType
         let groupDn = getGroupPathFromUserType userType
@@ -344,6 +369,7 @@ type ADApi(config: Config) =
         | UpdateUser (userName, Student oldClassName, MoveStudentToClass newClassName) -> moveStudentToClass userName oldClassName newClassName
         | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"
         | DeleteUser (userName, userType) -> deleteUser userName userType
+        | RestoreUser (userName, userType) -> restoreUser userName userType
         | CreateGroup userType -> createGroup userType
         | UpdateGroup (Teacher, ChangeGroupName _) -> failwith "Can't rename teacher group"
         | UpdateGroup (Student oldClassName, ChangeGroupName newClassName) -> changeStudentGroupName oldClassName newClassName

@@ -99,6 +99,7 @@ type DirectoryModification =
     | CreateUser of NewUser
     | UpdateUser of UserName * UserType * UserUpdate
     | DeleteUser of UserName * UserType
+    | RestoreUser of UserName * UserType
     | CreateGroup of UserType
     | UpdateGroup of UserType * GroupUpdate
     | DeleteGroup of UserType

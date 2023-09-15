@@ -283,6 +283,15 @@ module Ldap =
         do! setNodeProperties connection userDn properties
     }
 
+    let enableAccount connection userDn = async {
+        let! user = findObjectByDn connection userDn [| "userAccountControl" |]
+        let userAccountControl =
+            SearchResultEntry.getIntAttributeValue "userAccountControl" user
+        let properties = [
+            ("userAccountControl", Text $"{userAccountControl &&& ~~~UserAccountControl.ACCOUNTDISABLE}")
+        ]
+        do! setNodeProperties connection userDn properties
+    }
     let addObjectToGroup connection (DistinguishedName group) (DistinguishedName object) = async {
         let modification = directoryAttributeModification "member" DirectoryAttributeOperation.Add (Text object)
         try
