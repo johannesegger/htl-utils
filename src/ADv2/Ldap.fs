@@ -219,7 +219,7 @@ module Ldap =
     let createNodeAndParents connection node nodeType properties = async {
         let! parentNodes = createParents connection node
         let! isNew = createNodeIfNotExists connection node nodeType properties
-        if isNew then return parentNodes @ [ node  ]
+        if isNew then return parentNodes @ [ node ]
         else return parentNodes
     }
     let moveNode connection (DistinguishedName source) target = async {
