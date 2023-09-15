@@ -489,8 +489,8 @@ type ADApi(config: Config) =
     }
 
     member _.GetUser(userName, userType) = async {
-        let groupDn = getGroupPathFromUserType userType
-        let userDn = (let (UserName userName) = userName in DN.childCN userName groupDn)
+        let containerDn = getUserContainer userType
+        let userDn = (let (UserName userName) = userName in DN.childCN userName containerDn)
 
         let! adUser = Ldap.findObjectByDn ldapConnection userDn userProperties
         return getUserFromSearchResult userType adUser
