@@ -198,7 +198,7 @@ module Ldap =
         with
             | :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.EntryAlreadyExists ->
                 return false
-            | e -> return failwith $"Error while creating \"{nodeDn}\": {e.Message}"
+            | e -> return failwith $"Error while creating \"%s{nodeDn}\" with attributes \"%A{attributes}\": %s{e.Message}"
     }
     let private createParents connection node = async {
         let! createdParents =
