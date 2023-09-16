@@ -255,10 +255,8 @@ let modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes
 
     let state =
         let (uniqueUserAttributes, modifications) = state
-        let modifications =
-            (modifications, calculateCreateGroupModifications existingUsers sokratesTeachers sokratesStudents)
-            ||> List.fold (fun list item -> item :: list)
-        (uniqueUserAttributes, modifications)
+        let newModifications = calculateCreateGroupModifications existingUsers sokratesTeachers sokratesStudents
+        (uniqueUserAttributes, modifications @ newModifications)
 
     let state =
         let (uniqueUserAttributes, modifications) = state
