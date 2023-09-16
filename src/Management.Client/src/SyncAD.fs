@@ -183,6 +183,7 @@ type Msg =
     | SetTimestamp of DateTime
     | ApplyModifications
     | ApplyModificationsResponse of Result<unit, string>
+    | CancelApplyModifications
 
 let rec update msg (model: Model) =
     let updateDirectoryModificationGroups isMatch fn =
@@ -234,6 +235,14 @@ let rec update msg (model: Model) =
         | Applying { ToApply = modification :: rest; Applied = applied } ->
             let applied = (modification, applyResult) :: applied
             let modificationsState = if rest.Length > 0 then Applying { ToApply = rest; Applied = applied } else Applied applied
+            { model with ModificationsState = modificationsState }
+        | Applying { ToApply = [] } -> model
+        | Drafting
+        | Applied _ -> model
+    | CancelApplyModifications ->
+        match model.ModificationsState with
+        | Applying { ToApply = modification :: _; Applied = applied } ->
+            let modificationsState = Applying { ToApply = [ modification ]; Applied = applied }
             { model with ModificationsState = modificationsState }
         | Applying { ToApply = [] } -> model
         | Drafting
@@ -377,17 +386,29 @@ let view model dispatch =
                 ]
             ]
             Button.list [] [
-                Button.button
-                    [
-                        Button.Disabled (ModificationsState.isApplied model.ModificationsState || LoadableDirectoryModifications.isLoading model.Modifications)
-                        Button.IsLoading (ModificationsState.isApplying model.ModificationsState)
-                        Button.Color IsSuccess
-                        Button.OnClick (fun _e -> dispatch ApplyModifications)
-                    ]
-                    [
-                        Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
-                        span [] [ str "Apply modifications" ]
-                    ]
+                match model.ModificationsState with
+                | Drafting
+                | Applied _ ->
+                    Button.button
+                        [
+                            Button.Disabled (ModificationsState.isApplied model.ModificationsState)
+                            Button.Color IsSuccess
+                            Button.OnClick (fun _e -> dispatch ApplyModifications)
+                        ]
+                        [
+                            Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
+                            span [] [ str "Apply modifications" ]
+                        ]
+                | Applying _ ->
+                    Button.button
+                        [
+                            Button.Color IsDanger
+                            Button.OnClick (fun _e -> dispatch CancelApplyModifications)
+                        ]
+                        [
+                            Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
+                            span [] [ str "Stop applying modifications" ]
+                        ]
             ]
         ]
 
