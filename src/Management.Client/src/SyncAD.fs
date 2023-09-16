@@ -123,14 +123,41 @@ module DirectoryModificationGroup =
             List.choose UIDirectoryModification.toDto directoryModificationGroup.Modifications
         else []
 
+type ApplyingModificationState = {
+    ToApply: DirectoryModification list
+    Applied: (DirectoryModification * Result<unit, string>) list
+}
+
 type ModificationsState =
     | Drafting
-    | Applying of DirectoryModification list
-    | Applied
+    | Applying of ApplyingModificationState
+    | Applied of (DirectoryModification * Result<unit, string>) list
 module ModificationsState =
     let isDrafting = function | Drafting -> true | _ -> false
     let isApplying = function | Applying _ -> true | _ -> false
-    let isApplied = function | Applied -> true | _ -> false
+    let isApplied = function | Applied _ -> true | _ -> false
+    let tryGetApplicationResults = function
+        | Drafting -> (None, [])
+        | Applying { Applied = applied; ToApply = toApply } -> (List.tryHead toApply, applied)
+        | Applied applied -> (None, applied)
+
+type ModificationState =
+    | ApplyingModification
+    | AppliedModification of Result<unit, string>
+module ModificationState =
+    let tryGet modification modificationsState =
+        let isApplying =
+            modificationsState
+            |> ModificationsState.tryGetApplicationResults
+            |> fst
+            |> fun v -> v = Some modification
+        if isApplying then Some ApplyingModification
+        else
+            modificationsState
+            |> ModificationsState.tryGetApplicationResults
+            |> snd
+            |> List.tryFind (fst >> (=) modification)
+            |> Option.map (snd >> AppliedModification)
 
 type LoadableDirectoryModifications =
     | LoadingModifications
@@ -155,7 +182,7 @@ type Msg =
     | ToggleEnableModification of DirectoryModificationGroup * UIDirectoryModification
     | SetTimestamp of DateTime
     | ApplyModifications
-    | ApplyModificationsResponse of Result<unit, exn>
+    | ApplyModificationsResponse of Result<unit, string>
 
 let rec update msg (model: Model) =
     let updateDirectoryModificationGroups isMatch fn =
@@ -195,13 +222,22 @@ let rec update msg (model: Model) =
     | ApplyModifications ->
         match model.ModificationsState, model.Modifications with
         | Drafting, LoadedModifications directoryModificationGroups ->
-            { model with ModificationsState = Applying (directoryModificationGroups |> List.collect DirectoryModificationGroup.toDtoList) }
+            let toApply = directoryModificationGroups |> List.collect DirectoryModificationGroup.toDtoList
+            if toApply.Length > 0 then { model with ModificationsState = Applying { ToApply = toApply; Applied = [] } }
+            else model
         | Drafting, _
         | Applying _, _
-        | Applied, _ -> model
+        | Applied _, _ -> model
     | SetTimestamp timestamp -> { model with Timestamp = timestamp }
-    | ApplyModificationsResponse (Ok ())
-    | ApplyModificationsResponse (Error _) -> { model with ModificationsState = Applied }
+    | ApplyModificationsResponse applyResult ->
+        match model.ModificationsState with
+        | Applying { ToApply = modification :: rest; Applied = applied } ->
+            let applied = (modification, applyResult) :: applied
+            let modificationsState = if rest.Length > 0 then Applying { ToApply = rest; Applied = applied } else Applied applied
+            { model with ModificationsState = modificationsState }
+        | Applying { ToApply = [] } -> model
+        | Drafting
+        | Applied _ -> model
 
 let init =
     {
@@ -266,17 +302,34 @@ let view model dispatch =
             | DeleteGroup _ -> Fa.Solid.Minus, IsDanger
 
         Panel.Block.div [] [
-            Panel.icon [] []
-            Button.button
-                [
-                    Button.Disabled (isLocked || not directoryModificationGroup.IsEnabled)
-                    Button.Size IsSmall
-                    Button.Color (if directoryModificationGroup.IsEnabled && directoryModification.IsEnabled then color else NoColor)
-                    Button.Props [ Style [ MarginRight "0.5rem" ] ]
-                    Button.OnClick (fun _ -> dispatch (ToggleEnableModification (directoryModificationGroup, directoryModification)))
+            Control.div [] [
+                Level.level [] [
+                    Level.left [] [
+                        Button.button
+                            [
+                                Button.Disabled (isLocked || not directoryModificationGroup.IsEnabled)
+                                Button.Size IsSmall
+                                Button.Color (if directoryModificationGroup.IsEnabled && directoryModification.IsEnabled then color else NoColor)
+                                Button.Props [ Style [ MarginRight "0.5rem" ] ]
+                                Button.OnClick (fun _ -> dispatch (ToggleEnableModification (directoryModificationGroup, directoryModification)))
+                            ]
+                            [ Fa.i [ icon ] [] ]
+                        str directoryModification.Description
+                    ]
+                    Level.right [] [
+                        match ModificationState.tryGet directoryModification.Type model.ModificationsState with
+                        | Some ApplyingModification -> Fa.i [ Fa.Solid.Spinner; Fa.Spin; Fa.CustomClass "has-text-info" ] []
+                        | Some (AppliedModification (Ok ())) -> Fa.i [ Fa.Solid.Check; Fa.CustomClass "has-text-success" ] []
+                        | Some (AppliedModification (Error _)) -> Fa.i [ Fa.CustomClass "fa-solid fa-xmark has-text-danger" ] []
+                        | None -> ()
+                    ]
                 ]
-                [ Fa.i [ icon ] [] ]
-            str directoryModification.Description
+                match ModificationState.tryGet directoryModification.Type model.ModificationsState with
+                | Some ApplyingModification
+                | Some (AppliedModification (Ok ())) -> ()
+                | Some (AppliedModification (Error message)) -> Content.content [ Content.Modifiers [ Modifier.TextColor IsDanger ]; Content.Props [ Style [ WhiteSpace WhiteSpaceOptions.PreWrap ] ] ] [ str message ]
+                | None -> ()
+            ]
         ]
 
     let directoryModificationGroupView directoryModificationGroup =
@@ -380,20 +433,29 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             let coders = Extra.empty |> Thoth.addCoders
-                            do! Fetch.post(url, modifications, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            match! Fetch.tryPost(url, modifications, properties = requestProperties, extra = coders) |> Async.AwaitPromise with
+                            | Ok () -> return Ok ()
+                            | Error (FetchFailed response) ->
+                                let! message = response.json<string>() |> Async.AwaitPromise
+                                return Error message
+                            | Error v -> return Error $"Unexpected error: %A{v}"
                         })
-                        |> AsyncRx.map Ok
-                        |> AsyncRx.catch (Error >> AsyncRx.single)
                     )
 
                 states
                 |> AsyncRx.choose (function
-                    | Some ApplyModifications, { ModificationsState = Applying modifications } -> Some (applyModifications modifications)
+                    | Some ApplyModifications, { ModificationsState = Applying modifications }
+                    | Some (ApplyModificationsResponse _), { ModificationsState = Applying modifications } ->
+                        modifications.ToApply
+                        |> List.take 1
+                        |> applyModifications
+                        |> Some
                     | _ -> None)
                 |> AsyncRx.switchLatest
-                |> AsyncRx.showSimpleErrorToast (fun e -> "Applying AD modifications failed", e.Message)
-                |> AsyncRx.showSimpleSuccessToast (fun () -> "Applying AD modifications", "Successfully applied AD modifications")
                 |> AsyncRx.map ApplyModificationsResponse
+
+                // TODO show summary after applying modifications
+
             ]
             |> AsyncRx.mergeSeq
         | false -> AsyncRx.empty ()
