@@ -39,7 +39,7 @@ module SearchResultEntry =
         :> Collections.IEnumerable
         |> Option.ofObj
         |> Option.defaultValue []
-        |> Seq.cast<obj> 
+        |> Seq.cast<obj>
         |> Seq.map tryConvert
         |> Option.sequence
     let private getSingleAttributeValue attributeName object tryConvert =
@@ -72,106 +72,55 @@ module SearchResultEntry =
         getOptionalAttributeValue attributeName object TryConvert.toString
         |> Option.defaultWith (fun () -> failwith $"Attribute \"{attributeName}\" of object \"{object.DistinguishedName}\" is neither empty nor a single string")
 
-module Ldap =
-    let connect config =
-        let connection =
-            new LdapConnection(
-                LdapDirectoryIdentifier(config.HostName, 636),
-                Net.NetworkCredential(config.UserName, config.Password),
-                AuthType.Basic
-            )
-        connection.SessionOptions.SecureSocketLayer <- true
-        connection.SessionOptions.VerifyServerCertificate <- fun conn cert -> true
-        connection.SessionOptions.ProtocolVersion <- 3 // v2 e.g. doesn't allow ModifyDNRequest to move object to different OU
-        connection
-    let private sendRequest<'req, 'res when 'req :> DirectoryRequest and 'res :> DirectoryResponse> (connection: LdapConnection) (request: 'req) = async {
-        #if DEBUG
-        let response = connection.SendRequest(request)
-        #else
-        let! response =
-            Async.FromBeginEnd(
-                (fun (callback, state) -> connection.BeginSendRequest(request, PartialResultProcessing.NoPartialResultSupport, callback, state)),
-                connection.EndSendRequest,
-                ignore)
-        #endif
-        return response :?> 'res
-    }
-    let private search = sendRequest<SearchRequest, SearchResponse>
-    let private add = sendRequest<AddRequest, AddResponse>
-    let private modify = sendRequest<ModifyRequest, ModifyResponse>
-    let private delete = sendRequest<DeleteRequest, DeleteResponse>
-    let private modifyDN = sendRequest<ModifyDNRequest, ModifyDNResponse>
+type Ldap(config: LdapConnectionConfig) =
+    let connection =
+        let c = new LdapConnection(
+            LdapDirectoryIdentifier(config.HostName, 636),
+            Net.NetworkCredential(config.UserName, config.Password),
+            AuthType.Basic
+        )
+        c.AutoBind <- false
+        c.SessionOptions.SecureSocketLayer <- true
+        c.SessionOptions.VerifyServerCertificate <- fun conn cert -> true
+        c.SessionOptions.ProtocolVersion <- 3 // v2 e.g. doesn't allow ModifyDNRequest to move object to different OU
+        c
 
-    let private directoryAttributeValues v =
+    let gate = Object()
+
+    let sendRequest (request: #DirectoryRequest) : Async<#DirectoryResponse> = async {
+        return lock gate (fun () ->
+            connection.Bind()
+            connection.SendRequest(request) :?> 'res
+        )
+    }
+    let search (request: SearchRequest) : Async<SearchResponse> = sendRequest request
+    let add (request: AddRequest) : Async<AddResponse> = sendRequest request
+    let modify (request: ModifyRequest) : Async<ModifyResponse> = sendRequest request
+    let delete (request: DeleteRequest) : Async<DeleteResponse> = sendRequest request
+    let modifyDN (request: ModifyDNRequest) : Async<ModifyDNResponse> = sendRequest request
+
+    let directoryAttributeValues v =
         match v with
         | Unset -> Array.zeroCreate<string> 0 :> obj :?> obj[]
         | Text v -> [| v |] :> obj :?> obj[]
         | Bytes v -> [| v |] :> obj :?> obj[]
         | TextList v -> v |> List.toArray :> obj :?> obj[]
-    let private directoryAttribute name value =
+    let directoryAttribute name value =
         DirectoryAttribute(name, directoryAttributeValues value)
-    let private directoryAttributes =
+    let directoryAttributes =
         List.map (uncurry directoryAttribute) >> List.toArray
-    let private directoryAttributeModification name operation value =
+    let directoryAttributeModification name operation value =
         let v = DirectoryAttributeModification(Name = name, Operation = operation)
         v.AddRange(directoryAttributeValues value)
         v
-    let private directoryAttributeModifications operation =
+    let directoryAttributeModifications operation =
         List.map (fun (name, value) -> directoryAttributeModification name operation value) >> List.toArray
 
-    let findObjectByDn (connection: LdapConnection) (DistinguishedName objectDn) attributes = async {
-        let! response =
-            SearchRequest(objectDn, null, SearchScope.Base, attributes)
-            |> search connection
-
-        return
-            response.Entries
-            |> Seq.cast<SearchResultEntry>
-            |> Seq.tryHead
-            |> Option.defaultWith (fun () -> failwith $"Object \"{objectDn}\" not found")
-    }
-
-    let findGroupMembersIfGroupExists (connection: LdapConnection) groupDn = async {
-        try
-            let! group = findObjectByDn connection groupDn [| "member" |]
-            return
-                group
-                |> SearchResultEntry.getStringAttributeValues "member"
-                |> List.map DistinguishedName
-        with :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.NoSuchObject ->
-            return []
-    }
-
-    let findRecursiveGroupMembersIfGroupExists (connection: LdapConnection) (DistinguishedName groupDn) attributes = async {
-        let! (response: SearchResponse) = async {
-            let (DistinguishedName baseDn) = DN.domainBase (DistinguishedName groupDn)
-            return!
-                SearchRequest(baseDn, $"(&(objectClass=user)(memberof:1.2.840.113556.1.4.1941:=%s{groupDn}))", SearchScope.Subtree, attributes)
-                |> search connection
-        }
-        return
-            response.Entries
-            |> Seq.cast<SearchResultEntry>
-            |> Seq.toList
-    }
-
-    let findFullGroupMembers (connection: LdapConnection) (DistinguishedName groupDn) attributes = async {
-        let! response = async {
-            let (DistinguishedName baseDn) = DN.domainBase (DistinguishedName groupDn)
-            return!
-                SearchRequest(baseDn, $"(memberof={groupDn})", SearchScope.Subtree, attributes)
-                |> search connection
-        }
-        return
-            response.Entries
-            |> Seq.cast<SearchResultEntry>
-            |> Seq.toList
-    }
-    let private findDescendants (connection: LdapConnection) (DistinguishedName parentDn) ldapFilter attributes = async {
+    let findDescendants (DistinguishedName parentDn) ldapFilter attributes = async {
         try
             let! response =
                 SearchRequest(parentDn, ldapFilter, SearchScope.Subtree, attributes)
-                |> search connection
+                |> search
             return
                 response.Entries
                 |> Seq.cast<SearchResultEntry>
@@ -179,11 +128,8 @@ module Ldap =
         with :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.NoSuchObject ->
             return []
     }
-    let findDescendantUsers connection parentOU attributes =
-        findDescendants connection parentOU "(&(objectCategory=person)(objectClass=user))" attributes
-    let findDescendantComputers connection parentOU attributes =
-        findDescendants connection parentOU "(objectCategory=computer)" attributes
-    let private createNodeIfNotExists connection (DistinguishedName nodeDn) nodeType properties = async {
+
+    let createNodeIfNotExists (DistinguishedName nodeDn) nodeType properties = async {
         let attributes =
             [|
                 DirectoryAttribute("objectClass", NodeType.toString nodeType)
@@ -193,7 +139,7 @@ module Ldap =
         try
             do!
                 AddRequest(nodeDn, attributes)
-                |> add connection
+                |> add
                 |> Async.Ignore
             return true
         with
@@ -201,13 +147,14 @@ module Ldap =
                 return false
             | e -> return failwith $"Error while creating \"%s{nodeDn}\" with attributes \"%A{attributes}\": %s{e.Message}"
     }
-    let private createParents connection node = async {
+
+    let createParents node = async {
         let! createdParents =
             DN.parentsAndSelf node
             |> List.filter DN.isOU
             |> List.filter ((<>) node)
             |> List.map (fun path -> async {
-                let! isNew = createNodeIfNotExists connection path ADOrganizationalUnit []
+                let! isNew = createNodeIfNotExists path ADOrganizationalUnit []
                 if isNew then return Some path
                 else return None
             })
@@ -217,35 +164,100 @@ module Ldap =
             |> Array.choose id
             |> Array.toList
     }
-    let createNodeAndParents connection node nodeType properties = async {
-        let! parentNodes = createParents connection node
-        let! isNew = createNodeIfNotExists connection node nodeType properties
+
+    interface IDisposable with
+        member _.Dispose() = connection.Dispose()
+
+    member _.FindObjectByDn (DistinguishedName objectDn,  attributes) = async {
+        let! response =
+            SearchRequest(objectDn, null, SearchScope.Base, attributes)
+            |> search
+
+        return
+            response.Entries
+            |> Seq.cast<SearchResultEntry>
+            |> Seq.tryHead
+            |> Option.defaultWith (fun () -> failwith $"Object \"{objectDn}\" not found")
+    }
+
+    member this.FindGroupMembersIfGroupExists (groupDn) = async {
+        try
+            let! group = this.FindObjectByDn(groupDn, [| "member" |])
+            return
+                group
+                |> SearchResultEntry.getStringAttributeValues "member"
+                |> List.map DistinguishedName
+        with :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.NoSuchObject ->
+            return []
+    }
+
+    member _.FindRecursiveGroupMembersIfGroupExists (DistinguishedName groupDn, attributes) = async {
+        let! (response: SearchResponse) = async {
+            let (DistinguishedName baseDn) = DN.domainBase (DistinguishedName groupDn)
+            return!
+                SearchRequest(baseDn, $"(&(objectClass=user)(memberof:1.2.840.113556.1.4.1941:=%s{groupDn}))", SearchScope.Subtree, attributes)
+                |> search
+        }
+        return
+            response.Entries
+            |> Seq.cast<SearchResultEntry>
+            |> Seq.toList
+    }
+
+    member _.FindFullGroupMembers (DistinguishedName groupDn, attributes) = async {
+        let! response = async {
+            let (DistinguishedName baseDn) = DN.domainBase (DistinguishedName groupDn)
+            return!
+                SearchRequest(baseDn, $"(memberof={groupDn})", SearchScope.Subtree, attributes)
+                |> search
+        }
+        return
+            response.Entries
+            |> Seq.cast<SearchResultEntry>
+            |> Seq.toList
+    }
+
+    member _.FindDescendantUsers (parentOU, attributes) =
+        findDescendants parentOU "(&(objectCategory=person)(objectClass=user))" attributes
+
+    member _.FindDescendantComputers (parentOU, attributes) =
+        findDescendants parentOU "(objectCategory=computer)" attributes
+
+    member _.CreateNodeIfNotExists (nodeDn, nodeType, properties) = async {
+        do! createNodeIfNotExists nodeDn nodeType properties |> Async.Ignore
+    }
+
+    member _.CreateNodeAndParents (node, nodeType, properties) = async {
+        let! parentNodes = createParents node
+        let! isNew = createNodeIfNotExists node nodeType properties
         if isNew then return parentNodes @ [ node ]
         else return parentNodes
     }
-    let moveNode connection (DistinguishedName source) target = async {
+
+    member _.MoveNode (DistinguishedName source, target) = async {
         let (DistinguishedName targetParentDn) = DN.parent target
         let newName = DN.head target |> uncurry (sprintf "%s=%s")
-        do! createParents connection target |> Async.Ignore
+        do! createParents target |> Async.Ignore
         try
             do!
                 ModifyDNRequest(source, targetParentDn, newName)
-                |> modifyDN connection
+                |> modifyDN
                 |> Async.Ignore
         with e -> failwith $"Error while moving \"{DistinguishedName source}\" to \"{target}\": {e.Message}"
     }
-    let setNodeProperties connection (DistinguishedName node) properties = async {
+
+    member _.SetNodeProperties (DistinguishedName node, properties) = async {
         try
             do!
                 ModifyRequest(node, directoryAttributeModifications DirectoryAttributeOperation.Replace properties)
-                |> modify connection
+                |> modify
                 |> Async.Ignore
         with e -> failwith $"Error while setting node properties {properties} of \"{node}\": {e.Message}"
     }
-    let replaceTextInNodePropertyValues connection node (properties: {| Name: string; Pattern: Regex; Replacement: string |} list) = async {
+    member this.ReplaceTextInNodePropertyValues (node, properties: {| Name: string; Pattern: Regex; Replacement: string |} list) = async {
         let propertyNames = properties |> List.map (fun v -> v.Name) |> List.toArray
         let! user = async {
-            return! findObjectByDn connection node propertyNames
+            return! this.FindObjectByDn(node, propertyNames)
         }
         let propertyValueMap =
             propertyNames
@@ -261,67 +273,67 @@ module Ldap =
                 let newValue = v.Pattern.Replace(currentValue, v.Replacement)
                 v.Name, Text newValue
             )
-        do! setNodeProperties connection node properties
+        do! this.SetNodeProperties(node, properties)
     }
-    let deleteNode connection (DistinguishedName node) = async {
+    member _.DeleteNode (DistinguishedName node) = async {
         try
             do!
                 DeleteRequest(node)
-                |> delete connection
+                |> delete
                 |> Async.Ignore
         with
             | :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.NoSuchObject -> ()
             | e -> failwith $"Error while deleting \"%s{node}\": {e.Message}"
     }
 
-    let disableAccount connection userDn = async {
-        let! user = findObjectByDn connection userDn [| "userAccountControl" |]
+    member this.DisableAccount (userDn) = async {
+        let! user = this.FindObjectByDn (userDn, [| "userAccountControl" |])
         let userAccountControl =
             SearchResultEntry.getIntAttributeValue "userAccountControl" user
         let properties = [
             ("userAccountControl", Text $"{userAccountControl ||| UserAccountControl.ACCOUNTDISABLE}")
         ]
-        do! setNodeProperties connection userDn properties
+        do! this.SetNodeProperties (userDn, properties)
     }
 
-    let enableAccount connection userDn = async {
-        let! user = findObjectByDn connection userDn [| "userAccountControl" |]
+    member this.EnableAccount (userDn) = async {
+        let! user = this.FindObjectByDn (userDn, [| "userAccountControl" |])
         let userAccountControl =
             SearchResultEntry.getIntAttributeValue "userAccountControl" user
         let properties = [
             ("userAccountControl", Text $"{userAccountControl &&& ~~~UserAccountControl.ACCOUNTDISABLE}")
         ]
-        do! setNodeProperties connection userDn properties
+        do! this.SetNodeProperties(userDn, properties)
     }
-    let addObjectToGroup connection (DistinguishedName group) (DistinguishedName object) = async {
+    member _.AddObjectToGroup (DistinguishedName group, DistinguishedName object) = async {
         let modification = directoryAttributeModification "member" DirectoryAttributeOperation.Add (Text object)
         try
             do!
                 ModifyRequest(group, modification)
-                |> modify connection
+                |> modify
                 |> Async.Ignore
         with
             | :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.EntryAlreadyExists -> ()
             | e -> failwith $"Error while adding \"%s{object}\" to group \"%s{group}\": {e.Message}"
     }
-    let removeObjectFromGroup connection (DistinguishedName group) (DistinguishedName object) = async {
+    member _.RemoveObjectFromGroup (DistinguishedName group, DistinguishedName object) = async {
         let modification = directoryAttributeModification "member" DirectoryAttributeOperation.Delete (Text object)
         try
             do!
                 ModifyRequest(group, modification)
-                |> modify connection
+                |> modify
                 |> Async.Ignore
         with
             | :? DirectoryOperationException as e when e.Response.ResultCode = ResultCode.UnwillingToPerform -> ()
             | e -> failwith $"Error while removing \"%s{object}\" from group \"%s{group}\": {e.Message}"
     }
 
-    let removeGroupMemberships connection nodeDn = async {
-        let! node = findObjectByDn connection nodeDn [| "memberOf" |]
+    member this.RemoveGroupMemberships nodeDn = async {
+        let! node = this.FindObjectByDn (nodeDn, [| "memberOf" |])
         do!
             SearchResultEntry.getStringAttributeValues "memberOf" node
             |> List.map (DistinguishedName >> fun groupDn -> async {
-                do! removeObjectFromGroup connection groupDn nodeDn
+                do! this.RemoveObjectFromGroup (groupDn, nodeDn)
             })
             |> Async.Sequential
             |> Async.Ignore

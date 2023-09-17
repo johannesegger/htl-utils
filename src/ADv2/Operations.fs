@@ -87,9 +87,9 @@ module Operation =
     let private createGroupHomePath config path =
         use _ = NetworkConnection.create config path
         Directory.CreateDirectory(path) |> ignore
-    let private createUserHomePath ldapConnection networkShareConnectionConfig user = async {
+    let private createUserHomePath (ldap: Ldap) networkShareConnectionConfig user = async {
         let! user = async {
-            return! Ldap.findObjectByDn ldapConnection user [| "objectSid"; "homeDirectory" |]
+            return! ldap.FindObjectByDn(user, [| "objectSid"; "homeDirectory" |])
         }
         let userSID =
             SearchResultEntry.getBytesAttributeValue "objectSid" user
@@ -106,8 +106,8 @@ module Operation =
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
         dir.SetAccessControl(acl)
     }
-    let private moveUserHomePath ldapConnection networkShareConnectionConfig userDn newHomePath = async {
-        let! user = Ldap.findObjectByDn ldapConnection userDn [| "homeDirectory" |]
+    let private moveUserHomePath (ldap: Ldap) networkShareConnectionConfig userDn newHomePath = async {
+        let! user = ldap.FindObjectByDn(userDn, [| "homeDirectory" |])
         let currentHomePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
 
         if currentHomePath <> newHomePath then
@@ -119,10 +119,10 @@ module Operation =
             with e ->
                 failwith $"Failed to move user home path \"{currentHomePath}\" to \"{newHomePath}\": {e.Message}"
 
-        do! Ldap.setNodeProperties ldapConnection userDn [ "homeDirectory", Text newHomePath ]
+        do! ldap.SetNodeProperties(userDn, [ "homeDirectory", Text newHomePath ])
     }
-    let private deleteUserHomePath ldapConnection networkShareConnectionConfig user = async {
-        let! user = Ldap.findObjectByDn ldapConnection user [| "homeDirectory" |]
+    let private deleteUserHomePath (ldap: Ldap) networkShareConnectionConfig user = async {
+        let! user = ldap.FindObjectByDn(user, [| "homeDirectory" |])
 
         let homePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
         try
@@ -131,9 +131,9 @@ module Operation =
         with e ->
             failwith $"Failed to delete user home path \"{homePath}\": {e.Message}"
     }
-    let private createExercisePath ldapConnection networkShareConnectionConfig teacher basePath (groups: {| Teachers: DistinguishedName; Students: DistinguishedName; TestUsers: DistinguishedName |}) = async {
+    let private createExercisePath (ldap: Ldap) networkShareConnectionConfig teacher basePath (groups: {| Teachers: DistinguishedName; Students: DistinguishedName; TestUsers: DistinguishedName |}) = async {
         let findSIDByDn objectDn = async {
-            let! object = Ldap.findObjectByDn ldapConnection objectDn [| "objectSid" |]
+            let! object = ldap.FindObjectByDn(objectDn, [| "objectSid" |])
             return
                 object
                 |> SearchResultEntry.getBytesAttributeValue "objectSid"
@@ -215,38 +215,38 @@ module Operation =
             Directory.Move(source, target)
         with e ->
             failwith $"Failed to move directory \"{source}\" to \"{target}\": {e.Message}"
-    let rec run ldapConnection networkShareConnectionConfig operation = async {
+    let rec run (ldap: Ldap) networkShareConnectionConfig operation = async {
         match operation with
         | CreateNode v ->
-            do! Ldap.createNodeAndParents ldapConnection v.Node v.NodeType v.Properties |> Async.Ignore
+            do! ldap.CreateNodeAndParents(v.Node, v.NodeType, v.Properties) |> Async.Ignore
         | MoveNode v ->
-            do! Ldap.moveNode ldapConnection v.Source v.Target
+            do! ldap.MoveNode(v.Source, v.Target)
         | SetNodeProperties v ->
-            do! Ldap.setNodeProperties ldapConnection v.Node v.Properties
+            do! ldap.SetNodeProperties(v.Node, v.Properties)
         | ReplaceTextInNodePropertyValues v ->
-            do! Ldap.replaceTextInNodePropertyValues ldapConnection v.Node v.Properties
+            do! ldap.ReplaceTextInNodePropertyValues(v.Node, v.Properties)
         | DisableAccount userDn ->
-            do! Ldap.disableAccount ldapConnection userDn
+            do! ldap.DisableAccount(userDn)
         | EnableAccount userDn ->
-            do! Ldap.enableAccount ldapConnection userDn
+            do! ldap.EnableAccount(userDn)
         | RemoveGroupMemberships userDn ->
-            do! Ldap.removeGroupMemberships ldapConnection userDn
+            do! ldap.RemoveGroupMemberships(userDn)
         | DeleteNode node ->
-            do! Ldap.deleteNode ldapConnection node
+            do! ldap.DeleteNode(node)
         | AddObjectToGroup v ->
-            do! Ldap.addObjectToGroup ldapConnection v.Group v.Object
+            do! ldap.AddObjectToGroup(v.Group, v.Object)
         | RemoveObjectFromGroup v ->
-            do! Ldap.removeObjectFromGroup ldapConnection v.Group v.Object
+            do! ldap.RemoveObjectFromGroup(v.Group, v.Object)
         | CreateGroupHomePath path -> createGroupHomePath networkShareConnectionConfig path
-        | CreateUserHomePath user -> do! createUserHomePath ldapConnection networkShareConnectionConfig user
-        | MoveUserHomePath v -> do! moveUserHomePath ldapConnection networkShareConnectionConfig v.User v.HomePath
-        | DeleteUserHomePath user -> do! deleteUserHomePath ldapConnection networkShareConnectionConfig user
-        | CreateExercisePath v -> do! createExercisePath ldapConnection networkShareConnectionConfig v.Teacher v.Path v.Groups
+        | CreateUserHomePath user -> do! createUserHomePath ldap networkShareConnectionConfig user
+        | MoveUserHomePath v -> do! moveUserHomePath ldap networkShareConnectionConfig v.User v.HomePath
+        | DeleteUserHomePath user -> do! deleteUserHomePath ldap networkShareConnectionConfig user
+        | CreateExercisePath v -> do! createExercisePath ldap networkShareConnectionConfig v.Teacher v.Path v.Groups
         | DeleteDirectory path -> deleteDirectory path
         | MoveDirectory v -> moveDirectory networkShareConnectionConfig v.Source v.Target
         | ForEachGroupMember v ->
             let! memberDns = async {
-                let! group = Ldap.findObjectByDn ldapConnection v.Group [| "member" |]
+                let! group = ldap.FindObjectByDn(v.Group, [| "member" |])
                 return
                     group
                     |> SearchResultEntry.getStringAttributeValues "member"
@@ -256,7 +256,7 @@ module Operation =
                 memberDns
                 |> List.map (fun memberDn ->
                     v.Operations memberDn
-                    |> List.map (run ldapConnection networkShareConnectionConfig)
+                    |> List.map (run ldap networkShareConnectionConfig)
                     |> Async.Sequential
                     |> Async.Ignore
                 )

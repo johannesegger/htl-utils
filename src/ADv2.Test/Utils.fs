@@ -21,12 +21,12 @@ module AsyncDisposable =
     let fromDisposable (d: IDisposable) =
         { new IAsyncDisposable with member _.DisposeAsync() = d.Dispose(); ValueTask.CompletedTask }
 
-let createNodeAndParents connection node nodeType properties = async {
-    let! createdNodes = Ldap.createNodeAndParents connection node nodeType properties
+let createNodeAndParents (ldap: Ldap) node nodeType properties = async {
+    let! createdNodes = ldap.CreateNodeAndParents(node, nodeType, properties)
     return
         createdNodes
         |> List.rev
-        |> List.map (fun node -> async { do! Ldap.deleteNode connection node } |> Async.toAsyncDisposable)
+        |> List.map (fun node -> async { do! ldap.DeleteNode(node) } |> Async.toAsyncDisposable)
         |> AsyncDisposable.combine
 }
 
