@@ -205,7 +205,8 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
             let loadClassList =
                 AsyncRx.defer (fun () ->
                     AsyncRx.ofPromise (promise {
-                        return! Fetch.``get``("/api/classes", Decode.list Decode.string)
+                        let! classes = Fetch.``get``("/api/classes")
+                        return classes
                     })
                     |> AsyncRx.map Ok
                     |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -225,7 +226,8 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.``get``(sprintf "/api/classes/%s/students" className, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
+                            let! (students: string list) = Fetch.``get``(sprintf "/api/classes/%s/students" className, properties = requestProperties) |> Async.AwaitPromise
+                            return students
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

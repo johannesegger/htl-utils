@@ -54,7 +54,7 @@ let stream getAuthRequestHeader (states: IAsyncObservable<Msg option * Model>) (
                     let! authHeader = getAuthRequestHeader ()
                     let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                     // TODO Replace with XHR because fetch doesn't support increasing timeouts; Some browser trigger a timeout after about 2 minutes
-                    return! Fetch.post("/api/teachers/add-as-contacts", Encode.nil, Decode.succeed (), requestProperties) |> Async.AwaitPromise
+                    do! Fetch.post("/api/teachers/add-as-contacts", properties = requestProperties) |> Async.AwaitPromise
                 })
                 |> AsyncRx.map Ok
                 |> AsyncRx.catch (Error >> AsyncRx.single)

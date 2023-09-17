@@ -8,7 +8,8 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
-open Microsoft.Graph.Auth
+open Microsoft.Graph.Beta
+open Microsoft.Identity.Web
 open System
 open System.Collections.Generic
 open Thoth.Json.Giraffe
@@ -44,7 +45,7 @@ let handlePostWakeUp macAddress : HttpHandler =
 
 let handleAddTeachersAsContacts photoLibraryConfig (sokratesApi: Sokrates.SokratesApi) : HttpHandler =
     fun next ctx -> task {
-        let graphServiceClient = ctx.GetService<Microsoft.Graph.GraphServiceClient>()
+        let graphServiceClient = ctx.GetService<GraphServiceClient>()
         let! aadUsers =
             AAD.Core.getUsers graphServiceClient
             |> Async.StartChild
@@ -98,7 +99,7 @@ let handleAddTeachersAsContacts photoLibraryConfig (sokratesApi: Sokrates.Sokrat
             )
 
 
-        do! AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId (ctx.User.ToGraphUserAccount().ObjectId)) contacts
+        do! AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId (ctx.User.GetObjectId())) contacts
         return! Successful.OK () next ctx
     }
 

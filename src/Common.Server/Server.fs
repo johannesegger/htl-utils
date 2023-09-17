@@ -6,7 +6,9 @@ open Microsoft.Identity.Web
 
 let addAADAuth (services: IServiceCollection) (config: IConfiguration) =
     services
-        .AddMicrosoftGraphBeta(config.GetSection("MicrosoftGraph"))
+        .AddMicrosoftGraphBeta(fun options ->
+            options.BaseUrl <- "https://graph.microsoft.com/beta"
+        )
         .AddMicrosoftIdentityWebApiAuthentication(config)
         .EnableTokenAcquisitionToCallDownstreamApi()
         .AddInMemoryTokenCaches()

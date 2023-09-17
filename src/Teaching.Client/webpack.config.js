@@ -16,11 +16,11 @@ var CONFIG = {
     // The tags to include the generated JS and CSS will be automatically injected in the HTML template
     // See https://github.com/jantimon/html-webpack-plugin
     indexHtmlTemplate: "./src/index.html",
-    fsharpEntry: "./src/Teaching.Client.fsproj",
+    fsharpEntry: "./src/App.fs.js",
     cssEntry: "./sass/main.sass",
     outputDir: "./deploy",
     assetsDir: "./public",
-    devServerPort: 8080,
+    devServerPort: 8081,
     // When using webpack-dev-server, you may need to redirect some calls
     // to a external API server. See https://webpack.js.org/configuration/dev-server/#devserver-proxy
     devServerProxy: {
@@ -97,21 +97,20 @@ module.exports = {
             new MiniCssExtractPlugin({ filename: 'style.css' }),
             new CopyWebpackPlugin([{ from: resolve(CONFIG.assetsDir) }]),
         ])
-        : commonPlugins.concat([
-            new webpack.HotModuleReplacementPlugin(),
-        ]),
+        : commonPlugins,
     resolve: {
         // See https://github.com/fable-compiler/Fable/issues/1490
         symlinks: false
     },
     // Configuration for webpack-dev-server
     devServer: {
-        publicPath: "/",
-        contentBase: resolve(CONFIG.assetsDir),
+        devMiddleware: {
+            publicPath: "/"
+        },
+        static: resolve(CONFIG.assetsDir),
         port: CONFIG.devServerPort,
         proxy: CONFIG.devServerProxy,
-        hot: true,
-        inline: true
+        hot: true
     },
     // - fable-loader: transforms F# into JS
     // - babel-loader: transforms JS to old syntax (compatible with old browsers)
@@ -119,15 +118,6 @@ module.exports = {
     // - file-loader: Moves files referenced in the code (fonts, images) into output folder
     module: {
         rules: [
-            {
-                test: /\.fs(x|proj)?$/,
-                use: {
-                    loader: "fable-loader",
-                    options: {
-                        babel: CONFIG.babel
-                    }
-                }
-            },
             {
                 test: /\.js$/,
                 exclude: /node_modules/,
@@ -151,7 +141,7 @@ module.exports = {
             },
             {
                 test: /\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/,
-                use: ["file-loader"]
+                type: 'asset/resource'
             }
         ]
     }

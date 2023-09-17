@@ -109,7 +109,7 @@ let stream getAuthRequestHeader (states: IAsyncObservable<Msg option * Model>) (
                     let url = sprintf "/api/wake-up/%s" macAddress
                     let! authHeader = getAuthRequestHeader ()
                     let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                    let! response = Fetch.post(url, Encode.nil, Decode.succeed (), requestProperties) |> Async.AwaitPromise
+                    do! Fetch.post(url, properties = requestProperties) |> Async.AwaitPromise
                     return macAddress
                 })
                 |> AsyncRx.map Ok

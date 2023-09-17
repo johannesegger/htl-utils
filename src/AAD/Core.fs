@@ -21,8 +21,7 @@ let readAll<'a, 'b when 'a: (new: unit -> 'a) and 'a :> IParsable and 'a :> IAdd
                 (fun item ->
                     result.Add(item)
                     true // continue iteration
-                ),
-                (fun r -> r)
+                )
             )
     do! iterator.IterateAsync() |> Async.AwaitTask
     return result
@@ -280,15 +279,15 @@ let private getBirthdayCalendarId (graphServiceClient: GraphServiceClient) = asy
 let private getCalendarEventIds (graphServiceClient: GraphServiceClient) calendarId = async {
     let! events =
         graphServiceClient.Me.Calendars.[calendarId].Events.GetAsync()
-        |> readAll graphServiceClient
+        |> readAll<_, Models.Event> graphServiceClient
     return
         events
         |> Seq.map (fun e -> e.Id)
         |> Seq.toList
 }
 
-let private updateCalendarEvent (graphServiceClient: GraphServiceClient) calendarId eventId updatedEvent = async {
-    do! graphServiceClient.Me.Calendars.[calendarId].Events.[eventId].PatchAsync(updatedEvent) |> Async.AwaitTask |> Async.Ignore
+let private updateCalendarEvent (graphServiceClient: GraphServiceClient) eventId updatedEvent = async {
+    do! graphServiceClient.Me.Events.[eventId].PatchAsync(updatedEvent) |> Async.AwaitTask |> Async.Ignore
 }
 
 let private getBirthdayCalendarEventCount (graphServiceClient: GraphServiceClient) = async {
@@ -305,7 +304,7 @@ let private configureBirthdayReminders (graphServiceClient: GraphServiceClient) 
         birthdayEventIds
         |> Seq.map (fun eventId -> async {
             let event' = Models.Event(IsReminderOn = Nullable<_> true, ReminderMinutesBeforeStart = Nullable 0)
-            return! updateCalendarEvent graphServiceClient birthdayCalendarId eventId event'
+            return! updateCalendarEvent graphServiceClient eventId event'
         })
         |> Async.Sequential
         |> Async.Ignore

@@ -172,7 +172,8 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                 let loadClassList =
                     AsyncRx.defer (fun () ->
                         AsyncRx.ofPromise (promise {
-                            return! Fetch.``get``("/api/classes", Decode.list Decode.string)
+                            let! (classes: string list) = Fetch.``get``("/api/classes")
+                            return classes
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -190,7 +191,8 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                         let data = StoragePath.toString StoragePath.empty |> Encode.string
                         let! authHeader = getAuthRequestHeader ()
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
+                        let! (childDirectories: string list) = Fetch.post(url, data = data, properties = requestProperties) |> Async.AwaitPromise
+                        return childDirectories
                     })
                     |> AsyncRx.map (fun children -> Ok (StoragePath.empty, children))
                     |> AsyncRx.catch ((fun e -> StoragePath.empty, e) >> Error >> AsyncRx.single)
@@ -205,7 +207,8 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                             let data = StoragePath.toString path |> Encode.string
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
+                            let! (childDirectories: string list) = Fetch.post(url, data = data, properties = requestProperties) |> Async.AwaitPromise
+                            return childDirectories
                         })
                         |> AsyncRx.map (fun children -> Ok (path, children))
                         |> AsyncRx.catch ((fun e -> path, e) >> Error >> AsyncRx.single)
@@ -232,9 +235,10 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                             let data = CreateDirectoriesData.encode data
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            do! Fetch.post(url, data = data, properties = requestProperties, extra = coders) |> Async.AwaitPromise
                         })
-                        |> AsyncRx.map (ignore >> Ok)
+                        |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
                     )
                 msgs

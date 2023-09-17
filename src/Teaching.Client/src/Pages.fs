@@ -12,7 +12,7 @@ type Page =
     | KnowName
 
 let toHash = function
-    | Home -> ""
+    | Home -> "#home"
     | WakeUp -> "#wake-up"
     | AddAADTeacherContacts -> "#add-aad-teacher-contacts"
     | CreateStudentDirectories -> "#create-student-directories"

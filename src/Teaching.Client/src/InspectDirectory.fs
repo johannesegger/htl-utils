@@ -271,7 +271,7 @@ let view model dispatch =
                                             ]
                                             [ str filterName ]
                                 ]
-                            yield Panel.block []
+                            yield Panel.Block.div []
                                 [
                                     Field.div [ Field.IsGrouped ]
                                         [
@@ -323,7 +323,7 @@ let view model dispatch =
                             for childDirectory in directoryInfo.Directories do
                                 let showDetails = Set.contains childDirectory.Path model.DirectoriesWithVisibleDetails
                                 yield
-                                    Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
+                                    Panel.Block.div [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
                                         [
                                             Panel.icon [] [ Fa.i [ Fa.Solid.Folder ] [] ]
                                             str (StoragePath.getName childDirectory.Path)
@@ -348,16 +348,16 @@ let view model dispatch =
                                         ]
                                 if showDetails then
                                     yield
-                                        Panel.block []
+                                        Panel.Block.div []
                                             [
-                                                Panel.panel [ Props [ Style [ FlexGrow "1" ] ] ]
+                                                Panel.panel [ Panel.Props [ Style [ FlexGrow "1" ] ] ]
                                                     [
                                                         let relativeName path =
                                                             path
                                                             |> StoragePath.skip childDirectory.Path
                                                             |> StoragePath.toString
                                                         let fileView (file: FileInfo) =
-                                                            Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
+                                                            Panel.Block.div [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
                                                                 [
                                                                     Panel.icon [] [ Fa.i [ Fa.Solid.File ] [] ]
                                                                     str (relativeName file.Path)
@@ -367,7 +367,7 @@ let view model dispatch =
                                                         let rec subDirectoryView dir =
                                                             [
                                                                 yield
-                                                                    Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
+                                                                    Panel.Block.div [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
                                                                         [
                                                                             Panel.icon [] [ Fa.i [ Fa.Solid.Folder ] [] ]
                                                                             str (relativeName dir.Path)
@@ -383,7 +383,7 @@ let view model dispatch =
                                                     ]
                                             ]
                             for file in directoryInfo.Files ->
-                                Panel.block [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
+                                Panel.Block.div [ Panel.Block.Props [ Style [ JustifyContent "space-between" ] ] ]
                                     [
                                         Panel.icon [] [ Fa.i [ Fa.Solid.File ] [] ]
                                         str (StoragePath.getName file.Path)
@@ -408,7 +408,8 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                         let data = StoragePath.toString StoragePath.empty
                         let! authHeader = getAuthRequestHeader ()
                         let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                        return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
+                        let! (directories: string list) = Fetch.post(url, data = data, properties = requestProperties) |> Async.AwaitPromise
+                        return directories
                     })
                     |> AsyncRx.map (fun children -> Ok (StoragePath.empty, children))
                     |> AsyncRx.catch ((fun e -> StoragePath.empty, e) >> Error >> AsyncRx.single)
@@ -423,7 +424,8 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                             let data = StoragePath.toString path
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, Decode.list Decode.string, requestProperties) |> Async.AwaitPromise
+                            let! (childDirectories: string list) = Fetch.post(url, data = data, properties = requestProperties) |> Async.AwaitPromise
+                            return childDirectories
                         })
                         |> AsyncRx.map (fun children -> Ok (path, children))
                         |> AsyncRx.catch ((fun e -> path, e) >> Error >> AsyncRx.single)
@@ -444,7 +446,9 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                             let data = StoragePath.toString path
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.post(url, data, DirectoryInfo.decoder, requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (directoryInfo: Shared.InspectDirectory.DirectoryInfo) = Fetch.post(url, data = data, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return directoryInfo
                         })
                         |> AsyncRx.map (DirectoryInfo.fromDto >> Ok)
                         |> AsyncRx.catch (Error >> AsyncRx.single)

@@ -462,7 +462,9 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                         AsyncRx.ofAsync (async {
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.``get``("/api/know-name/groups", Decode.list Group.decoder, requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (groups: Group list) = Fetch.``get``("/api/know-name/groups", properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return groups
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)
@@ -486,7 +488,9 @@ let stream (getAuthRequestHeader, (pageActive: IAsyncObservable<bool>)) (states:
                                 | Students className -> sprintf "/api/know-name/students/%s" className
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
-                            return! Fetch.``get``(url, Decode.list Person.decoder, requestProperties) |> Async.AwaitPromise
+                            let coders = Extra.empty |> Thoth.addCoders
+                            let! (persons: Person list) = Fetch.``get``(url, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            return persons
                         })
                         |> AsyncRx.map (fun v -> Ok (group, v))
                         |> AsyncRx.catch (fun v -> Error (group, v) |> AsyncRx.single)

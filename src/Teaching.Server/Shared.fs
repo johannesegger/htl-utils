@@ -23,6 +23,10 @@ module CreateStudentDirectories =
                 Path = get.Required.Field "path" Decode.string
             })
 
+    module Thoth =
+        let addCoders =
+            Extra.withCustom CreateDirectoriesData.encode CreateDirectoriesData.decoder
+
 module InspectDirectory =
 #if FABLE_COMPILER
     [<Fable.Core.Erase>] // enables equality
@@ -102,6 +106,10 @@ module InspectDirectory =
                 }
             )
 
+    module Thoth =
+        let addCoders =
+            Extra.withCustom DirectoryInfo.encode DirectoryInfo.decoder
+
 module KnowName =
     type Group =
         | Teachers
@@ -135,3 +143,8 @@ module KnowName =
                 DisplayName = get.Required.Field "displayName" Decode.string
                 ImageUrl = get.Required.Field "imageUrl" (Decode.option Decode.string)
             })
+
+    module Thoth =
+        let addCoders =
+            Extra.withCustom Group.encode Group.decoder
+            >> Extra.withCustom Person.encode Person.decoder
