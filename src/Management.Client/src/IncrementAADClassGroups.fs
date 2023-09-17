@@ -231,7 +231,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             let coders = Extra.empty |> Thoth.addCoders
-                            do! Fetch.post(url, modifications, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            do! Fetch.post(url, data = modifications, properties = requestProperties, extra = coders) |> Async.AwaitPromise
                         })
                         |> AsyncRx.map Ok
                         |> AsyncRx.catch (Error >> AsyncRx.single)

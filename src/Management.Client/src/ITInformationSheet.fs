@@ -130,7 +130,7 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
                             let! authHeader = getAuthRequestHeader ()
                             let requestProperties = [ Fetch.requestHeaders [ authHeader ] ]
                             let coders = Extra.empty |> Thoth.addCoders
-                            let! (informationSheet: InformationSheet) = Fetch.post("/api/it-information/generate-sheet", user, properties = requestProperties, extra = coders) |> Async.AwaitPromise
+                            let! (informationSheet: InformationSheet) = Fetch.post("/api/it-information/generate-sheet", data = user, properties = requestProperties, extra = coders) |> Async.AwaitPromise
                             return informationSheet
                         })
                         |> AsyncRx.map Ok
