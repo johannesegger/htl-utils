@@ -2,66 +2,33 @@ module AAD.Test.Program
 
 open AAD.Core
 open AAD.Domain
+open Azure.Identity
 open Expecto
-open Microsoft.Graph
-open Microsoft.Graph.Auth
+open Microsoft.Graph.Beta
 open Microsoft.Identity.Client
+open Microsoft.Kiota.Abstractions
+open Microsoft.Kiota.Http.HttpClientLibrary.Middleware.Options
 open System
 open System.Net
 
 let config = AAD.Configuration.Config.fromEnvironment ()
 
-let clientApp =
-    PublicClientApplicationBuilder
-        .Create(config.OidcConfig.AppId)
-        .WithTenantId(config.OidcConfig.TenantId)
-        .Build()
-
-let aadConfig = AAD.Configuration.Config.fromEnvironment ()
-let credentials = NetworkCredential(Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_USERNAME", Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_PASSWORD")
-let innerAuthProvider = UsernamePasswordProvider(clientApp)
-
-// This is slightly better than calling `WithUsernamePassword` for every graph request
-let authProvider = DelegateAuthenticationProvider(fun request ->
-    // https://github.com/microsoftgraph/msgraph-sdk-dotnet-auth/blob/17f66373bf7ac4006425e34aedbaba814734230b/src/Microsoft.Graph.Auth/Extensions/BaseRequestExtensions.cs#L107-L120
-    let authHandlerOption = request.GetMiddlewareOption<AuthenticationHandlerOption>()
-    let authenticationProviderOption =
-        match authHandlerOption.AuthenticationProviderOption with
-        | :? AuthenticationProviderOption as v -> v
-        | _ ->
-            let v = AuthenticationProviderOption()
-            authHandlerOption.AuthenticationProviderOption <- v
-            v
-    authenticationProviderOption.UserAccount <- GraphUserAccount(Email = credentials.UserName)
-    authenticationProviderOption.Password <- credentials.SecurePassword
-
-    let v = request.GetMiddlewareOption<AuthenticationHandlerOption>()
-
-    innerAuthProvider.AuthenticateRequestAsync(request)
-)
-
-// let clientApp =
-//     ConfidentialClientApplicationBuilder
-//         .Create(config.OidcConfig.AppId)
-//         .WithTenantId(config.OidcConfig.TenantId)
-//         .WithClientSecret(config.OidcConfig.AppSecret)
-//         .Build()
-// let authProvider = new ClientCredentialProvider(clientApp)
-
-let graphServiceClient = GraphServiceClient(authProvider)
+let userName = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_USERNAME"
+let password = Environment.getEnvVarOrFail "AAD_MICROSOFT_GRAPH_PASSWORD"
+let authProvider = UsernamePasswordCredential(userName, password, config.OidcConfig.TenantId, config.OidcConfig.AppId)
+let graphServiceClient = new GraphServiceClient(authProvider)
 
 let randomGroupName () =
     sprintf "Test-%O" (Guid.NewGuid())
 
 let getGroup groupName = async {
     let! groups =
-        graphServiceClient.Groups.Request()
-            .WithMaxRetry(5)
-            .Filter(sprintf "displayName eq '%s'" groupName)
-            .Select("id,displayName,mail")
-            .GetAsync()
+        graphServiceClient.Groups.GetAsync(fun config ->
+            config.QueryParameters.Filter <- $"displayName eq '%s{groupName}'"
+            config.QueryParameters.Select <- [| "id"; "displayName"; "mail" |]
+        )
         |> Async.AwaitTask
-    return groups |> Seq.exactlyOne
+    return groups.Value |> Seq.exactlyOne
 }
 
 let tests =
@@ -74,23 +41,21 @@ let tests =
                 ]
 
             let! group = getGroup groupName
-            do! graphServiceClient.Groups.[group.Id].Request().DeleteAsync() |> Async.AwaitTask
+            do! graphServiceClient.Groups.[group.Id].DeleteAsync() |> Async.AwaitTask
         }
 
-        ftestCaseAsync "Create group with member" <| async {
+        testCaseAsync "Create group with member" <| async {
             let groupName = randomGroupName ()
-            let! me =
-                graphServiceClient.Me.Request()
-                    .WithMaxRetry(5)
-                    .GetAsync()
-                |> Async.AwaitTask
-            let! memberIds =
-                graphServiceClient.Users.Request()
-                    .WithMaxRetry(5)
-                    .Filter("userPrincipalName eq 'eggj@htlvb.at'").Select("id")
-                    .GetAsync()
-                |> Async.AwaitTask
-                |> Async.map (Seq.map (fun v -> UserId v.Id) >> Seq.toList)
+            let! me = graphServiceClient.Me.GetAsync() |> Async.AwaitTask
+            let! memberIds = async {
+                let! response =
+                    graphServiceClient.Users.GetAsync(fun config ->
+                        config.QueryParameters.Filter <- "userPrincipalName eq 'eggj@htlvb.at'"
+                        config.QueryParameters.Select <- [| "id" |]
+                    )
+                    |> Async.AwaitTask
+                return response.Value |> Seq.map (fun v -> UserId v.Id) |> Seq.toList
+            }
             do!
                 applyGroupsModifications graphServiceClient [
                     CreateGroup (groupName, memberIds)
@@ -98,23 +63,22 @@ let tests =
 
             let! group = getGroup groupName
 
-            do! Async.Sleep (TimeSpan.FromMinutes 1.)
-
             let message =
-                Message(
+                Models.Message(
                     Subject = "Test",
-                    Body = ItemBody(
-                        ContentType = BodyType.Text,
+                    Body = Models.ItemBody(
+                        ContentType = Models.BodyType.Text,
                         Content = "Test"
                     ),
-                    From = Recipient(EmailAddress = EmailAddress(Address = me.Mail)),
-                    ToRecipients = [
-                        Recipient(EmailAddress = EmailAddress(Address = group.Mail))
+                    From = Models.Recipient(EmailAddress = Models.EmailAddress(Address = me.Mail)),
+                    ToRecipients = Collections.Generic.List [
+                        Models.Recipient(EmailAddress = Models.EmailAddress(Address = group.Mail))
                     ]
                 )
-            do! graphServiceClient.Me.SendMail(message, SaveToSentItems = Nullable false).Request().PostAsync() |> Async.AwaitTask
+            let body = Me.SendMail.SendMailPostRequestBody(Message = message, SaveToSentItems = Nullable false)
+            do! graphServiceClient.Me.SendMail.PostAsync(body) |> Async.AwaitTask
 
-            do! graphServiceClient.Groups.[group.Id].Request().DeleteAsync() |> Async.AwaitTask
+            do! graphServiceClient.Groups.[group.Id].DeleteAsync() |> Async.AwaitTask
 
             // TODO check that no welcome mail is received and that you received the test mail in your inbox
         }
@@ -134,7 +98,7 @@ let tests =
                 ]
 
             let! group = getGroup groupName
-            do! graphServiceClient.Groups.[group.Id].Request().DeleteAsync() |> Async.AwaitTask
+            do! graphServiceClient.Groups.[group.Id].DeleteAsync() |> Async.AwaitTask
 
             Expect.all (group.Mail :: Seq.toList group.ProxyAddresses) (fun address -> address.Contains(groupName)) "Mail addresses should contain new group name"
         }
