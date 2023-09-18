@@ -160,6 +160,7 @@ type ADApi(config: Config) =
         [
             RemoveObjectFromGroup {| Object = oldUserDn; Group = oldGroup |}
             MoveNode {| Source = oldUserDn; Target = newUserDn |}
+            SetNodeProperties {| Node = newUserDn; Properties = [ ("department", Text (let (GroupName name) = newClassName in name)) ] |}
             AddObjectToGroup {| Object = newUserDn; Group = newGroup |}
             MoveUserHomePath {| User = newUserDn; HomePath = homePath |}
         ]
