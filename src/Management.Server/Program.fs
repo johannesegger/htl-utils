@@ -55,9 +55,9 @@ let private incrementClassGroupsConfig = IncrementClassGroups.Configuration.Conf
 let private requiresAdmin = AAD.Auth.requiresAdmin
 
 let webApp = fun next (ctx: HttpContext) ->
-    let adApi = AD.Core.ADApi.FromEnvironment() // TODO dispose
-    let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
-    let untisExport = Untis.UntisExport.FromEnvironment()
+    let adApi = ctx.GetService<AD.Core.ADApi>()
+    let sokratesApi = ctx.GetService<Sokrates.SokratesApi>()
+    let untisExport = ctx.GetService<Untis.UntisExport>()
     choose [
         subRoute "/api"
             (choose [
@@ -115,6 +115,9 @@ let configureApp (app : IApplicationBuilder) =
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
     services.AddOptions<Untis.Config.UntisConfig>().BindConfiguration("Untis") |> ignore
+    services.AddSingleton<AD.Core.ADApi>(fun _ -> AD.Core.ADApi.FromEnvironment()) |> ignore
+    services.AddSingleton<Sokrates.SokratesApi>(fun _ -> Sokrates.SokratesApi.FromEnvironment()) |> ignore
+    services.AddSingleton<Untis.UntisExport>(fun _ -> Untis.UntisExport.FromEnvironment()) |> ignore
     services.AddHttpClient() |> ignore
     services.AddGiraffe() |> ignore
     let coders =
