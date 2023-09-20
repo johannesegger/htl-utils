@@ -13,6 +13,16 @@ let tests =
             students
             |> List.iter (fun v -> printfn $"%s{v.LastName} %s{v.FirstName1} (%s{v.SchoolClass}): %O{v.Gender}")
         }
+
+        testCaseAsync "Can fetch student contact infos" <| async {
+            let! contactInfos = sokratesApi.FetchStudentContactInfos [ SokratesId "41742720230215" ] None
+            contactInfos
+            |> List.iter (fun v ->
+                printfn $"* {v.StudentId}"
+                v.ContactAddresses
+                |> List.iter (fun v -> printfn $"  %s{v.Name} %O{v.EMailAddress}")
+            )
+        }
     ]
 
 [<EntryPoint>]
