@@ -79,7 +79,6 @@ type Ldap(config: LdapConnectionConfig) =
             Net.NetworkCredential(config.UserName, config.Password),
             AuthType.Basic
         )
-        c.AutoBind <- false
         c.SessionOptions.SecureSocketLayer <- true
         c.SessionOptions.VerifyServerCertificate <- fun conn cert -> true
         c.SessionOptions.ProtocolVersion <- 3 // v2 e.g. doesn't allow ModifyDNRequest to move object to different OU
@@ -89,7 +88,6 @@ type Ldap(config: LdapConnectionConfig) =
 
     let sendRequest (request: #DirectoryRequest) : Async<#DirectoryResponse> = async {
         return lock gate (fun () ->
-            connection.Bind()
             connection.SendRequest(request) :?> 'res
         )
     }
