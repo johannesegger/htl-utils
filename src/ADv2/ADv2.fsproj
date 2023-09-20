@@ -10,7 +10,7 @@
     <Compile Include="Domain.fs" />
     <Compile Include="Config.fs" />
     <Compile Include="DN.fs" />
-    <Compile Include="NetworkConnection.fs" />
+    <Compile Include="NetworkShare.fs" />
     <Compile Include="Ldap.fs" />
     <Compile Include="Operations.fs" />
     <Compile Include="ADApi.fs" />

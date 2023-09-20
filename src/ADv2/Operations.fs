@@ -3,6 +3,7 @@ module AD.Operations
 open AD.Configuration
 open AD.Directory
 open AD.Ldap
+open NetworkShare
 open System.IO
 open System.Security.AccessControl
 open System.Security.Principal
@@ -84,10 +85,10 @@ module Operation =
     let private creatorOwnerSID =
         SecurityIdentifier(WellKnownSidType.CreatorOwnerSid, null)
 
-    let private createGroupHomePath config path =
-        use _ = NetworkConnection.create config path
+    let private createGroupHomePath (networkShare: NetworkShare) path =
+        networkShare.Open(path)
         Directory.CreateDirectory(path) |> ignore
-    let private createUserHomePath (ldap: Ldap) networkShareConnectionConfig user = async {
+    let private createUserHomePath (ldap: Ldap) (networkShare: NetworkShare) user = async {
         let! user = async {
             return! ldap.FindObjectByDn(user, [| "objectSid"; "homeDirectory" |])
         }
@@ -97,7 +98,7 @@ module Operation =
             |> Option.defaultWith (fun () -> failwith $"Invalid SID of user {user.DistinguishedName}")
         let homePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
 
-        use _ = NetworkConnection.create networkShareConnectionConfig homePath
+        networkShare.Open(homePath)
 
         let dir = Directory.CreateDirectory(homePath)
         let acl = dir.GetAccessControl()
@@ -106,13 +107,13 @@ module Operation =
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
         dir.SetAccessControl(acl)
     }
-    let private moveUserHomePath (ldap: Ldap) networkShareConnectionConfig userDn newHomePath = async {
+    let private moveUserHomePath (ldap: Ldap) (networkShare: NetworkShare) userDn newHomePath = async {
         let! user = ldap.FindObjectByDn(userDn, [| "homeDirectory" |])
         let currentHomePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
 
         if currentHomePath <> newHomePath then
-            use _ = NetworkConnection.create networkShareConnectionConfig currentHomePath
-            use _ = NetworkConnection.create networkShareConnectionConfig newHomePath
+            networkShare.Open(currentHomePath)
+            networkShare.Open(newHomePath)
 
             try
                 Directory.Move(currentHomePath, newHomePath)
@@ -121,17 +122,17 @@ module Operation =
 
         do! ldap.SetNodeProperties(userDn, [ "homeDirectory", Text newHomePath ])
     }
-    let private deleteUserHomePath (ldap: Ldap) networkShareConnectionConfig user = async {
+    let private deleteUserHomePath (ldap: Ldap) (networkShare: NetworkShare) user = async {
         let! user = ldap.FindObjectByDn(user, [| "homeDirectory" |])
 
         let homePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
         try
-            use _ = NetworkConnection.create networkShareConnectionConfig homePath
+            networkShare.Open(homePath)
             Directory.delete homePath
         with e ->
             failwith $"Failed to delete user home path \"{homePath}\": {e.Message}"
     }
-    let private createExercisePath (ldap: Ldap) networkShareConnectionConfig teacher basePath (groups: {| Teachers: DistinguishedName; Students: DistinguishedName; TestUsers: DistinguishedName |}) = async {
+    let private createExercisePath (ldap: Ldap) (networkShare: NetworkShare) teacher basePath (groups: {| Teachers: DistinguishedName; Students: DistinguishedName; TestUsers: DistinguishedName |}) = async {
         let findSIDByDn objectDn = async {
             let! object = ldap.FindObjectByDn(objectDn, [| "objectSid" |])
             return
@@ -146,7 +147,7 @@ module Operation =
         let! studentGroupSID = findSIDByDn groups.Students
         let! testUserGroupSID = findSIDByDn groups.TestUsers
 
-        use _ = NetworkConnection.create networkShareConnectionConfig basePath
+        networkShare.Open(basePath)
 
         let dir = Directory.CreateDirectory(basePath)
         let acl = dir.GetAccessControl()
@@ -207,9 +208,9 @@ module Operation =
             Directory.delete path
         with e ->
             failwith $"Failed to delete directory \"{path}\": {e.Message}"
-    let private moveDirectory config source target =
-        use _ = NetworkConnection.create config source
-        use _ = NetworkConnection.create config target
+    let private moveDirectory (networkShare: NetworkShare) source target =
+        networkShare.Open(source)
+        networkShare.Open(target)
 
         try
             Directory.Move(source, target)

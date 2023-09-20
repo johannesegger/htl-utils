@@ -2,7 +2,8 @@ module AD.Test.Setup
 
 open AD.Configuration
 
-let private server = "WIN-N12KEP11Q2R"
+let private server = "WIN-N12KEP11Q2R" // PC
+// let private server = "WIN-1L398PVPQN3" // Laptop
 
 let connectionConfig = {
     Ldap = {
@@ -37,4 +38,4 @@ let config = {
     }
 }
 
-let networkShare = $@"\\%s{server}\data"
+let networkSharePath = $@"\\%s{server}\data"

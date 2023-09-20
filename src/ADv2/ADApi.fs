@@ -5,12 +5,14 @@ open AD.Directory
 open AD.Domain
 open AD.Ldap
 open AD.Operations
+open NetworkShare
 open System
 open System.IO
 open System.Text.RegularExpressions
 
 type ADApi(config: Config) =
     let ldap = new Ldap(config.ConnectionConfig.Ldap)
+    let networkShare = new NetworkShare(config.ConnectionConfig.NetworkShare)
 
     let getGroupHomePath userType =
         match userType with
@@ -378,7 +380,7 @@ type ADApi(config: Config) =
             getADOperations modification
             |> List.map (fun v -> async {
                 try
-                    do! Operation.run ldap config.ConnectionConfig.NetworkShare v
+                    do! Operation.run ldap networkShare v
                     return Ok $"Successfully applied operation {v}"
                 with e -> return Error $"Error while applying operation {v}: {e.Message}"
             })
@@ -387,7 +389,9 @@ type ADApi(config: Config) =
     }
 
     interface IDisposable with
-        member _.Dispose() = (ldap :> IDisposable).Dispose()
+        member _.Dispose() =
+            (ldap :> IDisposable).Dispose()
+            (networkShare :> IDisposable).Dispose()
 
     member _.ApplyDirectoryModifications (modifications: DirectoryModification list) = async {
         let! results =
