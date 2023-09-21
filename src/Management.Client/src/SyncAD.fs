@@ -13,14 +13,15 @@ open System
 open Thoth.Fetch
 open Thoth.Json
 
-type DirectoryModificationKind =
-    | Create
-    | Update
-    | Delete
+type DirectoryModificationState =
+    | IgnoredModification
+    | StagedModification
+    | CommittingModification
+    | CommittedModification of Result<unit, string>
 
 type UIDirectoryModification = {
-    IsEnabled: bool
     Description: string
+    State: DirectoryModificationState
     Type: DirectoryModification
 }
 
@@ -65,20 +66,28 @@ module UIDirectoryModification =
             | DeleteGroup (Student (ClassName.ClassName className)) ->
                 className
         {
-            IsEnabled = true
             Description = description
+            State = StagedModification
             Type = modification
         }
-    let toDto modification =
-        if modification.IsEnabled then Some modification.Type
-        else None
 
-type DirectoryModificationGroup = {
-    IsEnabled: bool
-    Title: string
-    Kind: DirectoryModificationKind
-    Modifications: UIDirectoryModification list
-}
+type DirectoryModificationKind =
+    | Create
+    | Update
+    | Delete
+
+type DirectoryModificationGroup =
+    {
+        Title: string
+        Kind: DirectoryModificationKind
+        Modifications: UIDirectoryModification list
+    } with
+    member v.HasIgnoredModification =
+        v.Modifications
+        |> List.exists (fun v -> v.State = IgnoredModification)
+    member v.HasStagedModification =
+        v.Modifications
+        |> List.exists (fun v -> v.State = StagedModification)
 
 module DirectoryModificationGroup =
     let fromDtoList modifications =
@@ -109,7 +118,6 @@ module DirectoryModificationGroup =
         )
         |> List.map (fun ((title, kind), modifications) ->
             {
-                IsEnabled = true
                 Title = title
                 Kind = kind
                 Modifications =
@@ -118,46 +126,6 @@ module DirectoryModificationGroup =
                     |> List.sortBy (fun v -> v.Description)
             }
         )
-    let toDtoList directoryModificationGroup =
-        if directoryModificationGroup.IsEnabled then
-            List.choose UIDirectoryModification.toDto directoryModificationGroup.Modifications
-        else []
-
-type ApplyingModificationState = {
-    ToApply: DirectoryModification list
-    Applied: (DirectoryModification * Result<unit, string>) list
-}
-
-type ModificationsState =
-    | Drafting
-    | Applying of ApplyingModificationState
-    | Applied of (DirectoryModification * Result<unit, string>) list
-module ModificationsState =
-    let isDrafting = function | Drafting -> true | _ -> false
-    let isApplying = function | Applying _ -> true | _ -> false
-    let isApplied = function | Applied _ -> true | _ -> false
-    let tryGetApplicationResults = function
-        | Drafting -> (None, [])
-        | Applying { Applied = applied; ToApply = toApply } -> (List.tryHead toApply, applied)
-        | Applied applied -> (None, applied)
-
-type ModificationState =
-    | ApplyingModification
-    | AppliedModification of Result<unit, string>
-module ModificationState =
-    let tryGet modification modificationsState =
-        let isApplying =
-            modificationsState
-            |> ModificationsState.tryGetApplicationResults
-            |> fst
-            |> fun v -> v = Some modification
-        if isApplying then Some ApplyingModification
-        else
-            modificationsState
-            |> ModificationsState.tryGetApplicationResults
-            |> snd
-            |> List.tryFind (fst >> (=) modification)
-            |> Option.map (snd >> AppliedModification)
 
 type LoadableDirectoryModifications =
     | LoadingModifications
@@ -168,11 +136,20 @@ module LoadableDirectoryModifications =
     let isLoaded = function | LoadedModifications _ -> true | _ -> false
     let isFailed = function | FailedToLoadModifications -> true | _ -> false
 
-type Model = {
-    ModificationsState: ModificationsState
-    Modifications: LoadableDirectoryModifications
-    Timestamp: DateTime
-}
+type Model =
+    {
+        Modifications: LoadableDirectoryModifications
+        Timestamp: DateTime
+        ApplyPaused: bool
+    } with
+    member v.IsCommitting =
+        match v.Modifications with
+        | LoadedModifications directoryModificationGroups ->
+            directoryModificationGroups
+            |> List.collect (fun group -> group.Modifications)
+            |> List.exists (fun modification -> modification.State = CommittingModification)
+        | LoadingModifications
+        | FailedToLoadModifications -> false
 
 type Msg =
     | LoadModifications
@@ -189,80 +166,125 @@ let rec update msg (model: Model) =
     let updateDirectoryModificationGroups isMatch fn =
         { model with
             Modifications =
-                match model.ModificationsState, model.Modifications with
-                | Drafting, LoadedModifications directoryModificationGroups ->
+                match model.Modifications with
+                | LoadedModifications directoryModificationGroups ->
                     directoryModificationGroups
                     |> List.map (fun p -> if isMatch p then fn p else p)
                     |> LoadedModifications
                 | _ -> model.Modifications
         }
 
+    let updateDirectoryModifications isGroupMatch isModificationMatch fn =
+        updateDirectoryModificationGroups isGroupMatch (fun group ->
+            { group with
+                Modifications =
+                    group.Modifications
+                    |> List.map (fun modification ->
+                        if isModificationMatch modification then fn modification
+                        else modification
+                    )
+            }
+        )
+
     let updateDirectoryModificationGroup directoryModificationGroup fn =
         updateDirectoryModificationGroups ((=) directoryModificationGroup) fn
 
     let updateDirectoryModification directoryModificationGroup directoryModification fn =
-        updateDirectoryModificationGroup directoryModificationGroup (fun directoryModificationGroup ->
+        updateDirectoryModifications ((=) directoryModificationGroup) ((=) directoryModification) fn
+
+    let updateFirst filter update (directoryModificationGroups: DirectoryModificationGroup list) =
+        let mutable foundFirst = false
+        directoryModificationGroups
+        |> List.map (fun group ->
             let modifications =
-                directoryModificationGroup.Modifications
-                |> List.map (fun m -> if m = directoryModification then fn m else m)
-            { directoryModificationGroup with Modifications = modifications }
+                group.Modifications
+                |> List.map (fun modification ->
+                    if not foundFirst && filter modification then
+                        foundFirst <- true
+                        update modification
+                    else modification
+                )
+            { group with Modifications = modifications }
         )
+
+    let setNextModificationAsCommitting =
+        updateFirst
+            (fun v -> v.State = StagedModification)
+            (fun v -> { v with State = CommittingModification })
+
+    let setCommittingModificationResult applyResult =
+        updateFirst
+            (fun v -> v.State = CommittingModification)
+            (fun v -> { v with State = CommittedModification applyResult })
 
     match msg with
     | LoadModifications -> { model with Modifications = LoadingModifications }
     | LoadModificationsResponse (Ok directoryModifications) ->
-        { model with ModificationsState = Drafting; Modifications = LoadedModifications (DirectoryModificationGroup.fromDtoList directoryModifications) }
+        { model with Modifications = LoadedModifications (DirectoryModificationGroup.fromDtoList directoryModifications) }
     | LoadModificationsResponse (Error _ex) ->
         { model with Modifications = FailedToLoadModifications }
     | SelectAllModifications value ->
-        updateDirectoryModificationGroups (fun _ -> true) (fun p -> { p with IsEnabled = value })
+        let (oldState, newState) =
+            if value then (IgnoredModification, StagedModification)
+            else (StagedModification, IgnoredModification)
+        updateDirectoryModifications
+            (fun _ -> true)
+            (fun modification -> modification.State = oldState)
+            (fun p -> { p with State = newState })
     | ToggleEnableModificationGroup directoryModificationGroup ->
-        updateDirectoryModificationGroup directoryModificationGroup (fun p -> { p with IsEnabled = not p.IsEnabled })
+        let (oldState, newState) =
+            if directoryModificationGroup.HasIgnoredModification then (IgnoredModification, StagedModification)
+            else (StagedModification, IgnoredModification)
+        updateDirectoryModifications
+            ((=) directoryModificationGroup)
+            (fun modification -> modification.State = oldState)
+            (fun p -> { p with State = newState })
     | ToggleEnableModification (directoryModificationGroup, directoryModification) ->
-        updateDirectoryModification directoryModificationGroup directoryModification (fun p -> { p with IsEnabled = not p.IsEnabled })
-    | ApplyModifications ->
-        match model.ModificationsState, model.Modifications with
-        | Drafting, LoadedModifications directoryModificationGroups ->
-            let toApply = directoryModificationGroups |> List.collect DirectoryModificationGroup.toDtoList
-            if toApply.Length > 0 then { model with ModificationsState = Applying { ToApply = toApply; Applied = [] } }
-            else model
-        | Drafting, _
-        | Applying _, _
-        | Applied _, _ -> model
+        let modificationState =
+            match directoryModification.State with
+            | IgnoredModification -> Some StagedModification
+            | StagedModification -> Some IgnoredModification
+            | CommittingModification
+            | CommittedModification _ -> None
+        match modificationState with
+        | Some newState ->
+            updateDirectoryModification directoryModificationGroup directoryModification (fun p -> { p with State = newState })
+        | None -> model
     | SetTimestamp timestamp -> { model with Timestamp = timestamp }
+    | ApplyModifications ->
+        match model.Modifications with
+        | LoadedModifications directoryModificationGroups ->
+            let directoryModificationGroups = setNextModificationAsCommitting directoryModificationGroups
+            { model with Modifications = LoadedModifications directoryModificationGroups; ApplyPaused = false }
+        | LoadingModifications
+        | FailedToLoadModifications -> model
     | ApplyModificationsResponse applyResult ->
-        match model.ModificationsState with
-        | Applying { ToApply = modification :: rest; Applied = applied } ->
-            let applied = (modification, applyResult) :: applied
-            let modificationsState = if rest.Length > 0 then Applying { ToApply = rest; Applied = applied } else Applied applied
-            { model with ModificationsState = modificationsState }
-        | Applying { ToApply = [] } -> model
-        | Drafting
-        | Applied _ -> model
+        match model.Modifications with
+        | LoadedModifications directoryModificationGroups ->
+            let directoryModificationGroups =
+                directoryModificationGroups
+                |> setCommittingModificationResult applyResult
+                |> fun v ->
+                    if model.ApplyPaused then v
+                    else setNextModificationAsCommitting v
+            { model with Modifications = LoadedModifications directoryModificationGroups }
+        | LoadingModifications
+        | FailedToLoadModifications -> model
     | CancelApplyModifications ->
-        match model.ModificationsState with
-        | Applying { ToApply = modification :: _; Applied = applied } ->
-            let modificationsState = Applying { ToApply = [ modification ]; Applied = applied }
-            { model with ModificationsState = modificationsState }
-        | Applying { ToApply = [] } -> model
-        | Drafting
-        | Applied _ -> model
+        { model with ApplyPaused = true }
 
 let init =
     {
-        ModificationsState = Drafting
         Modifications = LoadingModifications
         Timestamp = DateTime.Today
+        ApplyPaused = false
     }
 
 let view model dispatch =
-    let isLocked = ModificationsState.isApplying model.ModificationsState || ModificationsState.isApplied model.ModificationsState
-
     let bulkOperations =
         Button.list [] [
             Button.button
                 [
-                    Button.Disabled isLocked
                     Button.OnClick (fun _e -> dispatch (SelectAllModifications true))
                 ]
                 [
@@ -271,7 +293,6 @@ let view model dispatch =
                 ]
             Button.button
                 [
-                    Button.Disabled isLocked
                     Button.OnClick (fun _e -> dispatch (SelectAllModifications false))
                 ]
                 [
@@ -290,9 +311,9 @@ let view model dispatch =
         Panel.heading [] [
             Button.button
                 [
-                    Button.Disabled isLocked
+                    Button.Disabled (not directoryModificationGroup.HasIgnoredModification && not directoryModificationGroup.HasStagedModification)
                     Button.Size IsSmall
-                    Button.Color (if directoryModificationGroup.IsEnabled then color else NoColor)
+                    Button.Color (if not directoryModificationGroup.HasIgnoredModification then color else NoColor)
                     Button.Props [ Style [ MarginRight "0.5rem" ] ]
                     Button.OnClick (fun _ -> dispatch (ToggleEnableModificationGroup directoryModificationGroup))
                 ]
@@ -316,9 +337,13 @@ let view model dispatch =
                     Level.left [] [
                         Button.button
                             [
-                                Button.Disabled (isLocked || not directoryModificationGroup.IsEnabled)
+                                Button.Disabled (
+                                    match directoryModification.State with
+                                    | IgnoredModification | StagedModification -> false
+                                    | CommittingModification | CommittedModification _ -> true
+                                )
                                 Button.Size IsSmall
-                                Button.Color (if directoryModificationGroup.IsEnabled && directoryModification.IsEnabled then color else NoColor)
+                                Button.Color (if directoryModification.State <> IgnoredModification then color else NoColor)
                                 Button.Props [ Style [ MarginRight "0.5rem" ] ]
                                 Button.OnClick (fun _ -> dispatch (ToggleEnableModification (directoryModificationGroup, directoryModification)))
                             ]
@@ -326,18 +351,20 @@ let view model dispatch =
                         str directoryModification.Description
                     ]
                     Level.right [] [
-                        match ModificationState.tryGet directoryModification.Type model.ModificationsState with
-                        | Some ApplyingModification -> Fa.i [ Fa.Solid.Spinner; Fa.Spin; Fa.CustomClass "has-text-info" ] []
-                        | Some (AppliedModification (Ok ())) -> Fa.i [ Fa.Solid.Check; Fa.CustomClass "has-text-success" ] []
-                        | Some (AppliedModification (Error _)) -> Fa.i [ Fa.CustomClass "fa-solid fa-xmark has-text-danger" ] []
-                        | None -> ()
+                        match directoryModification.State with
+                        | IgnoredModification
+                        | StagedModification -> ()
+                        | CommittingModification -> Fa.i [ Fa.Solid.Spinner; Fa.Spin; Fa.CustomClass "has-text-info" ] []
+                        | CommittedModification (Ok ()) -> Fa.i [ Fa.Solid.Check; Fa.CustomClass "has-text-success" ] []
+                        | CommittedModification (Error _) -> Fa.i [ Fa.CustomClass "fa-solid fa-xmark has-text-danger" ] []
                     ]
                 ]
-                match ModificationState.tryGet directoryModification.Type model.ModificationsState with
-                | Some ApplyingModification
-                | Some (AppliedModification (Ok ())) -> ()
-                | Some (AppliedModification (Error message)) -> Content.content [ Content.Modifiers [ Modifier.TextColor IsDanger ]; Content.Props [ Style [ WhiteSpace WhiteSpaceOptions.PreWrap ] ] ] [ str message ]
-                | None -> ()
+                match directoryModification.State with
+                | IgnoredModification
+                | StagedModification
+                | CommittingModification
+                | CommittedModification (Ok ()) -> ()
+                | CommittedModification (Error message) -> Content.content [ Content.Modifiers [ Modifier.TextColor IsDanger ]; Content.Props [ Style [ WhiteSpace WhiteSpaceOptions.PreWrap ] ] ] [ str message ]
             ]
         ]
 
@@ -369,6 +396,7 @@ let view model dispatch =
             Field.div [ Field.HasAddons ] [
                 Control.div [] [
                     Input.date [
+                        Input.Disabled model.IsCommitting
                         Input.Value (model.Timestamp.ToString("yyyy-MM-dd"))
                         Input.OnChange (fun e -> dispatch (SetTimestamp (DateTime.Parse e.Value)))
                     ]
@@ -376,6 +404,7 @@ let view model dispatch =
                 Control.div [] [
                     Button.button
                         [
+                            Button.Disabled model.IsCommitting
                             Button.Color IsInfo
                             Button.OnClick (fun _e -> dispatch LoadModifications)
                         ]
@@ -386,20 +415,7 @@ let view model dispatch =
                 ]
             ]
             Button.list [] [
-                match model.ModificationsState with
-                | Drafting
-                | Applied _ ->
-                    Button.button
-                        [
-                            Button.Disabled (ModificationsState.isApplied model.ModificationsState)
-                            Button.Color IsSuccess
-                            Button.OnClick (fun _e -> dispatch ApplyModifications)
-                        ]
-                        [
-                            Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
-                            span [] [ str "Apply modifications" ]
-                        ]
-                | Applying _ ->
+                if model.IsCommitting then
                     Button.button
                         [
                             Button.Color IsDanger
@@ -408,6 +424,16 @@ let view model dispatch =
                         [
                             Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
                             span [] [ str "Stop applying modifications" ]
+                        ]
+                else
+                    Button.button
+                        [
+                            Button.Color IsSuccess
+                            Button.OnClick (fun _e -> dispatch ApplyModifications)
+                        ]
+                        [
+                            Icon.icon [] [ Fa.i [ Fa.Solid.Save ] [] ]
+                            span [] [ str "Apply modifications" ]
                         ]
             ]
         ]
@@ -465,13 +491,14 @@ let stream getAuthRequestHeader (pageActive: IAsyncObservable<bool>) (states: IA
 
                 states
                 |> AsyncRx.choose (function
-                    | Some ApplyModifications, { ModificationsState = Applying modifications }
-                    | Some (ApplyModificationsResponse _), { ModificationsState = Applying modifications } ->
-                        modifications.ToApply
-                        |> List.take 1
-                        |> applyModifications
-                        |> Some
-                    | _ -> None)
+                    | Some ApplyModifications, { Modifications = LoadedModifications directoryModificationGroups }
+                    | Some (ApplyModificationsResponse _), { Modifications = LoadedModifications directoryModificationGroups } ->
+                        directoryModificationGroups
+                        |> List.collect (fun v -> v.Modifications)
+                        |> List.tryFind (fun v -> v.State = CommittingModification)
+                        |> Option.map (fun v -> applyModifications [ v.Type ])
+                    | _ -> None
+                )
                 |> AsyncRx.switchLatest
                 |> AsyncRx.map ApplyModificationsResponse
 
