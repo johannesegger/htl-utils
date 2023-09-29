@@ -384,6 +384,12 @@ let verifyADModification (adApi: AD.Core.ADApi) : HttpHandler =
             let mailAliases = uniqueMailAliases user existingMailAddressUserNames
             let modification = CreateUser { newUser with MailAliases = mailAliases }
             return! Successful.OK modification next ctx
+        | DeleteUser user ->
+            let! existingUser =
+                adApi.GetUser(UserName.toADDto user.Name, UserType.toADDto user.Type)
+                |> Async.map ExistingUser.fromADDto
+            let modification = DeleteUser existingUser.User
+            return! Successful.OK modification next ctx
         | _ -> return! RequestErrors.BAD_REQUEST "Can't verify modification" next ctx
     }
 
