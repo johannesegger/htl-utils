@@ -135,7 +135,13 @@ module private AD =
 let tests =
     testList "ADModifications" [
         testCase "Create first teacher" <| fun _ ->
-            let actual = modifications [ Sokrates.einstein ] [] [] { UserNames = []; MailAddressUserNames = [] }
+            let actual =
+                modifications
+                    [ Sokrates.einstein ]
+                    []
+                    ([ Sokrates.einstein.ShortName ] |> List.map ADModifications.DataTransferTypes.UserName)
+                    []
+                    { UserNames = []; MailAddressUserNames = [] }
             let expected = [ AD.createTeacherGroup; AD.createUser AD.einstein AD.einsteinMailAliasNames "14.03.1879" ]
             Expect.equal actual expected "New teacher and group should be created"
 
@@ -144,6 +150,7 @@ let tests =
                 modifications 
                     [ Sokrates.einstein; Sokrates.bohr ]
                     []
+                    ([ Sokrates.einstein.ShortName; Sokrates.bohr.ShortName ] |> List.map ADModifications.DataTransferTypes.UserName)
                     [ AD.einstein |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
                     { UserNames = []; MailAddressUserNames = [] }
             let expected = [ AD.createUser AD.bohr AD.bohrMailAliasNames "07.10.1885" ]
@@ -155,6 +162,7 @@ let tests =
                     []
                     [ Sokrates.einstein |> Sokrates.asStudent "1A" ]
                     []
+                    []
                     { UserNames = []; MailAddressUserNames = [] }
             let expected = [ AD.createStudentGroup "1A"; AD.createUser (AD.asStudent "1A" AD.einstein) AD.einsteinMailAliasNames "14.03.1879" ]
             Expect.equal actual expected "New student and group should be created"
@@ -164,6 +172,7 @@ let tests =
                 modifications
                     []
                     [ Sokrates.einstein |> Sokrates.asStudent "1A"; Sokrates.bohr |> Sokrates.asStudent "1A" ]
+                    []
                     [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
                     { UserNames = []; MailAddressUserNames = [] }
             let expected = [ AD.createUser (AD.asStudent "1A" AD.bohr) AD.bohrMailAliasNames "07.10.1885" ]
@@ -174,6 +183,7 @@ let tests =
                 modifications
                     []
                     [ Sokrates.einstein |> Sokrates.asStudent "1A"; Sokrates.bohr |> Sokrates.asStudent "1B" ]
+                    []
                     [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
                     { UserNames = []; MailAddressUserNames = [] }
             let expected = [ AD.createStudentGroup "1B"; AD.createUser (AD.asStudent "1B" AD.bohr) AD.bohrMailAliasNames "07.10.1885" ]
@@ -184,6 +194,7 @@ let tests =
                 modifications
                     []
                     [ Sokrates.einstein |> Sokrates.asStudent "1A"; Sokrates.einstein |> Sokrates.withId "9999" |> Sokrates.asStudent "1B" ]
+                    []
                     [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
                     { UserNames = [ (AD.einstein |> AD.asStudent "1A").Name ]; MailAddressUserNames = [ for v in AD.einsteinMailAliasNames -> v.UserName ] }
             let expectedMailAliases =
@@ -201,6 +212,7 @@ let tests =
                     []
                     [ Sokrates.einstein |> Sokrates.asStudent "1A"; Sokrates.einstein |> Sokrates.withId "9999" |> Sokrates.asStudent "1B" ]
                     []
+                    []
                     { UserNames = []; MailAddressUserNames = [] }
             let expected = [
                 AD.createStudentGroup "1A"
@@ -215,6 +227,7 @@ let tests =
                 modifications
                     [ Sokrates.einstein |> Sokrates.withName "ZWEA" "Albert" "Zweistein" ]
                     []
+                    ([ Sokrates.einstein.ShortName ] |> List.map ADModifications.DataTransferTypes.UserName)
                     [ AD.einstein |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
                     { UserNames = []; MailAddressUserNames = [] }
             let expected = [
@@ -231,6 +244,7 @@ let tests =
                 modifications
                     []
                     [ Sokrates.einstein |> Sokrates.asStudent "1B" ]
+                    []
                     [ AD.einstein |> AD.asStudent "1A" |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
                     { UserNames = []; MailAddressUserNames = [] }
             let expected = [
