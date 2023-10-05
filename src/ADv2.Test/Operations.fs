@@ -78,4 +78,19 @@ let tests =
             Expect.isChoice1Of2 selfWriteResult "User should be able to write in own home folder"
             Expect.isChoice2Of2 otherWriteResult "Other user should not be able to write in user home folder"
         })
+
+        testCaseTask "Move user home path to same location" (fun () -> task {
+            use networkShare = new NetworkShare(connectionConfig.NetworkShare)
+            use folder = new TemporaryFolder(networkShare)
+            let oldHomePath = Path.Combine(folder.Path, "EULL")
+            let newHomePath = Path.Combine(folder.Path, "eull")
+            use ldap = new Ldap(connectionConfig.Ldap)
+            let userDn = DistinguishedName "CN=EULL,CN=Users,DC=htlvb,DC=intern"
+            use! __ = createUser ldap userDn [ ("homeDirectory", Text oldHomePath) ]
+
+            do! Operation.run ldap networkShare (CreateUserHomePath userDn)
+            let! result = Operation.run ldap networkShare (MoveUserHomePath {| User = userDn; HomePath = newHomePath |}) |> Async.Catch
+
+            Expect.isChoice1Of2 result "Moving home path to same location should not fail"
+        })
     ]

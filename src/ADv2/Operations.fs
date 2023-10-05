@@ -111,7 +111,7 @@ module Operation =
         let! user = ldap.FindObjectByDn(userDn, [| "homeDirectory" |])
         let currentHomePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
 
-        if currentHomePath <> newHomePath then
+        if CIString currentHomePath <> CIString newHomePath then
             networkShare.Open(currentHomePath)
             networkShare.Open(newHomePath)
 
