@@ -165,7 +165,10 @@ let calculateChangeTeacherNameModification (users: ExistingUser list) (teacher: 
         let mailAliases =
             [
                 yield! uniqueMailAliases teacher (uniqueUserAttributes.MailAddressUserNames |> List.except user.MailAddressNames)
-                yield! user.MailAddressNames |> List.map (fun v -> { IsPrimary = false; UserName = v })
+                yield!
+                    user.MailAddressNames
+                    |> List.except [ let (UserName v) = teacher.Name in v ]
+                    |> List.map (fun v -> { IsPrimary = false; UserName = v })
             ]
             |> List.distinctBy (fun v -> v.UserName)
         let modification = UpdateUser (user.User, ChangeUserName (teacher.Name, teacher.FirstName, teacher.LastName, mailAliases))
@@ -198,7 +201,10 @@ let calculateChangeStudentNameModification (users: ExistingUser list) (student: 
         let mailAliases =
             [
                 yield! uniqueMailAliases student existingMailAddressUserNames
-                yield! user.MailAddressNames |> List.map (fun v -> { IsPrimary = false; UserName = v })
+                yield!
+                    user.MailAddressNames
+                    |> List.except [ let (UserName v) = student.Name in v ]
+                    |> List.map (fun v -> { IsPrimary = false; UserName = v })
             ]
             |> List.distinctBy (fun v -> v.UserName)
         let modification = UpdateUser (user.User, ChangeUserName (student.Name, student.FirstName, student.LastName, mailAliases))

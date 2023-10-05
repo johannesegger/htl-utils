@@ -239,6 +239,22 @@ let tests =
             ]
             Expect.equal actual expected "Teacher name should be changed"
 
+        testCase "Change name but keep user name" <| fun _ ->
+            let actual =
+                modifications
+                    [ Sokrates.einstein |> Sokrates.withName "EINA" "Adam" "Einstein" ]
+                    []
+                    ([ Sokrates.einstein.ShortName ] |> List.map ADModifications.DataTransferTypes.UserName)
+                    [ AD.einstein |> AD.toExistingDomainUser AD.einsteinMailAliasNames ]
+                    { UserNames = []; MailAddressUserNames = [] }
+            let expected = [
+                AD.changeUserName AD.einstein "EINA" "Adam" "Einstein" [
+                    AD.primaryMailAlias "Adam.Einstein"
+                    AD.nonPrimaryMailAlias "Albert.Einstein"
+                ]
+            ]
+            Expect.equal actual expected "Teacher name should be changed"
+
         testCase "Move student to another class" <| fun _ ->
             let actual =
                 modifications
