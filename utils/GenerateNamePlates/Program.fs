@@ -26,9 +26,14 @@ module Gender =
         elif CIString v = CIString "female" then Some Female
         else None
 
+let getMainFirstName (name: string) =
+    match name.IndexOf ' ' with
+    | -1 -> name
+    | v -> name.Substring(0, v)
+
 let fetchGenders (teachers: Sokrates.Teacher list) =
     teachers
-    |> List.map (fun v -> v.FirstName)
+    |> List.map (fun v -> getMainFirstName v.FirstName)
     |> List.distinct
     |> List.chunkBySize 10
     |> List.map (fun names -> async {
@@ -65,12 +70,14 @@ let genderTitle gender (v: string) =
             elif CIString v = CIString "(FH)" then "(FH)" // e.g. "DI (FH)"
             elif CIString v = CIString "DDI" then "DDIⁱⁿ"
             elif CIString v = CIString "Mag." then "Mag.ᵃ"
+            elif CIString v = CIString "Mag.(FH)" then "Mag.ᵃ(FH)"
             elif CIString v = CIString "MMag." then "MMag.ᵃ"
             elif CIString v = CIString "Ing." then "Ing.ⁱⁿ"
             elif CIString v = CIString "Priv.-Doz." then "Priv.-Doz.ⁱⁿ"
             elif CIString v = CIString "Prof." then "Prof.ⁱⁿ"
             elif CIString v = CIString "Professor" then "Professorin"
             elif CIString v = CIString "OStR" then "OStRⁱⁿ"
+            elif CIString v = CIString "OStR." then "OStR.ⁱⁿ"
             elif CIString v = CIString "AV" then "AVⁱⁿ"
             elif CIString v = CIString "Direktor" then "Direktorin"
             elif CIString v = CIString "VL" then "VLⁱⁿ"
@@ -82,6 +89,7 @@ let genderTitle gender (v: string) =
             elif CIString v = CIString "MSc." then "MSc."
             elif CIString v = CIString "BEd" then "BEd"
             elif CIString v = CIString "BEd." then "BEd."
+            elif CIString v = CIString "MEd" then "MEd"
             elif CIString v = CIString "MEd." then "MEd."
             elif CIString v = CIString "BA" then "BA"
             elif CIString v = CIString "MA" then "MA"
@@ -92,34 +100,10 @@ let genderTitle gender (v: string) =
 
 let generateTeacherNamePlates templateDir = async {
     let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
-    let untisExport = Untis.UntisExport.FromEnvironment()
-    let activeTeachers =
-        untisExport.GetTeachingData()
-        |> List.map (function
-            | Untis.NormalTeacher (_, Untis.TeacherShortName teacherShortName, _)
-            | Untis.FormTeacher (_, Untis.TeacherShortName teacherShortName)
-            | Untis.Custodian (Untis.TeacherShortName teacherShortName, _)
-            | Untis.Informant (Untis.TeacherShortName teacherShortName, _, _, _) -> teacherShortName
-        )
-        |> List.distinct
-        |> List.sort
-    let! sokratesTeachers = sokratesApi.FetchTeachers
-    let sokratesTeachersByShortName =
-        sokratesTeachers
-        |> List.map (fun v -> CIString v.ShortName, v)
-        |> Map.ofList
-    let teachers =
-        activeTeachers
-        |> List.choose (fun teacherName ->
-            match sokratesTeachersByShortName |> Map.tryFind (CIString teacherName) with
-            | Some v -> Some v
-            | None ->
-                printfn $"WARNING: Can't find %s{teacherName} in Sokrates"
-                None
-        )
+    let! teachers = sokratesApi.FetchTeachers
     let! nameToGender = fetchGenders teachers
     generateNamePlates templateDir teachers (fun template (teacher: Sokrates.Teacher) ->
-        let gender = nameToGender |> Map.tryFind teacher.FirstName |> Option.defaultWith (fun () -> failwith $"Can't find gender of \"%A{teacher}\"")
+        let gender = nameToGender |> Map.tryFind (getMainFirstName teacher.FirstName) |> Option.defaultWith (fun () -> failwith $"Can't find gender of \"%A{teacher}\"")
         let degreeFront =
             let title = teacher.Title |> Option.map (genderTitle gender) |> Option.defaultValue ""
             let degreeFront = teacher.DegreeFront |> Option.map (genderTitle gender) |> Option.defaultValue ""
