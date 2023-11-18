@@ -100,7 +100,10 @@ let genderTitle gender (v: string) =
 
 let generateTeacherNamePlates templateDir = async {
     let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
-    let! teachers = sokratesApi.FetchTeachers
+    let! teachers = async {
+        let! list = sokratesApi.FetchTeachers
+        return list |> List.sortBy (fun v -> v.LastName, v.FirstName)
+    }
     let! nameToGender = fetchGenders teachers
     generateNamePlates templateDir teachers (fun template (teacher: Sokrates.Teacher) ->
         let gender = nameToGender |> Map.tryFind (getMainFirstName teacher.FirstName) |> Option.defaultWith (fun () -> failwith $"Can't find gender of \"%A{teacher}\"")
@@ -155,7 +158,7 @@ let generateStudentNamePlates templateDir = async {
     let students =
         sokratesStudents
         |> List.filter (fun v -> not <| Regex.IsMatch(v.SchoolClass, "BMB$|VMB$"))
-        |> List.filter (fun v -> getYear v.SchoolClass > 2)
+        // |> List.filter (fun v -> getYear v.SchoolClass > 2)
         |> List.sortBy(fun v -> v.SchoolClass, v.LastName, v.FirstName1)
     generateNamePlates templateDir students (fun template student ->
         template
