@@ -16,6 +16,7 @@ let tests =
 
         testCaseAsync "Can fetch student contact infos" <| async {
             let! contactInfos = sokratesApi.FetchStudentContactInfos [ SokratesId "41742720230215" ] None
+            // TODO contacts where "Entscheide" checkbox is not checked are not shown
             contactInfos
             |> List.iter (fun v ->
                 printfn $"* {v.StudentId}"
