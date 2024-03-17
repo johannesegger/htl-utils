@@ -62,7 +62,7 @@ let webApp = fun next (ctx: HttpContext) ->
         subRoute "/api"
             (choose [
                 GET >=> choose [
-                    route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adApi sokratesApi untisExport
+                    route "/ad/updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADModifications adApi sokratesApi
                     route "/ad/increment-class-group-updates" >=> requiresAdmin >=> ADModifications.HttpHandler.getADIncrementClassGroupUpdates adApi incrementClassGroupsConfig
                     route "/aad/group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADGroupUpdates adApi aadConfig finalThesesConfig sokratesApi untisExport
                     route "/aad/increment-class-group-updates" >=> requiresAdmin >=> AADGroupUpdates.HttpHandler.getAADIncrementClassGroupUpdates aadConfig incrementClassGroupsConfig

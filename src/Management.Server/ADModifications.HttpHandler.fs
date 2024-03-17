@@ -102,12 +102,15 @@ let getMailAddressNames (adUser: AD.Domain.ExistingUser) =
         yield! adUser.ProxyAddresses |> List.map (fun v -> v.Address.UserName)
     ]
 
-let calculateDeleteTeacherModification untisTeachers (existingUser: ExistingUser) =
+let calculateDeleteTeacherModification sokratesTeachers (existingUser: ExistingUser) =
     match existingUser.User.Type with
     | Teacher ->
-        if untisTeachers |> List.contains existingUser.User.Name |> not then
-            Some (DeleteUser existingUser.User)
-        else None
+        let sokratesUsers =
+            sokratesTeachers
+            |> List.map User.fromSokratesTeacherDto
+        match tryFindUser sokratesUsers existingUser.User.SokratesId (Some existingUser.User.Name) with
+        | None -> Some (DeleteUser existingUser.User)
+        | Some _ -> None
     | _ -> None
 
 let calculateDeleteStudentModification sokratesStudents (existingUser: ExistingUser) =
@@ -249,7 +252,7 @@ let calculateDeleteGroupModifications existingUsers sokratesTeachers sokratesStu
     |> Seq.map (fun userType -> (DeleteGroup userType))
     |> Seq.toList
 
-let modifications sokratesTeachers sokratesStudents untisTeachers adUsers uniqueUserAttributes =
+let modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes =
     let existingUsers =
         adUsers
         |> List.map ExistingUser.fromADDto
@@ -265,7 +268,7 @@ let modifications sokratesTeachers sokratesStudents untisTeachers adUsers unique
         let (uniqueUserAttributes, modifications) = state
         let newModifications =
             existingUsers
-            |> List.choose (calculateDeleteTeacherModification untisTeachers)
+            |> List.choose (calculateDeleteTeacherModification sokratesTeachers)
         (uniqueUserAttributes, modifications @ newModifications)
 
     let state =
@@ -352,7 +355,7 @@ let modifications sokratesTeachers sokratesStudents untisTeachers adUsers unique
     let (_, modifications) = state
     modifications
 
-let getADModifications (adApi: AD.Core.ADApi) (sokratesApi: Sokrates.SokratesApi) (untisExport: Untis.UntisExport) : HttpHandler =
+let getADModifications (adApi: AD.Core.ADApi) (sokratesApi: Sokrates.SokratesApi) : HttpHandler =
     fun next ctx -> task {
         let! sokratesTeachers = sokratesApi.FetchTeachers |> Async.StartChild
         let timestamp =
@@ -369,17 +372,8 @@ let getADModifications (adApi: AD.Core.ADApi) (sokratesApi: Sokrates.SokratesApi
         let! sokratesStudents = sokratesStudents |> Async.map (List.sortBy (fun v -> v.SchoolClass, v.LastName, v.FirstName1))
         let! adUsers = adUsers |> Async.map (List.sortBy (fun v -> v.Type, v.LastName, v.FirstName))
         let! uniqueUserAttributes = uniqueUserAttributes |> Async.map UniqueUserAttributes.fromADDto
-        let untisTeachers =
-            untisExport.GetTeachingData()
-            |> List.map (function
-                | Untis.NormalTeacher (_, teacherShortName, _) -> teacherShortName
-                | Untis.FormTeacher (_, teacherShortName) -> teacherShortName
-                | Untis.Custodian (teacherShortName, _) -> teacherShortName
-                | Untis.Informant (teacherShortName, _, _, _) -> teacherShortName
-            )
-            |> List.map UserName.fromUntisDto
 
-        let modifications = modifications sokratesTeachers sokratesStudents untisTeachers adUsers uniqueUserAttributes
+        let modifications = modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes
         return! Successful.OK modifications next ctx
     }
 

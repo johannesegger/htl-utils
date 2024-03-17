@@ -5,7 +5,6 @@ open ADModifications.DataTransferTypes
 module UserName =
     let fromADDto (AD.Domain.UserName userName) = UserName userName
     let toADDto (UserName userName) = AD.Domain.UserName userName
-    let fromUntisDto (Untis.TeacherShortName shortName) = UserName shortName
 
 module SokratesId =
     let fromADDto (AD.Domain.SokratesId sokratesId) = SokratesId sokratesId
