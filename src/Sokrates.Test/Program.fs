@@ -8,6 +8,24 @@ let private sokratesApi = SokratesApi(sokratesConfig)
 
 let tests =
     testList "Fetch students" [
+        ptestCaseAsync "Should not find inactive teachers" <| async {
+            let! teachers = sokratesApi.FetchTeachers
+            let lacs =
+                teachers
+                |> List.tryFind (fun v -> v.ShortName = "LACS")
+            Expect.isNone lacs "Should not find LACS"
+        }
+
+        ptestCaseAsync "Should not find multiple teachers with same short name" <| async {
+            let! teachers = sokratesApi.FetchTeachers
+            let duplicateEntries =
+                teachers
+                |> List.groupBy (fun v -> v.ShortName)
+                |> List.filter (fun (_, v) -> v.Length > 1)
+                |> List.map snd
+            Expect.isEmpty duplicateEntries "Should not have multiple teachers with same short name"
+        }
+
         testCaseAsync "Can fetch student gender" <| async {
             let! students = sokratesApi.FetchStudents None None
             students
