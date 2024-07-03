@@ -35,11 +35,15 @@ module private MSGraph =
         return result
     }
 
-let getLookup tenantId clientId studentsGroupId sokratesReferenceDate =
+let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
     let sokratesApi = SokratesApi.FromEnvironment()
     let addressLookup =
-        sokratesApi.FetchStudentAddresses (Some sokratesReferenceDate) |> Async.RunSynchronously
-        |> List.map (fun s -> s.StudentId, s.Address)
+        sokratesReferenceDates
+        |> List.collect (fun v ->
+            sokratesApi.FetchStudentAddresses (Some v) |> Async.RunSynchronously
+            |> List.map (fun s -> s.StudentId, s.Address)
+        )
+        |> List.distinctBy fst
         |> Map.ofList
     let mailLookup =
         let scopes = [| "GroupMember.Read.All" |]
@@ -64,17 +68,21 @@ let getLookup tenantId clientId studentsGroupId sokratesReferenceDate =
         |> Seq.map (fun v -> ((String.toLower v.Department, String.toLower v.Surname, String.toLower v.GivenName), v.Mail))
         |> Map.ofSeq
 
-    sokratesApi.FetchStudents None (Some sokratesReferenceDate)
-    |> Async.RunSynchronously
-    |> List.map (fun student ->
-        let studentData =
-            match Map.tryFind student.Id addressLookup with
-            | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) not found in address list"
-            | Some None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have an address"
-            | Some (Some address) ->
-                match Map.tryFind (student.SchoolClass.ToLower(), student.LastName.ToLower(), student.FirstName1.ToLower()) mailLookup with
-                | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have a mail address"
-                | Some mailAddress ->
-                    Ok { Address = address; MailAddress = mailAddress }
-        (student, studentData)
+    sokratesReferenceDates
+    |> List.collect (fun sokratesReferenceDate ->
+        sokratesApi.FetchStudents None (Some sokratesReferenceDate)
+        |> Async.RunSynchronously
+        |> List.map (fun student ->
+            let studentData =
+                match Map.tryFind student.Id addressLookup with
+                | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) not found in address list"
+                | Some None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have an address"
+                | Some (Some address) ->
+                    match Map.tryFind (student.SchoolClass.ToLower(), student.LastName.ToLower(), student.FirstName1.ToLower()) mailLookup with
+                    | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have a mail address"
+                    | Some mailAddress ->
+                        Ok { Address = address; MailAddress = mailAddress }
+            (student, studentData)
+        )
     )
+    |> List.distinctBy (fun (v, _) -> v.Id)

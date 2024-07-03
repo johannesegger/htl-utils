@@ -2,11 +2,14 @@
 
 open System
 open System.Globalization
+open System.IO
 
 let getFullTests tests students =
     let studentLookup =
         students
-        |> List.map (fun (s: Sokrates.Student, d) -> ((s.SchoolClass.ToLower(), s.LastName.ToLower(), s.FirstName1.ToLower()), (s, d)))
+        |> List.map (fun (s: Sokrates.Student, d) ->
+            ((s.SchoolClass.ToLower(), s.LastName.ToLower(), s.FirstName1.ToLower()), (s, d))
+        )
         |> Map.ofList
     tests
     |> List.choose (fun (t: TestData.Test) ->
@@ -30,8 +33,14 @@ let getFullTests tests students =
             None
     )
 
-let run tenantId clientId studentsGroupId sokratesReferenceDate testFilePath =
-    let students = StudentInfo.getLookup tenantId clientId studentsGroupId sokratesReferenceDate
+let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath =
+    let students = StudentInfo.getLookup tenantId clientId studentsGroupId sokratesReferenceDates
+    
+    students
+    |> List.map (fst >> fun v -> $"%s{v.SchoolClass};%s{v.LastName};%s{v.FirstName1};%s{v.FirstName2 |> Option.defaultValue String.Empty}")
+    |> List.append [ "Klasse;Nachname;Vorname1;Vorname2" ]
+    |> fun v -> File.WriteAllLines("sokrates-students.csv", v)
+
     let tests = TestData.load testFilePath
     let fullTests = getFullTests tests students
     Letter.generateTeacherLetters fullTests
@@ -41,9 +50,9 @@ let run tenantId clientId studentsGroupId sokratesReferenceDate testFilePath =
 [<EntryPoint>]
 let main argv =
     match argv with
-    | [| tenantId; clientId; studentsGroupId; sokratesReferenceDate; testFilePath |] ->
-        let referenceDate = DateTime.Parse(sokratesReferenceDate, CultureInfo.InvariantCulture)
-        run tenantId clientId studentsGroupId referenceDate testFilePath
+    | [| tenantId; clientId; studentsGroupId; sokratesReferenceDates; testFilePath |] ->
+        let referenceDates = sokratesReferenceDates.Split(',') |> Seq.map (fun v -> DateTime.Parse(v, CultureInfo.InvariantCulture)) |> Seq.toList
+        run tenantId clientId studentsGroupId referenceDates testFilePath
         0
     | _ ->
         printfn $"Usage: dotnet run -- <tenantId> <clientId>"

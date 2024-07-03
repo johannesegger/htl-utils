@@ -24,7 +24,7 @@ type TestPart =
     | NoTime
 module TestPart =
     let private tryParseTimeSpan (text: string) =
-        match DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+        match DateTime.TryParse(text) with
         | (true, v) -> Some v.TimeOfDay
         | _ -> None
     let private tryParseExactTime text room =
@@ -104,9 +104,10 @@ type Test = {
 // TODO modify student in case the data in the excel sheet is not correct
 let private correctStudentData (student: Student) = student
 
-let private correctDate (date: DateTime) =
-    if date.Year <> DateTime.Today.Year then DateTime(DateTime.Today.Year, date.Month, date.Day)
-    else date
+let private parseDate v =
+    if v |> String.equalsCaseInsensitive "Mo" then DateTime(2024, 09, 09)
+    elif v |> String.equalsCaseInsensitive "Di" then DateTime(2024, 09, 10)
+    else failwith $"Can't parse date \"%s{v}\""
 
 let private parseTeacher v =
     if String.IsNullOrWhiteSpace v || v = "-" then None
@@ -116,7 +117,7 @@ let load (filePath: string) =
     use workbook = new XLWorkbook(filePath)
     let sheet = workbook.Worksheet(1)
     sheet.Rows()
-    |> Seq.skip 2
+    |> Seq.skip 1
     |> Seq.filter (fun row ->
         row.Cell("A").GetValue<string>() |> String.IsNullOrEmpty |> not &&
         row.Cell("B").GetValue<string>() |> String.IsNullOrEmpty |> not
@@ -129,15 +130,15 @@ let load (filePath: string) =
                 {
                     Class = row.Cell("B").GetValue<string>().Trim()
                     LastName = row.Cell("C").GetValue<string>().Trim()
-                    FirstName = row.Cell("D").GetValue<string>().Trim()
+                    FirstName = row.Cell("C").GetValue<string>().Trim()
                 }
                 |> correctStudentData
             Subject = row.Cell("E").GetValue<string>()
-            Teacher1 = row.Cell("G").GetValue<string>()
-            Teacher2 = row.Cell("H").GetValue<string>() |> parseTeacher
-            Date = row.Cell("J").GetValue<string>() |> (fun v -> Date.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\" as date (row #%d)" v (row.RowNumber()))) |> correctDate
-            PartWritten = (row.Cell("K").GetValue<string>(), row.Cell("L").GetValue<string>(), row.Cell("P").GetValue<string>()) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
-            PartOral = (row.Cell("N").GetValue<string>(), row.Cell("O").GetValue<string>(), row.Cell("Q").GetValue<string>()) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
+            Teacher1 = row.Cell("F").GetValue<string>()
+            Teacher2 = row.Cell("G").GetValue<string>() |> parseTeacher
+            Date = row.Cell("M").GetValue<string>() |> parseDate
+            PartWritten = (row.Cell("N").GetValue<string>(), row.Cell("O").GetValue<string>(), row.Cell("P").GetValue<string>()) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
+            PartOral = (row.Cell("Q").GetValue<string>(), row.Cell("R").GetValue<string>(), row.Cell("S").GetValue<string>()) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
         }
     )
     |> Seq.toList
