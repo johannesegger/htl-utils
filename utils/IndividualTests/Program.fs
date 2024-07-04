@@ -35,12 +35,6 @@ let getFullTests tests students =
 
 let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath =
     let students = StudentInfo.getLookup tenantId clientId studentsGroupId sokratesReferenceDates
-    
-    students
-    |> List.map (fst >> fun v -> $"%s{v.SchoolClass};%s{v.LastName};%s{v.FirstName1};%s{v.FirstName2 |> Option.defaultValue String.Empty}")
-    |> List.append [ "Klasse;Nachname;Vorname1;Vorname2" ]
-    |> fun v -> File.WriteAllLines("sokrates-students.csv", v)
-
     let tests = TestData.load testFilePath
     let fullTests = getFullTests tests students
     Letter.generateTeacherLetters fullTests

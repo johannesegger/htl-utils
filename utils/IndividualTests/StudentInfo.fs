@@ -5,7 +5,9 @@ open Microsoft.Graph
 open Microsoft.Graph.Models
 open Sokrates
 open System
+open System.IO
 open System.Threading.Tasks
+open Azure.Core
 
 type StudentData = {
     Address: Address
@@ -48,15 +50,26 @@ let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
     let mailLookup =
         let scopes = [| "GroupMember.Read.All" |]
         let deviceCodeCredential =
-            DeviceCodeCredentialOptions (
+            let opts = DeviceCodeCredentialOptions (
                 ClientId = clientId,
                 TenantId = tenantId,
+                TokenCachePersistenceOptions = TokenCachePersistenceOptions(Name = "HtlUtils.IndividualTests"),
                 DeviceCodeCallback = (fun code ct ->
                     printWarning $"%s{code.Message}"
                     Task.CompletedTask
                 )
             )
-            |> DeviceCodeCredential
+            let authTokenPath = Path.Combine(Path.GetTempPath(), $"%s{opts.TokenCachePersistenceOptions.Name}.token")
+            if File.Exists(authTokenPath) then
+                use fileStream = File.OpenRead(authTokenPath)
+                opts.AuthenticationRecord <- AuthenticationRecord.DeserializeAsync(fileStream) |> Async.AwaitTask |> Async.RunSynchronously
+                DeviceCodeCredential(opts)
+            else
+                let deviceCodeCredential = DeviceCodeCredential(opts)
+                let authenticationRecord = deviceCodeCredential.AuthenticateAsync(TokenRequestContext(scopes)) |> Async.AwaitTask |> Async.RunSynchronously
+                use fileStream = File.OpenWrite(authTokenPath)
+                authenticationRecord.SerializeAsync(fileStream) |> Async.AwaitTask |> Async.RunSynchronously
+                deviceCodeCredential
 
         use graphClient = new GraphServiceClient(deviceCodeCredential, scopes)
         graphClient.Groups.[studentsGroupId].Members.GetAsync(fun config ->
