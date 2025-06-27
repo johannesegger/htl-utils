@@ -36,6 +36,11 @@ let getFullTests tests students =
 let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath =
     let students = StudentInfo.getLookup tenantId clientId studentsGroupId sokratesReferenceDates
     let tests = TestData.load testFilePath
+    match TestData.getProblems tests with
+    | [] -> printfn "No problems found"
+    | v ->
+        printWarning $"%d{v.Length} problems found:"
+        v |> List.iter (fun v -> printWarning $"* %s{TestData.Problem.toString v}")
     let fullTests = getFullTests tests students
     Letter.generateTeacherLetters fullTests
     Letter.generateStudentLetters fullTests

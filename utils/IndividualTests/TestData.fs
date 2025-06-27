@@ -57,6 +57,12 @@ module TestPart =
         | StartTime (start, _) -> Some start
         | Afterwards _ -> None
         | NoTime -> None
+    let tryGetRoom = function
+        | ExactTimeSpan (_, _, room) -> Some room
+        | ExactTime (_, room) -> Some room
+        | StartTime (_, room) -> Some room
+        | Afterwards room -> Some room
+        | NoTime -> None
     // let toString = function
     //     | ExactTimeSpan (start, ``end``, room) -> sprintf "%s - %s (%s)" (start.ToString("hh\\:mm")) (``end``.ToString("hh\\:mm")) room
     //     | ExactTime (v, room) -> sprintf "%s (%s)" (v.ToString("hh\\:mm")) room
@@ -145,3 +151,55 @@ let load (filePath: string) =
         }
     )
     |> Seq.toList
+
+type Problem =
+    | StudentWithMultipleTestsAtSameDate of Student * DateOnly * subjects: string list
+    | TeacherWithMultipleTestsInDifferentRooms of teacher: string * (Test list)
+module Problem =
+    let toString = function
+        | StudentWithMultipleTestsAtSameDate (student, date, subjects) ->
+            let subjectsText = String.concat ", " subjects
+            $"%s{Student.toString student}: %s{subjectsText} (%A{date})"
+        | TeacherWithMultipleTestsInDifferentRooms (teacher, tests) ->
+            let testsText =
+                tests
+                |> List.groupBy (fun v -> TestPart.tryGetRoom v.PartWritten)
+                |> List.map (fun (room, tests) ->
+                    let roomText = room |> Option.defaultValue "kein Raum"
+                    $"%d{tests.Length} x %s{roomText}"
+                )
+                |> String.concat ", "
+            $"%s{teacher}: %s{testsText}"
+
+let getProblems tests =
+    let students = tests |> List.map _.Student |> List.distinct |> List.sortBy (fun v -> v.Class, v.LastName, v.FirstName)
+    [
+        yield! students
+        |> List.collect (fun student ->
+            let studentTests = 
+                tests
+                |> List.filter (fun test -> test.Student = student)
+            let dates =
+                studentTests |> List.map (fun test -> DateOnly.FromDateTime test.Date) |> List.distinct
+            dates
+            |> List.choose (fun date ->
+                match studentTests |> List.filter (fun test -> DateOnly.FromDateTime test.Date = date) with
+                | [ _ ] -> None
+                | tests -> Some (StudentWithMultipleTestsAtSameDate (student, date, tests |> List.map _.Subject))
+            )
+        )
+
+        let teachers = tests |> List.collect (fun test -> [ test.Teacher1; yield! Option.toList test.Teacher2 ]) |> List.distinct |> List.sort
+        yield! teachers
+        |> List.collect (fun teacher ->
+            let teacherTests = tests |> List.filter (fun test -> test.Teacher1 = teacher || test.Teacher2 = Some teacher)
+            let teacherTestsByDate =
+                teacherTests |> List.groupBy (fun test -> DateOnly.FromDateTime test.Date)
+            teacherTestsByDate
+            |> List.choose (fun (date, teacherTestsAtDate) ->
+                if teacherTestsAtDate |> List.choose (fun v -> TestPart.tryGetRoom v.PartWritten) |> List.distinct |> List.length > 1 then
+                    Some (TeacherWithMultipleTestsInDifferentRooms (teacher, teacherTestsAtDate))
+                else None
+            )
+        )
+    ]
