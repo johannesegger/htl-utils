@@ -1,7 +1,9 @@
 ﻿module Program
 
+open PuppeteerSharp
 open System
 open System.Globalization
+open System.IO
 
 let getFullTests tests students =
     let studentLookup =
@@ -32,7 +34,84 @@ let getFullTests tests students =
             None
     )
 
-let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath includeRoom =
+let teacherLetterToPdf (browser: IBrowser) teacherShortName htmlLetter = task {
+    let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
+    File.WriteAllText(htmlFilePath, htmlLetter)
+    use! page = browser.NewPageAsync()
+    let! _ = page.GoToAsync(htmlFilePath)
+    return! page.PdfDataAsync(
+        PdfOptions(
+            PrintBackground = true,
+            DisplayHeaderFooter = true,
+            Format = PuppeteerSharp.Media.PaperFormat.A4,
+            Landscape = true,
+            MarginOptions = PuppeteerSharp.Media.MarginOptions(
+                Top = "1cm",
+                Left = "1cm",
+                Right = "1cm",
+                Bottom = "1cm"
+            ),
+            HeaderTemplate = $"""<div style="font-family: &quot;Segoe UI Light&quot;; width: 297mm; text-align: center; font-size: 12px">
+                <span>%s{teacherShortName}</span>
+            </div>""",
+            FooterTemplate = $"""<div style="font-family: &quot;Segoe UI Light&quot;; width: 297mm; text-align: center; font-size: 12px">
+                Seite <span class="pageNumber"></span>/<span class="totalPages"></span>
+            </div>"""
+        ));
+}
+
+let studentLetterToPdf (browser: IBrowser) (student: Letter.Student) htmlLetter = task {
+    let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
+    File.WriteAllText(htmlFilePath, htmlLetter)
+    use! page = browser.NewPageAsync()
+    let! _ = page.GoToAsync(htmlFilePath)
+    return! page.PdfDataAsync(
+        PdfOptions(
+            PrintBackground = true,
+            DisplayHeaderFooter = true,
+            Format = PuppeteerSharp.Media.PaperFormat.A4,
+            MarginOptions = PuppeteerSharp.Media.MarginOptions(
+                Top = "0cm",
+                Left = "0cm",
+                Right = "0cm",
+                Bottom = "1cm"
+            ),
+            FooterTemplate = $"""<div style="font-family: &quot;Segoe UI Light&quot;; width: 297mm; font-size: 12px">
+                <div style="margin-right: 1cm; text-align: right;"><span>%s{student.Data.SchoolClass}</span></div>
+            </div>"""
+        ));
+}
+
+let generateLetters fullTests includeRoom = task {
+    let browserFetcher = BrowserFetcher()
+    let! _ = browserFetcher.DownloadAsync()
+    let! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true))
+
+    let targetDir = @"out\teachers"
+    Directory.CreateDirectory(targetDir) |> ignore
+    do!
+        Letter.generateTeacherLetters fullTests includeRoom
+        |> List.map (fun (teacherShortName, htmlLetter) -> async {
+            let! pdfLetter = teacherLetterToPdf browser teacherShortName htmlLetter |> Async.AwaitTask
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(targetDir, $"%s{teacherShortName}.pdf"), pdfLetter)
+        })
+        |> Async.Parallel
+        |> Async.Ignore
+
+    let targetDir = @"out\students"
+    Directory.CreateDirectory(targetDir) |> ignore
+    do!
+        Letter.generateStudentLetters fullTests includeRoom
+        |> List.map (fun (student, htmlLetter) -> async {
+            let! pdfLetter = studentLetterToPdf browser student htmlLetter |> Async.AwaitTask
+            let fileName = $"%s{student.Data.SchoolClass} %s{student.Data.LastName} %s{student.Data.FirstName1} - %s{let (Sokrates.SokratesId v) = student.Data.Id in v}.pdf"
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(targetDir, fileName), pdfLetter)
+        })
+        |> Async.Parallel
+        |> Async.Ignore
+}
+
+let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath includeRoom = task {
     let students = StudentInfo.getLookup tenantId clientId studentsGroupId sokratesReferenceDates
     let tests = TestData.load testFilePath includeRoom
     match TestData.getProblems tests with
@@ -41,9 +120,8 @@ let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath in
         printWarning $"%d{v.Length} problems found:"
         v |> List.iter (fun v -> printWarning $"* %s{TestData.Problem.toString v}")
     let fullTests = getFullTests tests students
-    Letter.generateTeacherLetters fullTests includeRoom
-    Letter.generateStudentLetters fullTests includeRoom
-    ()
+    do! generateLetters fullTests includeRoom
+}
 
 [<EntryPoint>]
 let main argv =
@@ -51,6 +129,8 @@ let main argv =
     | [| tenantId; clientId; studentsGroupId; sokratesReferenceDates; testFilePath; includeRoom |] ->
         let referenceDates = sokratesReferenceDates.Split(',') |> Seq.map (fun v -> DateTime.Parse(v, CultureInfo.InvariantCulture)) |> Seq.toList
         run tenantId clientId studentsGroupId referenceDates testFilePath (includeRoom = "--include-room")
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
         0
     | _ ->
         printfn $"Usage: dotnet run -- <tenantId> <clientId>"

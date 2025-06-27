@@ -107,21 +107,17 @@ let generateTeacherLetters tests includeRoom =
             (teacherShortName, teacherLetter)
         )
 
-    let targetDir = @"out\teachers"
-    Directory.CreateDirectory(targetDir) |> ignore
-
     let includeRoomStyle =
         if includeRoom then ".no-include-room { display: none; }"
         else ".include-room { display: none; }"
     letters
-    |> List.iter (fun (teacherShortName, content) ->
+    |> List.map (fun (teacherShortName, content) ->
         let document =
             documentTemplate
             |> String.replace "{{header}}" $"<style>%s{includeRoomStyle}</style>"
             |> String.replace "{{teacherShortName}}" teacherShortName
             |> String.replace "{{content}}" content
-        File.WriteAllText(Path.Combine(targetDir, sprintf "%s.html" teacherShortName), document)
-        
+        (teacherShortName, document)
     )
 
 let getSalutation = function
@@ -152,9 +148,6 @@ let generateStudentLetters tests includeRoom =
     let letterTemplate = File.ReadAllText @"templates\student-letter\letter-template.html"
     let testRowTemplate = File.ReadAllText @"templates\student-letter\test-row-template.html"
 
-    let targetDir = @"out\students"
-    Directory.CreateDirectory(targetDir) |> ignore
-
     let students =
         tests
         |> List.map (fun v -> v.Student)
@@ -174,11 +167,10 @@ let generateStudentLetters tests includeRoom =
         if includeRoom then ".no-include-room { display: none; }"
         else ".include-room { display: none; }"
     letters
-    |> List.iter (fun (student, content) ->
+    |> List.map (fun (student, content) ->
         let document =
             documentTemplate
             |> String.replace "{{header}}" $"<style>%s{includeRoomStyle}</style>"
             |> String.replace "{{content}}" content
-        let (Sokrates.SokratesId sokratesId) = student.Data.Id
-        File.WriteAllText(Path.Combine(targetDir, sprintf "%s %s - %s.html" student.Data.LastName student.Data.FirstName1 sokratesId), document)
+        (student, document)
     )

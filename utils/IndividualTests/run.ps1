@@ -8,7 +8,6 @@ $StudentsGroupId = az ad group list --filter "displayName eq 'GrpSchueler'" --qu
 $SokratesReferenceDates = "2024-07-03,2024-04-26"
 $TestFilePath = ".\data\2324-Pruefungen.xlsx"
 dotnet run -- $TenantId $ClientId $StudentsGroupId $SokratesReferenceDates $TestFilePath --no-include-room
-.\convert.ps1
 .\combine.ps1
 
 Pop-Location
