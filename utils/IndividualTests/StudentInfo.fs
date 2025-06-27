@@ -92,12 +92,12 @@ let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
         |> List.map (fun student ->
             let studentData =
                 match Map.tryFind student.Id addressLookup with
-                | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) not found in address list"
-                | Some None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have an address"
+                | None -> Error $"Not found in Sokrates address list"
+                | Some None -> Error $"No address"
                 | Some (Some address) ->
                     let (SokratesId sokratesId) = student.Id
                     match Map.tryFind sokratesId mailLookup with
-                    | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have a mail address"
+                    | None -> Error $"No mail address"
                     | Some mailAddress ->
                         Ok { Address = address; MailAddress = mailAddress }
             (student, studentData)

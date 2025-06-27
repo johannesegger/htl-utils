@@ -88,6 +88,9 @@ type Student = {
     FirstName: string
     LastName: string
 }
+module Student =
+    let toString v =
+        $"%s{v.LastName} %s{v.FirstName} (%s{v.Class})"
 
 type Test = {
     Id: string

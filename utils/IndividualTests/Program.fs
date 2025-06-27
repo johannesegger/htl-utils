@@ -26,10 +26,10 @@ let getFullTests tests students =
             }
             Some result
         | Some (_, Error e) ->
-            printWarning $"Student data lookup error: %s{e}"
+            printWarning $"Student data lookup error: %s{TestData.Student.toString t.Student}: %s{e}"
             None
         | None ->
-            printWarning $"Student data not found: %A{t.Student}"
+            printWarning $"Student data not found: %s{TestData.Student.toString t.Student}"
             None
     )
 
