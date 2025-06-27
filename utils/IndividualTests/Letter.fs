@@ -169,5 +169,6 @@ let generateStudentLetters tests =
     letters
     |> List.iter (fun (student, content) ->
         let document = String.replace "{{content}}" content documentTemplate
-        File.WriteAllText(Path.Combine(targetDir, sprintf "%s-%s %s.html" student.Data.SchoolClass student.Data.LastName student.Data.FirstName1), document)
+        let (Sokrates.SokratesId sokratesId) = student.Data.Id
+        File.WriteAllText(Path.Combine(targetDir, sprintf "%s %s - %s.html" student.Data.LastName student.Data.FirstName1 sokratesId), document)
     )

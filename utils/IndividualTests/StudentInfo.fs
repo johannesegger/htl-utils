@@ -73,12 +73,16 @@ let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
 
         use graphClient = new GraphServiceClient(deviceCodeCredential, scopes)
         graphClient.Groups.[studentsGroupId].Members.GetAsync(fun config ->
-            config.QueryParameters.Select <- [| "department"; "givenName"; "mail"; "surname" |]
+            config.QueryParameters.Select <- [| "extension_0b429365529a4f1ea9337bdcd9346b84_htlvbSokratesId"; "mail" |]
         )
         |> MSGraph.readAll<_, DirectoryObject> graphClient
         |> Async.RunSynchronously
         |> Linq.Enumerable.OfType<User>
-        |> Seq.map (fun v -> ((String.toLower v.Department, String.toLower v.Surname, String.toLower v.GivenName), v.Mail))
+        |> Seq.choose (fun v ->
+            match v.AdditionalData.TryGetValue("extension_0b429365529a4f1ea9337bdcd9346b84_htlvbSokratesId") with
+            | (true, sokratesId) -> Some (sokratesId :?> string, v.Mail)
+            | (false, _) -> None
+        )
         |> Map.ofSeq
 
     sokratesReferenceDates
@@ -91,7 +95,8 @@ let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
                 | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) not found in address list"
                 | Some None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have an address"
                 | Some (Some address) ->
-                    match Map.tryFind (student.SchoolClass.ToLower(), student.LastName.ToLower(), student.FirstName1.ToLower()) mailLookup with
+                    let (SokratesId sokratesId) = student.Id
+                    match Map.tryFind sokratesId mailLookup with
                     | None -> Error $"Student %s{student.LastName} %s{student.FirstName1} (%s{student.SchoolClass}) doesn't have a mail address"
                     | Some mailAddress ->
                         Ok { Address = address; MailAddress = mailAddress }
