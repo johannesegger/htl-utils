@@ -2,7 +2,6 @@
 
 open System
 open System.Globalization
-open System.IO
 
 let getFullTests tests students =
     let studentLookup =
