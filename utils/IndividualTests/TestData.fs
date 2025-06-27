@@ -17,10 +17,10 @@ module Date =
         | (false, _) -> None
 
 type TestPart =
-    | ExactTimeSpan of start: TimeSpan * ``end``: TimeSpan * room: string
-    | ExactTime of TimeSpan * room: string
-    | StartTime of TimeSpan * room: string
-    | Afterwards of room: string
+    | ExactTimeSpan of start: TimeSpan * ``end``: TimeSpan * room: string option
+    | ExactTime of TimeSpan * room: string option
+    | StartTime of TimeSpan * room: string option
+    | Afterwards of room: string option
     | NoTime
 module TestPart =
     let private tryParseTimeSpan (text: string) =
@@ -51,6 +51,9 @@ module TestPart =
         |> Option.orElse (tryParseStartTime start room)
         |> Option.orElse (tryParseAfterwards start room)
         |> Option.orElse (tryParseNoTime start)
+    let parseRoom v =
+        if String.IsNullOrWhiteSpace v then None
+        else Some v
     let tryGetStartTime = function
         | ExactTimeSpan (start, _, _) -> Some start
         | ExactTime (start, _) -> Some start
@@ -58,22 +61,24 @@ module TestPart =
         | Afterwards _ -> None
         | NoTime -> None
     let tryGetRoom = function
-        | ExactTimeSpan (_, _, room) -> Some room
-        | ExactTime (_, room) -> Some room
-        | StartTime (_, room) -> Some room
-        | Afterwards room -> Some room
+        | ExactTimeSpan (_, _, room) -> room
+        | ExactTime (_, room) -> room
+        | StartTime (_, room) -> room
+        | Afterwards room -> room
         | NoTime -> None
-    // let toString = function
-    //     | ExactTimeSpan (start, ``end``, room) -> sprintf "%s - %s (%s)" (start.ToString("hh\\:mm")) (``end``.ToString("hh\\:mm")) room
-    //     | ExactTime (v, room) -> sprintf "%s (%s)" (v.ToString("hh\\:mm")) room
-    //     | StartTime (v, room) -> sprintf "ab %s (%s)" (v.ToString("hh\\:mm")) room
-    //     | Afterwards room -> sprintf "anschließend (%s)" room
-    //     | NoTime -> "-"
     let toString = function
-        | ExactTimeSpan (start, ``end``, room) -> sprintf "%s - %s" (start.ToString("hh\\:mm")) (``end``.ToString("hh\\:mm"))
-        | ExactTime (v, room) -> sprintf "%s" (v.ToString("hh\\:mm"))
-        | StartTime (v, room) -> sprintf "ab %s" (v.ToString("hh\\:mm"))
-        | Afterwards room -> sprintf "anschließend"
+        | ExactTimeSpan (start, ``end``, room) ->
+            let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
+            sprintf "%s - %s%s" (start.ToString("hh\\:mm")) (``end``.ToString("hh\\:mm")) roomText
+        | ExactTime (v, room) ->
+            let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
+            sprintf "%s (%s)" (v.ToString("hh\\:mm")) roomText
+        | StartTime (v, room) ->
+            let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
+            sprintf "ab %s (%s)" (v.ToString("hh\\:mm")) roomText
+        | Afterwards room ->
+            let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
+            sprintf "anschließend (%s)" roomText
         | NoTime -> "-"
 
 type TestType = Wiederholungspruefung | NOSTPruefung | Uebertrittspruefung | Semesterpruefung
@@ -122,7 +127,7 @@ let private parseTeacher v =
     if String.IsNullOrWhiteSpace v || v = "-" then None
     else Some v
 
-let load (filePath: string) =
+let load (filePath: string) includeRoom =
     use workbook = new XLWorkbook(filePath)
     let sheet = workbook.Worksheet(1)
     sheet.Rows()
@@ -146,8 +151,8 @@ let load (filePath: string) =
             Teacher1 = row.Cell("F").GetValue<string>()
             Teacher2 = row.Cell("G").GetValue<string>() |> parseTeacher
             Date = row.Cell("M").GetValue<string>() |> parseDate
-            PartWritten = (row.Cell("N").GetValue<string>(), row.Cell("O").GetValue<string>(), row.Cell("P").GetValue<string>()) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
-            PartOral = (row.Cell("Q").GetValue<string>(), row.Cell("R").GetValue<string>(), row.Cell("S").GetValue<string>()) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
+            PartWritten = (row.Cell("N").GetValue<string>(), row.Cell("O").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("P").GetValue<string>()) else None) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
+            PartOral = (row.Cell("Q").GetValue<string>(), row.Cell("R").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("S").GetValue<string>()) else None) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
         }
     )
     |> Seq.toList

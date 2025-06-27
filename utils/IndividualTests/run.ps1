@@ -7,7 +7,7 @@ $ClientId = az ad app list --display-name HTLUtilsConsoleApp --query "[].appId" 
 $StudentsGroupId = az ad group list --filter "displayName eq 'GrpSchueler'" --query "[].id" -o tsv
 $SokratesReferenceDates = "2024-07-03,2024-04-26"
 $TestFilePath = ".\data\2324-Pruefungen.xlsx"
-dotnet run -- $TenantId $ClientId $StudentsGroupId $SokratesReferenceDates $TestFilePath
+dotnet run -- $TenantId $ClientId $StudentsGroupId $SokratesReferenceDates $TestFilePath --no-include-room
 .\convert.ps1
 .\combine.ps1
 

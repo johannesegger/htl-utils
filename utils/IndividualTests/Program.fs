@@ -32,25 +32,25 @@ let getFullTests tests students =
             None
     )
 
-let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath =
+let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath includeRoom =
     let students = StudentInfo.getLookup tenantId clientId studentsGroupId sokratesReferenceDates
-    let tests = TestData.load testFilePath
+    let tests = TestData.load testFilePath includeRoom
     match TestData.getProblems tests with
     | [] -> printfn "No problems found"
     | v ->
         printWarning $"%d{v.Length} problems found:"
         v |> List.iter (fun v -> printWarning $"* %s{TestData.Problem.toString v}")
     let fullTests = getFullTests tests students
-    Letter.generateTeacherLetters fullTests
-    Letter.generateStudentLetters fullTests
+    Letter.generateTeacherLetters fullTests includeRoom
+    Letter.generateStudentLetters fullTests includeRoom
     ()
 
 [<EntryPoint>]
 let main argv =
     match argv with
-    | [| tenantId; clientId; studentsGroupId; sokratesReferenceDates; testFilePath |] ->
+    | [| tenantId; clientId; studentsGroupId; sokratesReferenceDates; testFilePath; includeRoom |] ->
         let referenceDates = sokratesReferenceDates.Split(',') |> Seq.map (fun v -> DateTime.Parse(v, CultureInfo.InvariantCulture)) |> Seq.toList
-        run tenantId clientId studentsGroupId referenceDates testFilePath
+        run tenantId clientId studentsGroupId referenceDates testFilePath (includeRoom = "--include-room")
         0
     | _ ->
         printfn $"Usage: dotnet run -- <tenantId> <clientId>"

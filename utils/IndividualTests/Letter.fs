@@ -88,7 +88,7 @@ let private generateTeacherLetter letterTemplate testRowTemplate teacherShortNam
     )
     |> String.concat ""
 
-let generateTeacherLetters tests =
+let generateTeacherLetters tests includeRoom =
     let documentTemplate = File.ReadAllText @"templates\teacher-letter\document-template.html"
     let letterTemplate = File.ReadAllText @"templates\teacher-letter\letter-template.html"
     let testRowTemplate = File.ReadAllText @"templates\teacher-letter\test-row-template.html"
@@ -110,10 +110,14 @@ let generateTeacherLetters tests =
     let targetDir = @"out\teachers"
     Directory.CreateDirectory(targetDir) |> ignore
 
+    let includeRoomStyle =
+        if includeRoom then ".no-include-room { display: none; }"
+        else ".include-room { display: none; }"
     letters
     |> List.iter (fun (teacherShortName, content) ->
         let document =
             documentTemplate
+            |> String.replace "{{header}}" $"<style>%s{includeRoomStyle}</style>"
             |> String.replace "{{teacherShortName}}" teacherShortName
             |> String.replace "{{content}}" content
         File.WriteAllText(Path.Combine(targetDir, sprintf "%s.html" teacherShortName), document)
@@ -143,7 +147,7 @@ let generateStudentLetter letterTemplate testRowTemplate student tests =
     |> String.replace "{{testTypeSingular}}" (TestData.TestType.singularText testType)
     |> String.replace "{{testTypePlural}}" (TestData.TestType.pluralText testType)
 
-let generateStudentLetters tests =
+let generateStudentLetters tests includeRoom =
     let documentTemplate = File.ReadAllText @"templates\student-letter\document-template.html"
     let letterTemplate = File.ReadAllText @"templates\student-letter\letter-template.html"
     let testRowTemplate = File.ReadAllText @"templates\student-letter\test-row-template.html"
@@ -166,9 +170,15 @@ let generateStudentLetters tests =
             (student, studentLetter)
         )
 
+    let includeRoomStyle =
+        if includeRoom then ".no-include-room { display: none; }"
+        else ".include-room { display: none; }"
     letters
     |> List.iter (fun (student, content) ->
-        let document = String.replace "{{content}}" content documentTemplate
+        let document =
+            documentTemplate
+            |> String.replace "{{header}}" $"<style>%s{includeRoomStyle}</style>"
+            |> String.replace "{{content}}" content
         let (Sokrates.SokratesId sokratesId) = student.Data.Id
         File.WriteAllText(Path.Combine(targetDir, sprintf "%s %s - %s.html" student.Data.LastName student.Data.FirstName1 sokratesId), document)
     )
