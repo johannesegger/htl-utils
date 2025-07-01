@@ -116,11 +116,16 @@ type Test = {
 }
 
 // TODO modify student in case the data in the excel sheet is not correct
-let private correctStudentData (student: Student) = student
+let private correctStudentData (student: Student) =
+    let student =
+        let names = student.LastName.Split()
+        if names.Length < 2 then { student with LastName = names.[0]; FirstName = "" }
+        else  { student with LastName = names.[0]; FirstName = names.[1] }
+    student
 
 let private parseDate v =
-    if v |> String.equalsCaseInsensitive "Mo" then DateTime(2024, 09, 09)
-    elif v |> String.equalsCaseInsensitive "Di" then DateTime(2024, 09, 10)
+    if v |> String.equalsCaseInsensitive "Mo" then DateTime(2025, 09, 08)
+    elif v |> String.equalsCaseInsensitive "Di" then DateTime(2025, 09, 09)
     else failwith $"Can't parse date \"%s{v}\""
 
 let private parseTeacher v =
