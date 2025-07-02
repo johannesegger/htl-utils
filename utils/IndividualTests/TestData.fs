@@ -153,8 +153,8 @@ let load (filePath: string) includeRoom =
                 }
                 |> correctStudentData
             Subject = row.Cell("E").GetValue<string>()
-            Teacher1 = row.Cell("F").GetValue<string>()
-            Teacher2 = row.Cell("G").GetValue<string>() |> parseTeacher
+            Teacher1 = row.Cell("F").GetValue<string>().Trim()
+            Teacher2 = row.Cell("G").GetValue<string>() |> parseTeacher |> Option.map _.Trim()
             Date = row.Cell("M").GetValue<string>() |> parseDate
             PartWritten = (row.Cell("N").GetValue<string>(), row.Cell("O").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("P").GetValue<string>()) else None) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
             PartOral = (row.Cell("Q").GetValue<string>(), row.Cell("R").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("S").GetValue<string>()) else None) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
