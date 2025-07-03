@@ -36,7 +36,7 @@ let deviceCodeCredential =
 
 do
     use graphClient = new GraphServiceClient(deviceCodeCredential, scopes)
-    Directory.GetFiles(@"..\out\teachers")
+    Directory.GetFiles("../out/teachers")
     // |> Seq.filter (fun v -> Path.GetFileNameWithoutExtension v = "EGGJ")
     |> Seq.iter (fun file ->
         let name = Path.GetFileNameWithoutExtension(file)
@@ -58,10 +58,10 @@ do
                 ContentType = BodyType.Text,
                 Content = $"""Liebe Kolleginnen und Kollegen,
 
-im Anhang findet ihr die Einteilung zu euren Wiederholungsprüfungen.
+im Anhang findet ihr die finale Einteilung zu euren Wiederholungsprüfungen.
 Die Raumeinteilung erfolgt zu einem späteren Zeitpunkt.
 
-Eine schöne letzte Schulwoche.
+Schöne Ferien!
 """
             ),
             Attachments = Collections.Generic.List<_>([

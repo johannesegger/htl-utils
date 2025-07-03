@@ -12,7 +12,7 @@ open Microsoft.Graph.Me.SendMail
 open Microsoft.Graph.Models
 
 [<Literal>]
-let samplePath = __SOURCE_DIRECTORY__ + "\\students.csv"
+let samplePath = __SOURCE_DIRECTORY__ + "/students.csv"
 type MailAddresses = CsvProvider<samplePath>
 let mailAddresses = MailAddresses.GetSample()
 
@@ -43,8 +43,8 @@ let deviceCodeCredential =
 
 do
     use graphClient = new GraphServiceClient(deviceCodeCredential, scopes)
-    Directory.GetFiles(@".\out\students")
-    // |> Seq.head
+    Directory.GetFiles("../out/students")
+    // |> Seq.take 1
     |> Seq.iter (fun file ->
         let fullName = Path.GetFileNameWithoutExtension(file)
         let student =
@@ -57,6 +57,7 @@ do
                     Collections.Generic.List<_>([
                         Recipient(
                             EmailAddress = EmailAddress(Address = student.Mail)
+                            // EmailAddress = EmailAddress(Address = "eggj@htlvb.at")
                         )
                     ]),
                 From = Recipient(EmailAddress = EmailAddress(Address = "office@htlvb.at")),
