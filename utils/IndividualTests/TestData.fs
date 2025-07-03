@@ -118,7 +118,7 @@ type Test = {
 // TODO modify student in case the data in the excel sheet is not correct
 let private correctStudentData (student: Student) =
     let student =
-        let names = student.LastName.Split()
+        let names = student.LastName.Split(' ', 2)
         if names.Length < 2 then { student with LastName = names.[0]; FirstName = "" }
         else  { student with LastName = names.[0]; FirstName = names.[1] }
     student
