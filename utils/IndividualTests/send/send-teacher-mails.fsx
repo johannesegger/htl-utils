@@ -6,7 +6,6 @@ open Azure.Identity
 open Microsoft.Graph
 open System
 open System.IO
-open System.Net
 open Microsoft.Graph.Me.SendMail
 open Microsoft.Graph.Models
 
@@ -59,7 +58,8 @@ do
                 ContentType = BodyType.Text,
                 Content = $"""Liebe Kolleginnen und Kollegen,
 
-im Anhang findet ihr die Einteilung zu euren Wiederholungsprüfungen mit der Bitte um Kontrolle und ggf. Rückmeldung an STAL.
+im Anhang findet ihr die Einteilung zu euren Wiederholungsprüfungen.
+Die Raumeinteilung erfolgt zu einem späteren Zeitpunkt.
 
 Eine schöne letzte Schulwoche.
 """
