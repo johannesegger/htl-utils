@@ -116,7 +116,7 @@ let generateLetters fullTests includeRoom = task {
             let! pdfLetter = teacherLetterToPdf browser teacherShortName htmlLetter |> Async.AwaitTask
             return (teacherShortName, pdfLetter)
         })
-        |> Async.Parallel
+        |> Async.Sequential
     teacherLetters |> Seq.iter (fun (teacherShortName, pdfLetter) ->
         File.WriteAllBytes(System.IO.Path.Combine(targetDir, $"%s{teacherShortName}.pdf"), pdfLetter)
     )
@@ -130,7 +130,7 @@ let generateLetters fullTests includeRoom = task {
             let! pdfLetter = studentLetterToPdf browser student htmlLetter |> Async.AwaitTask
             return (student, pdfLetter)
         })
-        |> Async.Parallel
+        |> Async.Sequential
     studentLetters |> Seq.iter (fun (student, pdfLetter) ->
         let fileName = $"%s{student.Data.SchoolClass} %s{student.Data.LastName} %s{student.Data.FirstName1} - %s{let (Sokrates.SokratesId v) = student.Data.Id in v}.pdf"
         File.WriteAllBytes(System.IO.Path.Combine(targetDir, fileName), pdfLetter)
