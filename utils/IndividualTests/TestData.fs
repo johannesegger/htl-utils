@@ -72,13 +72,13 @@ module TestPart =
             sprintf "%s - %s%s" (start.ToString("hh\\:mm")) (``end``.ToString("hh\\:mm")) roomText
         | ExactTime (v, room) ->
             let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-            sprintf "%s (%s)" (v.ToString("hh\\:mm")) roomText
+            sprintf "%s%s" (v.ToString("hh\\:mm")) roomText
         | StartTime (v, room) ->
             let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-            sprintf "ab %s (%s)" (v.ToString("hh\\:mm")) roomText
+            sprintf "ab %s%s" (v.ToString("hh\\:mm")) roomText
         | Afterwards room ->
             let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-            sprintf "anschließend (%s)" roomText
+            sprintf "anschließend%s" roomText
         | NoTime -> "-"
 
 type TestType = Wiederholungspruefung | NOSTPruefung | Uebertrittspruefung | Semesterpruefung
