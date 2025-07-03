@@ -1,5 +1,6 @@
 module StudentInfo
 
+open Azure.Core
 open Azure.Identity
 open Microsoft.Graph
 open Microsoft.Graph.Models
@@ -7,7 +8,6 @@ open Sokrates
 open System
 open System.IO
 open System.Threading.Tasks
-open Azure.Core
 
 type StudentData = {
     Address: Address

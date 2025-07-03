@@ -1,14 +1,8 @@
 module Letter
 
-open iText.Html2pdf
-open iText.Kernel.Geom
-open iText.Kernel.Pdf
-open iText.Kernel.Utils
 open System
 open System.Globalization
 open System.IO
-open System.Text
-open iText.Html2pdf.Resolver.Font
 
 module Date =
     let culture = CultureInfo.GetCultureInfo("de-AT")
@@ -89,9 +83,9 @@ let private generateTeacherLetter letterTemplate testRowTemplate teacherShortNam
     |> String.concat ""
 
 let generateTeacherLetters tests includeRoom =
-    let documentTemplate = File.ReadAllText @"templates\teacher-letter\document-template.html"
-    let letterTemplate = File.ReadAllText @"templates\teacher-letter\letter-template.html"
-    let testRowTemplate = File.ReadAllText @"templates\teacher-letter\test-row-template.html"
+    let documentTemplate = File.ReadAllText "templates/teacher-letter/document-template.html"
+    let letterTemplate = File.ReadAllText "templates/teacher-letter/letter-template.html"
+    let testRowTemplate = File.ReadAllText "templates/teacher-letter/test-row-template.html"
     let teachers =
         tests
         |> List.collect (fun v -> [ v.Test.Teacher1; yield! Option.toList v.Test.Teacher2 ])
@@ -144,9 +138,9 @@ let generateStudentLetter letterTemplate testRowTemplate student tests =
     |> String.replace "{{testTypePlural}}" (TestData.TestType.pluralText testType)
 
 let generateStudentLetters tests includeRoom =
-    let documentTemplate = File.ReadAllText @"templates\student-letter\document-template.html"
-    let letterTemplate = File.ReadAllText @"templates\student-letter\letter-template.html"
-    let testRowTemplate = File.ReadAllText @"templates\student-letter\test-row-template.html"
+    let documentTemplate = File.ReadAllText "templates/student-letter/document-template.html"
+    let letterTemplate = File.ReadAllText "templates/student-letter/letter-template.html"
+    let testRowTemplate = File.ReadAllText "templates/student-letter/test-row-template.html"
 
     let students =
         tests

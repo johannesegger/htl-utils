@@ -4,6 +4,9 @@ open PuppeteerSharp
 open System
 open System.Globalization
 open System.IO
+open iText.Kernel.Pdf
+open iText.IO.Source
+open iText.Kernel.Utils
 
 let getFullTests tests students =
     let studentLookup =
@@ -38,7 +41,7 @@ let teacherLetterToPdf (browser: IBrowser) teacherShortName htmlLetter = task {
     let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
     File.WriteAllText(htmlFilePath, htmlLetter)
     use! page = browser.NewPageAsync()
-    let! _ = page.GoToAsync(htmlFilePath)
+    let! _ = page.GoToAsync(Uri(htmlFilePath).AbsoluteUri)
     return! page.PdfDataAsync(
         PdfOptions(
             PrintBackground = true,
@@ -64,7 +67,7 @@ let studentLetterToPdf (browser: IBrowser) (student: Letter.Student) htmlLetter 
     let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
     File.WriteAllText(htmlFilePath, htmlLetter)
     use! page = browser.NewPageAsync()
-    let! _ = page.GoToAsync(htmlFilePath)
+    let! _ = page.GoToAsync(Uri(htmlFilePath).AbsoluteUri)
     return! page.PdfDataAsync(
         PdfOptions(
             PrintBackground = true,
@@ -82,33 +85,57 @@ let studentLetterToPdf (browser: IBrowser) (student: Letter.Student) htmlLetter 
         ));
 }
 
+let combinePdfs docs =
+    use stream = new MemoryStream()
+    do
+        use pdfWriter = new PdfWriter(stream)
+        use targetDoc = new PdfDocument(pdfWriter)
+        let merger = new PdfMerger(targetDoc)
+
+        docs
+        |> Seq.iter (fun (sourceDoc: byte[]) ->
+            use sourceStream = new MemoryStream(sourceDoc)
+            use reader = new PdfReader(sourceStream)
+            use sourceDoc = new PdfDocument(reader)
+            merger.Merge(sourceDoc, 1, sourceDoc.GetNumberOfPages()) |> ignore
+        )
+    stream.ToArray()
+
 let generateLetters fullTests includeRoom = task {
     let browserFetcher = BrowserFetcher()
     let! _ = browserFetcher.DownloadAsync()
     let! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true))
+    
+    let combinedLetterTargetDir = "./out"
 
-    let targetDir = @"out\teachers"
+    let targetDir = "./out/teachers"
     Directory.CreateDirectory(targetDir) |> ignore
-    do!
+    let! teacherLetters =
         Letter.generateTeacherLetters fullTests includeRoom
         |> List.map (fun (teacherShortName, htmlLetter) -> async {
             let! pdfLetter = teacherLetterToPdf browser teacherShortName htmlLetter |> Async.AwaitTask
-            System.IO.File.WriteAllBytes(System.IO.Path.Combine(targetDir, $"%s{teacherShortName}.pdf"), pdfLetter)
+            return (teacherShortName, pdfLetter)
         })
         |> Async.Parallel
-        |> Async.Ignore
+    teacherLetters |> Seq.iter (fun (teacherShortName, pdfLetter) ->
+        File.WriteAllBytes(System.IO.Path.Combine(targetDir, $"%s{teacherShortName}.pdf"), pdfLetter)
+    )
+    File.WriteAllBytes(System.IO.Path.Combine(combinedLetterTargetDir, $"Lehrer.pdf"), teacherLetters |> Seq.map snd |> combinePdfs)
 
-    let targetDir = @"out\students"
+    let targetDir = "./out/students"
     Directory.CreateDirectory(targetDir) |> ignore
-    do!
+    let! studentLetters =
         Letter.generateStudentLetters fullTests includeRoom
         |> List.map (fun (student, htmlLetter) -> async {
             let! pdfLetter = studentLetterToPdf browser student htmlLetter |> Async.AwaitTask
-            let fileName = $"%s{student.Data.SchoolClass} %s{student.Data.LastName} %s{student.Data.FirstName1} - %s{let (Sokrates.SokratesId v) = student.Data.Id in v}.pdf"
-            System.IO.File.WriteAllBytes(System.IO.Path.Combine(targetDir, fileName), pdfLetter)
+            return (student, pdfLetter)
         })
         |> Async.Parallel
-        |> Async.Ignore
+    studentLetters |> Seq.iter (fun (student, pdfLetter) ->
+        let fileName = $"%s{student.Data.SchoolClass} %s{student.Data.LastName} %s{student.Data.FirstName1} - %s{let (Sokrates.SokratesId v) = student.Data.Id in v}.pdf"
+        File.WriteAllBytes(System.IO.Path.Combine(targetDir, fileName), pdfLetter)
+    )
+    File.WriteAllBytes(System.IO.Path.Combine(combinedLetterTargetDir, $"Schüler.pdf"), studentLetters |> Seq.map snd |> combinePdfs)
 }
 
 let run tenantId clientId studentsGroupId sokratesReferenceDates testFilePath includeRoom = task {

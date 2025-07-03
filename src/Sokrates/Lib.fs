@@ -111,7 +111,7 @@ type StudentContact = {
 }
 
 [<Literal>]
-let private SchemaFile = __SOURCE_DIRECTORY__ + "\\sokrates.xsd"
+let private SchemaFile = __SOURCE_DIRECTORY__ + "/sokrates.xsd"
 type private SokratesWebService = XmlProvider<Schema = SchemaFile>
 
 type private ParameterType =
