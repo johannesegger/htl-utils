@@ -1,4 +1,5 @@
-import type { Cell } from "./Excel"
+import * as _ from 'lodash-es'
+import type { Cell } from './Excel'
 
 export type ColumnName = string | undefined
 export type ColumnMapping = {
@@ -145,5 +146,54 @@ export namespace ColumnMapping {
           case 'date': return { isMapped: true, type: 'time', value: cell.value, text: cell.text }
         }
     }
+  }
+
+  export const getStudentNames = (columnMappings: ColumnMapping[], columnNames: string[], rows: MappedCell[][]) => {
+    const studentNameColumnNames = columnMappings.flatMap(v => v.name === 'studentName' ? [ v.columnNames ] : [])[0]
+    const studentClassNameColumnName = columnMappings.flatMap(v => v.name === 'className' ? [ v.columnName ] : [])[0]
+
+    if (studentNameColumnNames === undefined || studentClassNameColumnName === undefined) {
+      return []
+    }
+    const studentColumnIndices = {
+      fullName: studentNameColumnNames.fullName === undefined ? -1 : columnNames.indexOf(studentNameColumnNames.fullName),
+      lastName: studentNameColumnNames.lastName === undefined ? -1 : columnNames.indexOf(studentNameColumnNames.lastName),
+      firstName: studentNameColumnNames.firstName === undefined ? -1 : columnNames.indexOf(studentNameColumnNames.firstName),
+      className: columnNames.indexOf(studentClassNameColumnName)
+    }
+
+    return _.chain(rows)
+      .map(row => ({
+        fullName: row[studentColumnIndices.fullName]?.text,
+        lastName: row[studentColumnIndices.lastName]?.text,
+        firstName: row[studentColumnIndices.firstName]?.text,
+        className: row[studentColumnIndices.className]?.text,
+      }))
+      .uniqWith(_.isEqual)
+      .value()
+  }
+
+  export const getTeacherNames = (columnMappings: ColumnMapping[], columnNames: string[], rows: MappedCell[][]) => {
+    const teacherNameColumnNames = (() => {
+      const result = [] as string[]
+      for (const columnMapping of columnMappings) {
+        switch (columnMapping.name) {
+          case 'teacher1':
+          case 'teacher2':
+            if (columnMapping.columnName !== undefined) {
+              result.push(columnMapping.columnName)
+            }
+          default: break
+        }
+      }
+      return result
+    })()
+
+    const teacherNameColumnIndices = teacherNameColumnNames.map(v => columnNames.indexOf(v))
+
+    return _.chain(rows)
+      .flatMap(row => teacherNameColumnIndices.map(idx => row[idx].text))
+      .uniq()
+      .value()
   }
 }

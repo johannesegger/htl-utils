@@ -6,25 +6,9 @@ import * as _ from 'lodash-es'
 import { ColumnMapping, type MappedCell } from './ColumnMapping'
 import { Cell } from './Excel'
 import ColumnMappingForm from './ColumnMappingForm.vue'
-
-// type StudentData = {
-//   sokratesId: string
-//   firstName: string
-//   lastName: string
-//   className: string
-//   mailAddress: string
-//   address: {
-//     country: string
-//     zip: string
-//     city: string
-//     street: string
-//   }
-// }
-// const studentData = ref<StudentData[]>()
-// const loadStudentData = async () => {
-  
-// }
-// loadStudentData()
+import ListView from './ListView.vue'
+import TeacherView from './TeacherView.vue'
+import DataSyncView from './DataSyncView.vue'
 
 const dataFile = ref<File>()
 const doc = ref<XLSX.WorkBook>()
@@ -65,18 +49,7 @@ watch(columnMappings, columnMappings => {
   localStorage.setItem('columnMappings-v1', JSON.stringify(columnMappings))
 }, { deep: true })
 
-const view = ref<'list' | 'teacher'>('list')
-const teacherViewError = computed(() => {
-  const hasUnmapped = columnMappings.some(v => {
-    switch (v.name) {
-      case 'teacher1':
-      case 'teacher2':
-        return v.columnName === undefined
-      default: return false
-    }
-  })
-  return hasUnmapped ? 'Bitte die Spalten "Prüfer" und "Beisitz" zuordnen, um auf die Lehreransicht umzuschalten.' : undefined
-})
+const view = ref<'list' | 'teacher' | 'data-sync'>('list')
 
 const tableData = ref<{columnNames: string[], rows: MappedCell[][]}>()
 watch([rawTableData, columnMappings], ([rawTableData, columnMappings]) => {
@@ -97,59 +70,32 @@ watch([rawTableData, columnMappings], ([rawTableData, columnMappings]) => {
   }
 }, { deep: true })
 
-const teacherDataSortColumns = ref<{ name: string, direction: 'asc' | 'desc' }[]>([])
-const setTeacherSortColumn = (teacher: string, columnName: string) => {
-  const column = teacherDataSortColumns.value.find(v => v.name === columnName)
-  if (column === undefined) {
-    teacherDataSortColumns.value.push({ name: columnName, direction: 'asc' })
-  }
-  else {
-    switch (column.direction) {
-      case 'asc': column.direction = 'desc'; break
-      case 'desc': teacherDataSortColumns.value.splice(teacherDataSortColumns.value.indexOf(column), 1); break
-    }
-  }
-}
-
-const sortTeacherRows = (columnNames: string[], rows: MappedCell[][]) => {
-  const columnTextFns = teacherDataSortColumns.value.map(v => ((row: MappedCell[]) => row[columnNames.indexOf(v.name)].value))
-  const sortOrders = teacherDataSortColumns.value.map(v => v.direction)
-  return _.orderBy(rows, columnTextFns, sortOrders)
-}
-
-const teacherData = computed(() => {
-  if (tableData.value === undefined) return
-
-  const currentTableData = tableData.value
-
-  const teacherColumnNames = columnMappings.flatMap(v => {
+const teacherViewError = computed(() => {
+  const hasUnmappedColumns = columnMappings.some(v => {
     switch (v.name) {
       case 'teacher1':
       case 'teacher2':
-        return [ v.columnName ].filter(v => v !== undefined)
-      default: return []
+        return v.columnName === undefined
+      default: return false
     }
   })
+  return hasUnmappedColumns ? `Bitte die Spalten "${ColumnMapping.getTitle('teacher1')}" und "${ColumnMapping.getTitle('teacher2')}" zuordnen, um auf die Lehreransicht umzuschalten.` : undefined
+})
 
-  const teacherColumnIndices = teacherColumnNames.map(v => currentTableData.columnNames.indexOf(v))
-
-  const teachers = _.chain(currentTableData.rows)
-    .flatMap(row => teacherColumnIndices.map(idx => row[idx].text))
-    .uniq()
-    .sort()
-    .value()
-
-  return {
-    columnNames: currentTableData.columnNames,
-    tables: teachers.map(teacher => {
-      const rows = currentTableData.rows.filter(row => teacherColumnIndices.map(idx => row[idx].text).includes(teacher))
-      const sortedRows = sortTeacherRows(currentTableData.columnNames, rows)
-      return {
-        teacher: teacher,
-        rows: sortedRows
-      }
-    })
-  }
+const dataSyncError = computed(() => {
+  const hasUnmappedColumns = columnMappings.some(v => {
+    switch (v.name) {
+      case 'studentName':
+        switch (v.selectedType) {
+          case 'separate': return v.columnNames.firstName === undefined || v.columnNames.lastName === undefined
+          case 'combined': return v.columnNames.fullName === undefined
+        }
+      case 'className':
+        return v.columnName === undefined
+      default: return false
+    }
+  })
+  return hasUnmappedColumns ? `Bitte die Spalten "${ColumnMapping.getTitle('studentName')}" und "${ColumnMapping.getTitle('className')}" zuordnen, um den Datenabgleich zu starten.` : undefined
 })
 </script>
 
@@ -163,7 +109,7 @@ const teacherData = computed(() => {
         <button v-for="sheet in doc.SheetNames" :key="sheet" class="btn" :class="{ 'bg-green-500 text-white': sheetName === sheet }" @click="sheetName = sheet">{{ sheet }}</button>
       </div>
     </div>
-    <div v-if="tableData?.columnNames !== undefined" class="flex flex-col gap-2">
+    <div v-if="tableData !== undefined" class="flex flex-col gap-2">
       <span class="input-label">Spaltenzuordnung</span>
       <ColumnMappingForm :column-names="tableData.columnNames" v-model="columnMappings" />
     </div>
@@ -172,43 +118,12 @@ const teacherData = computed(() => {
       <div class="flex gap-2">
         <button class="btn" :class="{ 'bg-green-500 text-white': view === 'list' }" @click="view = 'list'">Liste</button>
         <button class="btn" :disabled="teacherViewError !== undefined" :title="teacherViewError" :class="{ 'bg-green-500 text-white': view === 'teacher' }" @click="view = 'teacher'">Lehrer</button>
+        <button class="btn" :disabled="dataSyncError !== undefined" :title="dataSyncError" :class="{ 'bg-green-500 text-white': view === 'data-sync' }" @click="view = 'data-sync'">Datenabgleich mit Sokrates</button>
       </div>
     </div>
-    <table v-if="view === 'list' && tableData?.columnNames !== undefined" class="border border-gray-300">
-      <thead class="bg-blue-500/25">
-        <tr>
-          <th v-for="columnName in tableData.columnNames" :key="columnName" class="px-2 py-1 border border-gray-300">{{ columnName }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in tableData.rows" :key="JSON.stringify(row)">
-          <td v-for="col in row" :key="col.text" class="px-2 py-1 border border-gray-300" :class="{ 'bg-red-500/50': col.isMapped && col.value === undefined, 'bg-green-500/50': col.isMapped && col.value !== undefined }">{{ col.text }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <div v-else-if="view === 'teacher' && teacherData !== undefined" class="flex flex-col gap-4">
-      <div v-for="table in teacherData.tables" :key="table.teacher" class="flex flex-col gap-2">
-        <h2 class="text-xl text-blue-800">{{ table.teacher }}</h2>
-        <table>
-          <thead class="bg-blue-500/25">
-          <tr>
-            <th v-for="columnName in teacherData.columnNames" :key="columnName" class="px-2 py-1 border border-gray-300 cursor-pointer" @click="setTeacherSortColumn(table.teacher, columnName)">
-              <div class="flex gap-2">
-                <span>{{ columnName }}</span>
-                <span v-if="teacherDataSortColumns.some(v => v.name === columnName && v.direction === 'asc')">↑</span>
-                <span v-else-if="teacherDataSortColumns.some(v => v.name === columnName && v.direction === 'desc')">↓</span>
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in table.rows" :key="JSON.stringify(row)">
-          <td v-for="col in row" :key="col.text" class="px-2 py-1 border border-gray-300" :class="{ 'bg-red-500/50': col.isMapped && col.value === undefined, 'bg-green-500/50': col.isMapped && col.value !== undefined }">{{ col.text }}</td>
-          </tr>
-        </tbody>
-        </table>
-      </div>
-    </div>
+    <ListView v-if="view === 'list' && tableData !== undefined" :column-names="tableData.columnNames" :rows="tableData.rows" />
+    <TeacherView v-else-if="view === 'teacher' && tableData !== undefined" :column-names="tableData.columnNames" :rows="tableData.rows" :column-mappings="columnMappings" />
+    <DataSyncView v-if="view ==='data-sync' && tableData !== undefined" :column-names="tableData.columnNames" :rows="tableData.rows" :column-mappings="columnMappings" />
   </div>
 </template>
 
