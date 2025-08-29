@@ -6,7 +6,7 @@ defineProps<{
   columnNames: string[]
 }>()
 
-const model= defineModel<ColumnMapping[]>()
+const model = defineModel<ColumnMapping[]>()
 </script>
 
 <template>

@@ -59,7 +59,11 @@ watch(sheet, sheet => {
   }
 }, { deep: true })
 
-const columnMappings = reactive(ColumnMapping.init())
+const storedColumnMappings = <ColumnMapping[]>JSON.parse(<string>localStorage.getItem('columnMappings-v1'))
+const columnMappings = reactive(storedColumnMappings || ColumnMapping.init())
+watch(columnMappings, columnMappings => {
+  localStorage.setItem('columnMappings-v1', JSON.stringify(columnMappings))
+}, { deep: true })
 
 const view = ref<'list' | 'teacher'>('list')
 const teacherViewError = computed(() => {
