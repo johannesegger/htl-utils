@@ -36,6 +36,32 @@
                     "message": 7
                 }
             }
-        }
+        },
+        {
+			"label": "IndividualTests (Server)",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"watch",
+				"run",
+				"--environment", "Development",
+				"--urls", "https://localhost:5001",
+			],
+			"problemMatcher": "$msCompile",
+			"options": {
+				"cwd": "${workspaceFolder}/src/IndividualTests.Server",
+			},
+		},
+		{
+			"label": "IndividualTests (Client)",
+			"type": "npm",
+			"script": "dev",
+			"path": "src/IndividualTests.Client",
+			"problemMatcher": [],
+		},
+		{
+			"label": "IndividualTests",
+			"dependsOn": [ "IndividualTests (Server)", "IndividualTests (Client)" ]
+		},
     ]
 }
