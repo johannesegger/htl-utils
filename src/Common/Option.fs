@@ -7,3 +7,7 @@ let sequence list =
         | Some v, Some vs -> Some (v :: vs)
         | _ -> None
     )
+
+let fromTryPattern (success, value) =
+    if success then Some value
+    else None

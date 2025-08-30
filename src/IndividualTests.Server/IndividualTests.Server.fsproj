@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <Compile Include="HttpQueryAttribute.fs" />
+    <Compile Include="MicrosoftGraphExtensions.fs" />
+    <Compile Include="AsyncEnumerableExtensions.fs" />
     <Compile Include="WeatherForecast.fs" />
     <Compile Include="Controllers/SyncController.fs" />
     <Compile Include="Controllers/WeatherForecastController.fs" />
@@ -17,6 +19,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Identity.Web" Version="3.14.0" />
     <PackageReference Include="Microsoft.Identity.Web.GraphServiceClient" Version="3.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Sokrates/Sokrates.fsproj" />
   </ItemGroup>
 
 </Project>

@@ -2,6 +2,7 @@ module IndividualTests.Server.Main
 
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Authentication.JwtBearer
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Identity.Web
@@ -20,8 +21,11 @@ let main args =
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"))
         .EnableTokenAcquisitionToCallDownstreamApi()
-        .AddMicrosoftGraph(builder.Configuration.GetSection("GraphBeta"))
+        .AddMicrosoftGraph(builder.Configuration.GetSection("Graph"))
         .AddInMemoryTokenCaches() |> ignore
+
+    builder.Services.AddSingleton(builder.Configuration.GetSection("Sokrates").Get<Sokrates.Config>()) |> ignore
+    builder.Services.AddSingleton<Sokrates.SokratesApi>() |> ignore
 
     let app = builder.Build()
 

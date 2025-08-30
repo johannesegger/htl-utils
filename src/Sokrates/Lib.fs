@@ -82,6 +82,7 @@ type Teacher = {
     DegreeBack: string option
     Phones: Phone list
     Address: Address option
+    Gender: Gender option
 }
 
 type StudentAddress = {
@@ -213,6 +214,11 @@ type SokratesApi(config: Config) =
         else
             Home text
 
+    let parseGender text =
+        if CIString text = CIString "m" then Male
+        elif CIString text = CIString "w" then Female
+        else failwith $"Unknown gender \"%s{text}\""
+
     let parseTeachers (xmlElement: XElement) =
         SokratesWebService.TeacherList(xmlElement).TeacherEntries
         |> Seq.choose (fun node ->
@@ -253,6 +259,7 @@ type SokratesApi(config: Config) =
                         DegreeBack = teacher.XElement.Element(XName.Get "degree2") |> Option.ofObj |> Option.map (fun n -> n.Value) |> Option.bind Option.ofString
                         Phones = phones
                         Address = address
+                        Gender = teacher.XElement.Element(XName.Get "gender") |> Option.ofObj |> Option.map (_.Value >> parseGender)
                     }
                 | None -> None
             )
@@ -268,11 +275,6 @@ type SokratesApi(config: Config) =
         |> Seq.map (fun n -> parseClassName n.ClassName)
         |> Seq.distinct
         |> Seq.toList
-
-    let parseGender text =
-        if CIString text = CIString "m" then Male
-        elif CIString text = CIString "w" then Female
-        else failwith $"Unknown gender \"%s{text}\""
 
     let parseStudents (mainStudentXmlData: XElement) (additionalStudentXmlData: XElement) =
         let additionalData =

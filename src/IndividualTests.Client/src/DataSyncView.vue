@@ -26,6 +26,7 @@ type StudentDto = {
     firstName: string
     className: string
     mailAddress: string
+    gender: 'm' | 'f'
     address: {
       country: string
       zip: string
@@ -39,16 +40,16 @@ type StudentDto = {
 }
 type TeacherDto = {
   type: 'exact-match'
-  shortName: string
+  name: string
   data: {
+    shortName: string
     lastName: string
     firstName: string
     mailAddress: string
-    gender: 'm' | 'f'
   }
 } | {
   type: 'no-match'
-  shortName: string
+  name: string
 }
 
 const isSyncingStudentData = ref(false)
