@@ -14,10 +14,12 @@ const defaultScopes = [ "api://235fe3a7-8dbd-426c-b7b1-3d64cb37724b/.default" ]
 
 const redirectPromise = msalInstance.handleRedirectPromise()
 redirectPromise.then((tokenResponse) => {
-    if (!tokenResponse) {
-        return
+    if (tokenResponse) {
+        msalInstance.setActiveAccount(msalInstance.getAllAccounts()[0])
     }
-    msalInstance.setActiveAccount(msalInstance.getAllAccounts()[0])
+    else {
+        msalInstance.loginRedirect({ scopes: defaultScopes })
+    }
 }).catch(error => {
     console.error('Error while logging in', error)
 })
