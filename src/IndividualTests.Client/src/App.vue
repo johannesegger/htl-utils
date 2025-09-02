@@ -9,6 +9,8 @@ import ColumnMappingForm from './ColumnMappingForm.vue'
 import ListView from './ListView.vue'
 import TeacherView from './TeacherView.vue'
 import DataSyncView from './DataSyncView.vue'
+import { syncStudentData, syncTeacherData, type StudentDto, type TeacherDto } from './DataSync'
+import { TestData } from './TestData'
 
 const dataFile = ref<File>()
 const doc = ref<XLSX.WorkBook>()
@@ -63,8 +65,8 @@ watch([rawTableData, columnMappings], ([rawTableData, columnMappings]) => {
     columnNames: rawTableData.columnNames,
     rows: rawTableData.rows.map(row => {
       return row.map((value, columnIndex) => {
-        const columnMapping = ColumnMapping.getByColumnName(columnMappings, rawTableData.columnNames[columnIndex])
-        return ColumnMapping.getColumnValue(columnMapping, value)
+        const columnIdentifier = ColumnMapping.getColumnIdentifier(columnMappings, rawTableData.columnNames[columnIndex])
+        return ColumnMapping.getColumnValue(columnIdentifier, value)
       })
     })
   }
@@ -97,6 +99,52 @@ const dataSyncError = computed(() => {
   })
   return hasUnmappedColumns ? `Bitte die Spalten "${ColumnMapping.getTitle('studentName')}" und "${ColumnMapping.getTitle('className')}" zuordnen, um den Datenabgleich zu starten.` : undefined
 })
+
+const studentNames = computed(() => {
+  if (tableData.value === undefined) return undefined
+  return ColumnMapping.getStudentNames(columnMappings, tableData.value.columnNames, tableData.value.rows)
+})
+
+const teacherNames = computed(() => {
+  if (tableData.value === undefined) return undefined
+  return ColumnMapping.getTeacherNames(columnMappings, tableData.value.columnNames, tableData.value.rows)
+})
+
+const isSyncingStudentData = ref(false)
+const hasSyncingStudentDataFailed = ref(false)
+const syncedStudentData = ref<StudentDto[]>()
+let syncStudentDataAbortController = new AbortController()
+const resyncStudentData = async () => {
+  if (studentNames.value === undefined) return
+
+  syncStudentDataAbortController.abort()
+  syncStudentDataAbortController = new AbortController()
+  syncedStudentData.value = await syncStudentData(studentNames.value, isSyncingStudentData, hasSyncingStudentDataFailed, syncStudentDataAbortController.signal)
+}
+watch(studentNames, async () => {
+  await resyncStudentData()
+}, { immediate: true })
+
+const isSyncingTeacherData = ref(false)
+const hasSyncingTeacherDataFailed = ref(false)
+const syncedTeacherData = ref<TeacherDto[]>()
+let syncTeacherDataAbortController = new AbortController()
+const resyncTeacherData = async () => {
+  if (teacherNames.value === undefined) {
+    return
+  }
+  syncTeacherDataAbortController.abort()
+  syncTeacherDataAbortController = new AbortController()
+  syncedTeacherData.value = await syncTeacherData(teacherNames.value, isSyncingTeacherData, hasSyncingTeacherDataFailed, syncTeacherDataAbortController.signal)
+}
+watch(teacherNames, async () => {
+  await resyncTeacherData()
+}, { immediate: true })
+
+const testData = computed<TestData[] | undefined>(() => {
+  return TestData.create(tableData.value, syncedStudentData.value, syncedTeacherData.value)
+})
+watch(testData, (v) => console.log(v))
 </script>
 
 <template>
@@ -121,9 +169,22 @@ const dataSyncError = computed(() => {
         <button class="btn" :disabled="dataSyncError !== undefined" :title="dataSyncError" :class="{ 'bg-green-500 text-white': view === 'data-sync' }" @click="view = 'data-sync'">Datenabgleich mit Sokrates</button>
       </div>
     </div>
-    <ListView v-if="view === 'list' && tableData !== undefined" :column-names="tableData.columnNames" :rows="tableData.rows" />
-    <TeacherView v-else-if="view === 'teacher' && tableData !== undefined" :column-names="tableData.columnNames" :rows="tableData.rows" :column-mappings="columnMappings" />
-    <DataSyncView v-if="view ==='data-sync' && tableData !== undefined" :column-names="tableData.columnNames" :rows="tableData.rows" :column-mappings="columnMappings" />
+    <ListView v-if="view === 'list' && tableData !== undefined"
+      :column-names="tableData.columnNames"
+      :rows="tableData.rows" />
+    <TeacherView v-else-if="view === 'teacher' && tableData !== undefined"
+      :column-names="tableData.columnNames"
+      :rows="tableData.rows"
+      :column-mappings="columnMappings" />
+    <DataSyncView v-if="view ==='data-sync' && tableData !== undefined"
+      :is-syncing-student-data="isSyncingStudentData"
+      :has-syncing-student-data-failed="hasSyncingStudentDataFailed"
+      :synced-student-data="syncedStudentData"
+      @sync-student-data="resyncStudentData"
+      :is-syncing-teacher-data="isSyncingTeacherData"
+      :has-syncing-teacher-data-failed="hasSyncingTeacherDataFailed"
+      :synced-teacher-data="syncedTeacherData"
+      @sync-teacher-data="resyncTeacherData" />
   </div>
 </template>
 

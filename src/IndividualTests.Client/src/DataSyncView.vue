@@ -1,99 +1,98 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { ColumnMapping, type MappedCell } from './ColumnMapping'
-import { uiFetch } from './UIFetch'
+import { computed } from 'vue'
+import type { StudentDto, StudentIdentifierDto, TeacherDto } from './DataSync'
 import ErrorWithRetry from './ErrorWithRetry.vue'
+import * as _ from 'lodash-es'
 
 const props = defineProps<{
-  columnNames: string[]
-  rows: MappedCell[][]
-  columnMappings: ColumnMapping[]
+  isSyncingStudentData: boolean
+  hasSyncingStudentDataFailed: boolean
+  syncedStudentData: StudentDto[] | undefined
+  isSyncingTeacherData: boolean
+  hasSyncingTeacherDataFailed: boolean
+  syncedTeacherData: TeacherDto[] | undefined
 }>()
 
-const studentNames = computed(() => {
-  return ColumnMapping.getStudentNames(props.columnMappings, props.columnNames, props.rows)
-})
-const teacherNames = computed(() => {
-  return ColumnMapping.getTeacherNames(props.columnMappings, props.columnNames, props.rows)
-})
-
-type StudentDto = {
-  type: 'exact-match'
-  name: { fullName: string } | { lastName: string, firstName: string}
-  data: {
-    sokratesId: string
+type StudentDataSyncError = {
+  type: 'no-match'
+  studentName: StudentIdentifierDto
+} | {
+  type: 'mail-address-not-found'
+  studentName: {
     lastName: string
     firstName: string
     className: string
-    mailAddress: string
-    gender: 'm' | 'f'
-    address: {
-      country: string
-      zip: string
-      city: string
-      street: string
-    }
   }
 } | {
-  type: 'no-match'
-  name: { fullName: string } | { lastName: string, firstName: string}
-}
-type TeacherDto = {
-  type: 'exact-match'
-  name: string
-  data: {
-    shortName: string
+  type: 'address-not-found'
+  studentName: {
     lastName: string
     firstName: string
-    mailAddress: string
+    className: string
   }
-} | {
+}
+const studentDataSyncErrors = computed(() => {
+  if (props.syncedStudentData === undefined) return []
+
+  return props.syncedStudentData.flatMap(v => [
+    ...(v.type === 'no-match' ? [ <StudentDataSyncError>{ type: 'no-match', studentName: v.name } ] : []),
+    ...(v.type === 'exact-match' && v.data.mailAddress === undefined ? [ <StudentDataSyncError>{ type: 'mail-address-not-found', studentName: { lastName: v.data.lastName, firstName: v.data.firstName, className: v.data.className } } ] : []),
+    ...(v.type === 'exact-match' && v.data.address === undefined ? [ <StudentDataSyncError>{ type: 'address-not-found', studentName: { lastName: v.data.lastName, firstName: v.data.firstName, className: v.data.className } } ] : []),
+  ])
+})
+
+type TeacherDataSyncError = {
   type: 'no-match'
-  name: string
+  teacherName: string
 }
+const teacherDataSyncErrors = computed(() => {
+  if (props.syncedTeacherData === undefined) return []
 
-const isSyncingStudentData = ref(false)
-const hasSyncingStudentDataFailed = ref(false)
-const syncedStudentData = ref<StudentDto[]>()
+  return props.syncedTeacherData.flatMap(v => [
+    ...(v.type === 'no-match' ? [ <TeacherDataSyncError>{ type: 'no-match', teacherName: v.name } ] : []),
+  ])
+})
 
-const isSyncingTeacherData = ref(false)
-const hasSyncingTeacherDataFailed = ref(false)
-const syncedTeacherData = ref<TeacherDto[]>()
-
-const syncStudentData = async () => {
-  const result = await uiFetch(isSyncingStudentData, hasSyncingStudentDataFailed, '/api/sync/students', {
-    method: 'QUERY',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(studentNames.value)
-  })
-  if (result.succeeded) {
-    syncedStudentData.value = await result.response.json()
-  }
-  else {
-    syncedStudentData.value = undefined
-  }
-}
-const syncTeacherData = async () => {
-  const result = await uiFetch(isSyncingTeacherData, hasSyncingTeacherDataFailed, '/api/sync/teachers', {
-    method: 'QUERY',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(teacherNames.value)
-  })
-  if (result.succeeded) {
-    syncedTeacherData.value = await result.response.json()
-  }
-  else {
-    syncedTeacherData.value = undefined
-  }
-}
-
-watch(props, async _props => {
-  await syncStudentData()
-  await syncTeacherData()
-}, { immediate: true, deep: true })
+defineEmits<{
+  syncStudentData: []
+  syncTeacherData: []
+}>()
 </script>
 
 <template>
-  <ErrorWithRetry v-if="hasSyncingStudentDataFailed" type="inline" class="self-start" @retry="syncStudentData">Fehler beim Laden der Schülerdaten.</ErrorWithRetry>
-  <ErrorWithRetry v-if="hasSyncingTeacherDataFailed" type="inline" class="self-start" @retry="syncTeacherData">Fehler beim Laden der Lehrerdaten.</ErrorWithRetry>
+  <div class="flex flex-col gap-4">
+    <h2 class="text-xl text-blue-800">Schüler</h2>
+    <div v-if="isSyncingStudentData">Schülerdaten werden abgeglichen...</div>
+    <ErrorWithRetry v-else-if="hasSyncingStudentDataFailed" type="inline" class="self-start" @retry="$emit('syncStudentData')">Fehler beim Laden der Schülerdaten.</ErrorWithRetry>
+    <div v-else-if="syncedStudentData !== undefined">
+      <div v-if="syncedStudentData.every(v => v.type === 'exact-match')">{{ syncedStudentData.length }} Schülerdaten wurden erfolgreich abgeglichen.</div>
+      <div v-else class="flex flex-col gap-2">
+        <span>Folgende Schülerdaten konnten nicht abgeglichen werden:</span>
+        <ul class="list-disc ml-4">
+          <li v-for="error in studentDataSyncErrors" :key="JSON.stringify(error)" :class="{ 'text-red-800': error.type === 'no-match', 'text-yellow-500': error.type === 'mail-address-not-found' || error.type === 'address-not-found' }">
+            <span v-if="error.type === 'no-match'">{{ 'fullName' in error.studentName ? error.studentName.fullName : `${error.studentName.lastName} ${error.studentName.firstName}` }} ({{ error.studentName.className }})</span>
+            <span v-else-if="error.type === 'mail-address-not-found'">{{ error.studentName.lastName }} {{ error.studentName.firstName }} ({{ error.studentName.className }}) - Mailadresse nicht gefunden</span>
+            <span v-else-if="error.type === 'address-not-found'">{{ error.studentName.lastName }} {{ error.studentName.firstName }} ({{ error.studentName.className }}) - Wohnadresse nicht gefunden</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex flex-col gap-4">
+    <h2 class="text-xl text-blue-800">Lehrer</h2>
+    <div v-if="isSyncingTeacherData">Lehrerdaten werden abgeglichen...</div>
+    <ErrorWithRetry v-else-if="hasSyncingTeacherDataFailed" type="inline" class="self-start" @retry="$emit('syncTeacherData')">Fehler beim Laden der Lehrerdaten.</ErrorWithRetry>
+    <div v-else-if="syncedTeacherData !== undefined">
+      <div v-if="syncedTeacherData.every(v => v.type === 'exact-match')">{{ syncedTeacherData.length }} Lehrerdaten wurden erfolgreich abgeglichen.</div>
+      <div v-else class="flex flex-col gap-2">
+        <span>Folgende Lehrerdaten konnten nicht abgeglichen werden:</span>
+        <ul class="list-disc ml-4">
+          <li v-for="error in teacherDataSyncErrors" :key="error.teacherName" class="text-red-800">
+            <span>{{ error.teacherName }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
 </template>

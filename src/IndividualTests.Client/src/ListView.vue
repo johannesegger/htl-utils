@@ -16,7 +16,7 @@ defineProps<{
     </thead>
     <tbody>
       <tr v-for="row in rows" :key="JSON.stringify(row)">
-        <td v-for="col in row" :key="col.text" class="px-2 py-1 border border-gray-300" :class="{ 'bg-yellow-300/50': col.isMapped && col.value === undefined, 'bg-green-500/50': col.isMapped && col.value !== undefined }">{{ col.text }}</td>
+        <td v-for="col in row" :key="col.text" class="px-2 py-1 border border-gray-300" :class="{ 'bg-yellow-300/50': col.mappedToColumn !== undefined && col.value === undefined, 'bg-green-500/50': col.mappedToColumn !== undefined && col.value !== undefined }">{{ col.text }}</td>
       </tr>
     </tbody>
   </table>

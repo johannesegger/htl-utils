@@ -1,5 +1,6 @@
 import * as _ from 'lodash-es'
 import type { Cell } from './Excel'
+import type { StudentIdentifierDto } from './DataSync'
 
 export type ColumnName = string | undefined
 export type ColumnMapping = {
@@ -10,18 +11,19 @@ export type ColumnMapping = {
   name: 'className' | 'subject' | 'teacher1' | 'teacher2' | 'date' | 'beginWritten' | 'endWritten' | 'beginOral' | 'endOral' | 'room'
   columnName: ColumnName
 }
+export type ColumnIdentifier = Exclude<ColumnMapping['name'], 'studentName'> | 'studentFullName' | 'studentFirstName' | 'studentLastName'
 export type MappedCell = {
-  isMapped: boolean
+  mappedToColumn: ColumnIdentifier | undefined
   type: 'text'
   value: string | undefined
   text: string
 } | {
-  isMapped: boolean
+  mappedToColumn: ColumnIdentifier | undefined
   type: 'date'
   value: Date | undefined
   text: string
 } | {
-  isMapped: boolean
+  mappedToColumn: ColumnIdentifier | undefined
   type: 'time'
   value: Date | undefined
   text: string
@@ -42,18 +44,17 @@ export namespace ColumnMapping {
       case 'room': return 'Raum'
     }
   }
-  export const getByColumnName = (columnMappings: ColumnMapping[], columnName: string) : ColumnMapping | undefined => {
+  export const getColumnIdentifier = (columnMappings: ColumnMapping[], columnName: string) : ColumnIdentifier | undefined => {
     for (const columnMapping of columnMappings) {
       switch (columnMapping.name) {
         case 'studentName':
-          const columnNames = (() => {
-            switch (columnMapping.selectedType) {
-              case 'separate': return [ columnMapping.columnNames.lastName, columnMapping.columnNames.firstName ]
-              case 'combined': return [ columnMapping.columnNames.fullName ]
-            }
-          })()
-          if (columnNames.includes(columnName))
-            return columnMapping
+          switch (columnMapping.selectedType) {
+            case 'separate':
+              if (columnMapping.columnNames.lastName === columnName) return 'studentLastName'
+              if (columnMapping.columnNames.firstName === columnName) return 'studentFirstName'
+            case 'combined':
+              if (columnMapping.columnNames.fullName === columnName) return 'studentFullName'
+          }
           break
         case 'className':
         case 'subject':
@@ -65,7 +66,7 @@ export namespace ColumnMapping {
         case 'beginOral':
         case 'endOral':
         case 'room':
-          if (columnMapping.columnName === columnName) return columnMapping
+          if (columnMapping.columnName === columnName) return columnMapping.name
           break
       }
     }
@@ -111,15 +112,17 @@ export namespace ColumnMapping {
     { name: 'room', columnName: undefined }
   ]
 
-  export const getColumnValue = (columnMapping: ColumnMapping | undefined, cell: Cell) : MappedCell => {
-    switch (columnMapping?.name) {
+  export const getColumnValue = (columnIdentifier: ColumnIdentifier | undefined, cell: Cell) : MappedCell => {
+    switch (columnIdentifier) {
       case undefined:
         switch (cell.type) {
           case 'empty':
-          case 'string': return { isMapped: false, type: 'text', value: cell.value, text: cell.text }
-          case 'date': return { isMapped: false, type: 'date', value: cell.value, text: cell.text }
+          case 'string': return { mappedToColumn: columnIdentifier, type: 'text', value: cell.value, text: cell.text }
+          case 'date': return { mappedToColumn: columnIdentifier, type: 'date', value: cell.value, text: cell.text }
         }
-      case 'studentName':
+      case 'studentFullName':
+      case 'studentLastName':
+      case 'studentFirstName':
       case 'className':
       case 'subject':
       case 'teacher1':
@@ -127,14 +130,14 @@ export namespace ColumnMapping {
       case 'room':
         switch (cell.type) {
           case 'empty':
-          case 'string': return { isMapped: true, type: 'text', value: cell.value, text: cell.text }
-          case 'date': return { isMapped: true, type: 'text', value: undefined, text: cell.text }
+          case 'string': return { mappedToColumn: columnIdentifier, type: 'text', value: cell.value, text: cell.text }
+          case 'date': return { mappedToColumn: columnIdentifier, type: 'text', value: undefined, text: cell.text }
         }
       case 'date':
         switch (cell.type) {
           case 'empty':
-          case 'string': return { isMapped: true, type: 'date', value: undefined, text: cell.text }
-          case 'date': return { isMapped: true, type: 'date', value: cell.value, text: cell.text }
+          case 'string': return { mappedToColumn: columnIdentifier, type: 'date', value: undefined, text: cell.text }
+          case 'date': return { mappedToColumn: columnIdentifier, type: 'date', value: cell.value, text: cell.text }
         }
       case 'beginWritten':
       case 'endWritten':
@@ -142,13 +145,13 @@ export namespace ColumnMapping {
       case 'endOral':
         switch (cell.type) {
           case 'empty':
-          case 'string': return { isMapped: true, type: 'time', value: undefined, text: cell.text }
-          case 'date': return { isMapped: true, type: 'time', value: cell.value, text: cell.text }
+          case 'string': return { mappedToColumn: columnIdentifier, type: 'time', value: undefined, text: cell.text }
+          case 'date': return { mappedToColumn: columnIdentifier, type: 'time', value: cell.value, text: cell.text }
         }
     }
   }
 
-  export const getStudentNames = (columnMappings: ColumnMapping[], columnNames: string[], rows: MappedCell[][]) => {
+  export const getStudentNames = (columnMappings: ColumnMapping[], columnNames: string[], rows: MappedCell[][]) : StudentIdentifierDto[] => {
     const studentNameColumnNames = columnMappings.flatMap(v => v.name === 'studentName' ? [ v.columnNames ] : [])[0]
     const studentClassNameColumnName = columnMappings.flatMap(v => v.name === 'className' ? [ v.columnName ] : [])[0]
 
@@ -163,12 +166,18 @@ export namespace ColumnMapping {
     }
 
     return _.chain(rows)
-      .map(row => ({
-        fullName: row[studentColumnIndices.fullName]?.text,
-        lastName: row[studentColumnIndices.lastName]?.text,
-        firstName: row[studentColumnIndices.firstName]?.text,
-        className: row[studentColumnIndices.className]?.text,
-      }))
+      .map(row => {
+        if (studentNameColumnNames.fullName !== undefined) {
+          return { className: row[studentColumnIndices.className]?.text, fullName: row[studentColumnIndices.fullName]?.text }
+        }
+        else {
+          return {
+            className: row[studentColumnIndices.className]?.text,
+            lastName: row[studentColumnIndices.lastName]?.text,
+            firstName: row[studentColumnIndices.firstName]?.text,
+          }
+        }
+      })
       .uniqWith(_.isEqual)
       .value()
   }
