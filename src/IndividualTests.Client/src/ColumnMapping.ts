@@ -8,7 +8,7 @@ export type ColumnMapping = {
   selectedType: 'separate' | 'combined'
   columnNames: { firstName: ColumnName; lastName: ColumnName, fullName: ColumnName }
 } | {
-  name: 'className' | 'subject' | 'teacher1' | 'teacher2' | 'date' | 'beginWritten' | 'endWritten' | 'beginOral' | 'endOral' | 'room'
+  name: 'className' | 'subject' | 'teacher1' | 'teacher2' | 'date' | 'beginWritten' | 'endWritten' | 'roomWritten' | 'beginOral' | 'endOral' | 'roomOral'
   columnName: ColumnName
 }
 export type ColumnIdentifier = Exclude<ColumnMapping['name'], 'studentName'> | 'studentFullName' | 'studentFirstName' | 'studentLastName'
@@ -39,9 +39,10 @@ export namespace ColumnMapping {
       case 'date': return 'Datum'
       case 'beginWritten': return 'Beginn schriftlich'
       case 'endWritten' : return 'Ende schriftlich'
+      case 'roomWritten': return 'Raum schriftlich'
       case 'beginOral': return 'Beginn mündlich'
       case 'endOral': return 'Ende mündlich'
-      case 'room': return 'Raum'
+      case 'roomOral': return 'Raum mündlich'
     }
   }
   export const getColumnIdentifier = (columnMappings: ColumnMapping[], columnName: string) : ColumnIdentifier | undefined => {
@@ -63,9 +64,10 @@ export namespace ColumnMapping {
         case 'date':
         case 'beginWritten':
         case 'endWritten':
+        case 'roomWritten':
         case 'beginOral':
         case 'endOral':
-        case 'room':
+        case 'roomOral':
           if (columnMapping.columnName === columnName) return columnMapping.name
           break
       }
@@ -86,9 +88,10 @@ export namespace ColumnMapping {
       case 'date':
       case 'beginWritten':
       case 'endWritten':
+      case 'roomWritten':
       case 'beginOral':
       case 'endOral':
-      case 'room':
+      case 'roomOral':
         if (columnMapping.columnName !== undefined && !list.includes(columnMapping.columnName)) columnMapping.columnName = undefined
         return
     }
@@ -107,9 +110,10 @@ export namespace ColumnMapping {
     { name: 'date', columnName: undefined },
     { name: 'beginWritten', columnName: undefined },
     { name: 'endWritten', columnName: undefined },
+    { name: 'roomWritten', columnName: undefined },
     { name: 'beginOral', columnName: undefined },
     { name: 'endOral', columnName: undefined },
-    { name: 'room', columnName: undefined }
+    { name: 'roomOral', columnName: undefined },
   ]
 
   export const getColumnValue = (columnIdentifier: ColumnIdentifier | undefined, cell: Cell) : MappedCell => {
@@ -127,7 +131,8 @@ export namespace ColumnMapping {
       case 'subject':
       case 'teacher1':
       case 'teacher2':
-      case 'room':
+      case 'roomWritten':
+      case 'roomOral':
         switch (cell.type) {
           case 'empty':
           case 'string': return { mappedToColumn: columnIdentifier, type: 'text', value: cell.value, text: cell.text }

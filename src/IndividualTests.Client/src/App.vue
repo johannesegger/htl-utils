@@ -11,6 +11,7 @@ import TeacherView from './TeacherView.vue'
 import DataSyncView from './DataSyncView.vue'
 import { syncStudentData, syncTeacherData, type StudentDto, type TeacherDto } from './DataSync'
 import { TestData } from './TestData'
+import StudentLetters from './StudentLetters.vue'
 
 const dataFile = ref<File>()
 const doc = ref<XLSX.WorkBook>()
@@ -45,13 +46,13 @@ watch(sheet, sheet => {
   }
 }, { deep: true })
 
-const storedColumnMappings = <ColumnMapping[]>JSON.parse(<string>localStorage.getItem('columnMappings-v1'))
+const storedColumnMappings = <ColumnMapping[]>JSON.parse(<string>localStorage.getItem('columnMappings-v2'))
 const columnMappings = reactive(storedColumnMappings || ColumnMapping.init())
 watch(columnMappings, columnMappings => {
-  localStorage.setItem('columnMappings-v1', JSON.stringify(columnMappings))
+  localStorage.setItem('columnMappings-v2', JSON.stringify(columnMappings))
 }, { deep: true })
 
-const view = ref<'list' | 'teacher' | 'data-sync'>('list')
+const view = ref<'test-list' | 'teacher-lists' | 'data-sync' | 'student-letters' | 'teacher-letters'>('test-list')
 
 const tableData = ref<{columnNames: string[], rows: MappedCell[][]}>()
 watch([rawTableData, columnMappings], ([rawTableData, columnMappings]) => {
@@ -144,7 +145,19 @@ watch(teacherNames, async () => {
 const testData = computed<TestData[] | undefined>(() => {
   return TestData.create(tableData.value, syncedStudentData.value, syncedTeacherData.value)
 })
-watch(testData, (v) => console.log(v))
+
+const studentLettersError = computed(() => {
+  if (testData.value === undefined) {
+    return 'Bitte zuerst die Spalten zuweisen und den Datenabgleich starten, um die Schülerbriefe zu erzeugen.'
+  }
+  return undefined
+})
+const teacherLettersError = computed(() => {
+  if (testData.value === undefined) {
+    return 'Bitte zuerst die Spalten zuweisen und den Datenabgleich starten, um die Lehrerbriefe zu erzeugen.'
+  }
+  return undefined
+})
 </script>
 
 <template>
@@ -164,19 +177,21 @@ watch(testData, (v) => console.log(v))
     <div v-if="tableData !== undefined" class="flex flex-col gap-2">
       <span class="input-label">Ansicht</span>
       <div class="flex gap-2">
-        <button class="btn" :class="{ 'bg-green-500 text-white': view === 'list' }" @click="view = 'list'">Liste</button>
-        <button class="btn" :disabled="teacherViewError !== undefined" :title="teacherViewError" :class="{ 'bg-green-500 text-white': view === 'teacher' }" @click="view = 'teacher'">Lehrer</button>
+        <button class="btn" :class="{ 'bg-green-500 text-white': view === 'test-list' }" @click="view = 'test-list'">Prüfungsliste</button>
+        <button class="btn" :disabled="teacherViewError !== undefined" :title="teacherViewError" :class="{ 'bg-green-500 text-white': view === 'teacher-lists' }" @click="view = 'teacher-lists'">Lehrerlisten</button>
         <button class="btn" :disabled="dataSyncError !== undefined" :title="dataSyncError" :class="{ 'bg-green-500 text-white': view === 'data-sync' }" @click="view = 'data-sync'">Datenabgleich mit Sokrates</button>
+        <button class="btn" :disabled="studentLettersError !== undefined" :title="studentLettersError" :class="{ 'bg-green-500 text-white': view === 'student-letters' }" @click="view = 'student-letters'">Schülerbriefe erstellen</button>
+        <button class="btn" :disabled="teacherLettersError !== undefined" :title="teacherLettersError" :class="{ 'bg-green-500 text-white': view === 'teacher-letters' }" @click="view = 'teacher-letters'">Lehrerbriefe erstellen</button>
       </div>
     </div>
-    <ListView v-if="view === 'list' && tableData !== undefined"
+    <ListView v-if="view === 'test-list' && tableData !== undefined"
       :column-names="tableData.columnNames"
       :rows="tableData.rows" />
-    <TeacherView v-else-if="view === 'teacher' && tableData !== undefined"
+    <TeacherView v-else-if="view === 'teacher-lists' && tableData !== undefined"
       :column-names="tableData.columnNames"
       :rows="tableData.rows"
       :column-mappings="columnMappings" />
-    <DataSyncView v-if="view ==='data-sync' && tableData !== undefined"
+    <DataSyncView v-if="view === 'data-sync' && tableData !== undefined"
       :is-syncing-student-data="isSyncingStudentData"
       :has-syncing-student-data-failed="hasSyncingStudentDataFailed"
       :synced-student-data="syncedStudentData"
@@ -185,6 +200,8 @@ watch(testData, (v) => console.log(v))
       :has-syncing-teacher-data-failed="hasSyncingTeacherDataFailed"
       :synced-teacher-data="syncedTeacherData"
       @sync-teacher-data="resyncTeacherData" />
+    <StudentLetters v-if="view === 'student-letters' && testData !== undefined"
+      :tests="testData" />
   </div>
 </template>
 

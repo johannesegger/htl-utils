@@ -12,13 +12,17 @@
     <Compile Include="AsyncEnumerableExtensions.fs" />
     <Compile Include="WeatherForecast.fs" />
     <Compile Include="Controllers/SyncController.fs" />
+    <Compile Include="Controllers/LetterController.fs" />
     <Compile Include="Controllers/WeatherForecastController.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="itext7" Version="9.3.0" />
+    <PackageReference Include="itext7.bouncy-castle-adapter" Version="9.3.0" />
     <PackageReference Include="Microsoft.Identity.Web" Version="3.14.0" />
     <PackageReference Include="Microsoft.Identity.Web.GraphServiceClient" Version="3.14.0" />
+    <PackageReference Include="PuppeteerSharp" Version="20.2.2" />
   </ItemGroup>
 
   <ItemGroup>

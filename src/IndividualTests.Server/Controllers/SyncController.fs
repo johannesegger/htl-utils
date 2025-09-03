@@ -10,56 +10,58 @@ open Sokrates
 open System
 open System.Text.RegularExpressions
 
-type StudentIdentifierDto = {
-    FullName: string option
-    LastName: string option
-    FirstName: string option
-    ClassName: string
-}
-
 [<AutoOpen>]
-module Domain =
-    type StudentName = FullName of string | LastNameFirstName of string * string
-
-    type StudentIdentifier = private {
-        Class: string
-        Name: StudentName
+module Sync =
+    type StudentIdentifierDto = {
+        FullName: string option
+        LastName: string option
+        FirstName: string option
+        ClassName: string
     }
 
-    type TeacherName = private TeacherName of string
-    module TeacherName =
-        let create (v: string) = TeacherName (v.Trim().ToUpperInvariant())
+    [<AutoOpen>]
+    module Domain =
+        type StudentName = FullName of string | LastNameFirstName of string * string
 
-    module StudentIdentifier =
-        let tryFromDto v =
-            match v.FullName, v.LastName, v.FirstName with
-            | _, Some lastName, Some firstName ->
-                Some {
-                    Class = v.ClassName.Trim()
-                    Name = LastNameFirstName (lastName.Trim(), firstName.Trim())
-                }
-            | Some fullName, _, _ ->
-                Some {
-                    Class = v.ClassName.Trim()
-                    Name = FullName (fullName.Trim())
-                }
-            | _ -> None
+        type StudentIdentifier = private {
+            Class: string
+            Name: StudentName
+        }
 
-        let matches (sokratesStudent: Sokrates.Student) (v: StudentIdentifier) =
-            let nameMatches =
-                match v.Name with
-                | FullName fullName ->
-                    CIString fullName = CIString $"%s{sokratesStudent.LastName} %s{sokratesStudent.FirstName1}"
-                | LastNameFirstName (lastName, firstName) ->
-                    CIString lastName = CIString sokratesStudent.LastName &&
-                    CIString firstName = CIString sokratesStudent.FirstName1
-            CIString v.Class = CIString sokratesStudent.SchoolClass && nameMatches
+        type TeacherName = private TeacherName of string
+        module TeacherName =
+            let create (v: string) = TeacherName (v.Trim().ToUpperInvariant())
 
-module Serialize =
-    let gender (v: Sokrates.Gender) =
-        match v with
-        | Male -> "m"
-        | Female -> "f"
+        module StudentIdentifier =
+            let tryFromDto v =
+                match v.FullName, v.LastName, v.FirstName with
+                | _, Some lastName, Some firstName ->
+                    Some {
+                        Class = v.ClassName.Trim()
+                        Name = LastNameFirstName (lastName.Trim(), firstName.Trim())
+                    }
+                | Some fullName, _, _ ->
+                    Some {
+                        Class = v.ClassName.Trim()
+                        Name = FullName (fullName.Trim())
+                    }
+                | _ -> None
+
+            let matches (sokratesStudent: Sokrates.Student) (v: StudentIdentifier) =
+                let nameMatches =
+                    match v.Name with
+                    | FullName fullName ->
+                        CIString fullName = CIString $"%s{sokratesStudent.LastName} %s{sokratesStudent.FirstName1}"
+                    | LastNameFirstName (lastName, firstName) ->
+                        CIString lastName = CIString sokratesStudent.LastName &&
+                        CIString firstName = CIString sokratesStudent.FirstName1
+                CIString v.Class = CIString sokratesStudent.SchoolClass && nameMatches
+
+    module Serialize =
+        let gender (v: Sokrates.Gender) =
+            match v with
+            | Male -> "m"
+            | Female -> "f"
 
 [<ApiController>]
 [<Route("api/sync")>]

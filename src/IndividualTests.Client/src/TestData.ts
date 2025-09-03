@@ -6,20 +6,23 @@ export type TimeOfDay = {
   hours: number
 }
 export type TestPart = {
-   type: 'exact-time-span',
-   begin: TimeOfDay,
-   end: TimeOfDay,
+  type: 'exact-time-span',
+  begin: TimeOfDay,
+  end: TimeOfDay,
+  room: string | undefined,
 } | {
   type: 'exact-time',
   time: TimeOfDay,
+  room: string | undefined,
 } | {
   type: 'begin-time',
   time: TimeOfDay,
+  room: string | undefined,
 } | {
-  type: 'afterwards'
+  type: 'afterwards',
+  room: string | undefined,
 }
 export type TestData = {
-  testType: 'Wiederholungsprüfung' | 'NOSTPrüfung' | 'Übertrittsprüfung' | 'Semesterprüfung'
   student: {
     lastName: string | undefined
     firstName: string | undefined
@@ -40,11 +43,10 @@ export type TestData = {
     firstName: string | undefined
     mailAddress: string | undefined
   }
-  teacher2: TestData['teacher1'] | undefined
+  teacher2: TestData['teacher1']
   date: Date | undefined
   partWritten: TestPart | undefined
   partOral: TestPart | undefined
-  room: string | undefined
   additionalData: {
     columnName: string
     value: string
@@ -52,7 +54,7 @@ export type TestData = {
 }
 
 export namespace TestData {
-  export const createTestPart = (begin: MappedCell | undefined, end: MappedCell | undefined) : TestPart | undefined => {
+  export const createTestPart = (begin: MappedCell | undefined, end: MappedCell | undefined, room: MappedCell | undefined) : TestPart | undefined => {
     if (begin === undefined || end === undefined) {
       return undefined
     }
@@ -61,7 +63,8 @@ export namespace TestData {
       return {
         type: 'exact-time-span',
         begin: { hours: begin.value.getHours() + begin.value.getMinutes() / 60 },
-        end: { hours: end.value.getHours() + end.value.getMinutes() / 60 }
+        end: { hours: end.value.getHours() + end.value.getMinutes() / 60 },
+        room: room?.text
       }
     }
     // TODO match other types, not necessary at the moment
@@ -79,7 +82,7 @@ export namespace TestData {
     teacherData: TeacherDto[] | undefined) => {
       
     if (tableData === undefined) {
-      return []
+      return undefined
     }
 
     return tableData.rows.map((row) : TestData => {
@@ -102,7 +105,6 @@ export namespace TestData {
       const teacher2Identifier = row.find(v => v.mappedToColumn === 'teacher2')?.value as (string | undefined)
       const teacher2 = teacherData?.flatMap(v => v.type === 'exact-match' && _.isEqual(v.name, teacher2Identifier) ? [ v.data ] : [])[0]
       return {
-        testType: 'Wiederholungsprüfung',
         student: {
           lastName: student?.lastName || lastName || fullName?.split(' ')[0],
           firstName: student?.firstName || firstName || fullName?.split(' ')[1],
@@ -125,9 +127,8 @@ export namespace TestData {
           mailAddress: teacher2?.mailAddress,
         },
         date: row.find(v => v.mappedToColumn === 'date')?.value as (Date | undefined),
-        partWritten: createTestPart(row.find(v => v.mappedToColumn === 'beginWritten'), row.find(v => v.mappedToColumn === 'endWritten')),
-        partOral: createTestPart(row.find(v => v.mappedToColumn === 'beginOral'), row.find(v => v.mappedToColumn === 'endOral')),
-        room: row.find(v => v.mappedToColumn === 'room')?.value as string | undefined,
+        partWritten: createTestPart(row.find(v => v.mappedToColumn === 'beginWritten'), row.find(v => v.mappedToColumn === 'endWritten'), row.find(v => v.mappedToColumn === 'roomWritten')),
+        partOral: createTestPart(row.find(v => v.mappedToColumn === 'beginOral'), row.find(v => v.mappedToColumn === 'endOral'), row.find(v => v.mappedToColumn === 'roomOral')),
         additionalData: row.flatMap((v, idx) => v.mappedToColumn === undefined ? [{ columnName: tableData.columnNames[idx], value: v.text }] : [])
       }
     })
