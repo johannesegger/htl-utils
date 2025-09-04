@@ -1,12 +1,15 @@
 namespace IndividualTests.Server.Controllers
 
+open FsToolkit.ErrorHandling
 open iText.Kernel.Pdf
 open iText.Kernel.Utils
 open IndividualTests.Server
 open Microsoft.AspNetCore.Authorization
+open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.Logging
+open Microsoft.Graph
 open PuppeteerSharp
 open System
 open System.Globalization
@@ -64,9 +67,16 @@ module Letter =
             |} list
         }
 
-        type StudentLettersDto = {
+        type GenerateStudentLettersDto = {
             Tests: TestData list
             LetterText: string
+        }
+
+        type SendStudentLettersDto = {
+            Tests: TestData list
+            LetterText: string
+            MailSubject: string
+            MailText: string
         }
 
     module Domain =
@@ -372,28 +382,34 @@ module Letter =
                 (student, document)
             )
 
-        let studentLetterToPdf (browser: IBrowser) (student: Student) (htmlLetter: string) = async {
-            return! Async.AwaitTask (task {
-                let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
-                File.WriteAllText(htmlFilePath, htmlLetter)
-                use! page = browser.NewPageAsync()
-                let! _ = page.GoToAsync(Uri(htmlFilePath).AbsoluteUri)
-                return! page.PdfDataAsync(
-                    PdfOptions(
-                        PrintBackground = true,
-                        DisplayHeaderFooter = true,
-                        Format = PuppeteerSharp.Media.PaperFormat.A4,
-                        MarginOptions = PuppeteerSharp.Media.MarginOptions(
-                            Top = "0cm",
-                            Left = "0cm",
-                            Right = "0cm",
-                            Bottom = "1cm"
-                        ),
-                        FooterTemplate = $"""<div style="font-family: &quot;Segoe UI Light&quot;; width: 297mm; font-size: 12px">
-                            <div style="margin-right: 1cm; text-align: right;"><span>%s{student.ClassName |> Option.defaultValue ""}</span></div>
-                        </div>"""
-                    ))
-            })
+        let startBrowser = async {
+            let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlvb-individual-tests-browser")
+            let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
+            let! downloadedBrowser = browserFetcher.DownloadAsync() |> Async.AwaitTask
+            return! Puppeteer.LaunchAsync(LaunchOptions(Headless = true, Browser = downloadedBrowser.Browser, ExecutablePath = downloadedBrowser.GetExecutablePath())) |> Async.AwaitTask
+        }
+
+        let studentLetterToPdf (student: Student) (htmlLetter: string) = async {
+            use! browser = startBrowser
+            let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
+            File.WriteAllText(htmlFilePath, htmlLetter)
+            use! page = browser.NewPageAsync() |> Async.AwaitTask
+            let! _ = page.GoToAsync(Uri(htmlFilePath).AbsoluteUri) |> Async.AwaitTask
+            return! page.PdfDataAsync(
+                PdfOptions(
+                    PrintBackground = true,
+                    DisplayHeaderFooter = true,
+                    Format = PuppeteerSharp.Media.PaperFormat.A4,
+                    MarginOptions = PuppeteerSharp.Media.MarginOptions(
+                        Top = "0cm",
+                        Left = "0cm",
+                        Right = "0cm",
+                        Bottom = "1cm"
+                    ),
+                    FooterTemplate = $"""<div style="font-family: &quot;Segoe UI Light&quot;; width: 297mm; font-size: 12px">
+                        <div style="margin-right: 1cm; text-align: right;"><span>%s{student.ClassName |> Option.defaultValue ""}</span></div>
+                    </div>"""
+                )) |> Async.AwaitTask
         }
 
         let combinePdfs docs =
@@ -412,29 +428,79 @@ module Letter =
                 )
             stream.ToArray()
 
+        let sendMail (graphClient: GraphServiceClient) toMailAddress subject content (pdfLetterName, pdfLetterContent) = async {
+            let message = new Models.Message(
+                ToRecipients =
+                    Collections.Generic.List<_>([
+                        Models.Recipient(
+                            EmailAddress = Models.EmailAddress(Address = toMailAddress)
+                        )
+                    ]),
+                // From = Models.Recipient(EmailAddress = Models.EmailAddress(Address = "office@htlvb.at")),
+                Subject = subject,
+                Body = new Models.ItemBody(
+                    ContentType = Models.BodyType.Text,
+                    Content = content
+                ),
+                Attachments = Collections.Generic.List<_>([
+                    Models.FileAttachment(
+                        Name = pdfLetterName,
+                        ContentType = "application/pdf",
+                        ContentBytes = pdfLetterContent
+                    ) :> Models.Attachment
+                ])
+            )
+            do! graphClient.Me.SendMail.PostAsync(Me.SendMail.SendMailPostRequestBody(Message = message)) |> Async.AwaitTask
+        }
+
 [<ApiController>]
 [<Route("api/letter")>]
 [<Authorize>]
-type LetterController (config: IConfiguration, logger : ILogger<LetterController>) =
+type LetterController (graphClient: GraphServiceClient, config: IConfiguration, logger : ILogger<LetterController>) =
     inherit ControllerBase()
 
     [<HttpQuery>]
     [<Route("students")>]
-    member this.GenerateStudentLetters ([<FromBody>]data: Dto.StudentLettersDto) = async {
-        let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlvb-individual-tests-browser")
-        let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
-        let! downloadedBrowser = browserFetcher.DownloadAsync() |> Async.AwaitTask
-        use! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true, Browser = downloadedBrowser.Browser, ExecutablePath = downloadedBrowser.GetExecutablePath())) |> Async.AwaitTask
-
+    member this.GenerateStudentLetters ([<FromBody>]data: Dto.GenerateStudentLettersDto) = async {
         let documentTemplate = File.ReadAllText config.["StudentLetterDocumentTemplatePath"]
         let contentTemplate = File.ReadAllText config.["StudentLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
         let testRowTemplate = File.ReadAllText config.["StudentLetterTestRowTemplatePath"]
         let tests = data.Tests |> List.map Domain.TestData.fromDto
         let! pdfLetters =
             Domain.generateStudentLetters (documentTemplate, contentTemplate, testRowTemplate) tests
-            |> List.map (fun (student, htmlLetter) -> Domain.studentLetterToPdf browser student htmlLetter)
+            |> List.map (fun (student, htmlLetter) -> Domain.studentLetterToPdf student htmlLetter)
             |> Async.Sequential
         return this.File(Domain.combinePdfs pdfLetters, MediaTypeNames.Application.Pdf)
+    }
+
+    [<HttpPost>]
+    [<Route("students")>]
+    member this.SendStudentLetters ([<FromBody>]data: Dto.SendStudentLettersDto) = async {
+        let documentTemplate = File.ReadAllText config.["StudentLetterDocumentTemplatePath"]
+        let contentTemplate = File.ReadAllText config.["StudentLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
+        let testRowTemplate = File.ReadAllText config.["StudentLetterTestRowTemplatePath"]
+        let tests = data.Tests |> List.map Domain.TestData.fromDto
+        let! sendResults =
+            Domain.generateStudentLetters (documentTemplate, contentTemplate, testRowTemplate) tests
+            |> List.map (fun (student, htmlLetter) -> async {
+                let studentMailAddress = Some "eggj@htlvb.at" // student.MailAddress
+                match studentMailAddress with
+                | Some studentMailAddress ->
+                    let! pdfLetter = Domain.studentLetterToPdf student htmlLetter
+                    try
+                        let letterFileName =
+                            match student.LastName, student.FirstName with
+                            | Some studentLastName, Some studentFirstName -> $"Einteilung zu Wiederholungsprüfungen %s{studentFirstName} %s{studentLastName}.pdf"
+                            | _, _ -> "Einteilung zu Wiederholungsprüfungen.pdf"
+                        do! Domain.sendMail graphClient studentMailAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
+                        return Ok ()
+                    with e -> return Error {| Type = "sending-mail-failed"; StudentMailAddress = Some studentMailAddress; Student = None |}
+                | None -> return Error {| Type = "student-has-no-mail-address"; StudentMailAddress = None; Student = Some {| ClassName = student.ClassName; LastName = student.LastName; FirstName = student.FirstName |} |}
+            })
+            |> Async.Sequential
+        match Array.sequenceResultA sendResults with
+        | Ok _ -> return this.Ok() :> IActionResult
+        | Error errors -> return this.StatusCode(StatusCodes.Status500InternalServerError, errors)
     }
 
     [<HttpQuery>]
