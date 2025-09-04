@@ -45,6 +45,9 @@ watch(mailSubject, v => store('student-letter-mail-subject', v))
 const mailText = ref(localStorage.getItem('student-letter-mail-text') || undefined)
 watch(mailText, v => store('student-letter-mail-text', v))
 
+const useMailToAddress = ref(false)
+const mailToAddress = ref('')
+
 const isSendingLetters = ref(false)
 const hasSendingLettersFailed = ref(false)
 type SendLetterError =
@@ -60,7 +63,7 @@ const sendLetters = async () => {
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ tests: props.tests, letterText: letterText.value, mailSubject: mailSubject.value, mailText: mailText.value })
+    body: JSON.stringify({ tests: props.tests, letterText: letterText.value, mailSubject: mailSubject.value, mailText: mailText.value, overwriteMailTo: useMailToAddress.value ? mailToAddress.value : undefined })
   })
   if (result.succeeded) {
     sendingLettersSucceeded.value = true
@@ -104,6 +107,14 @@ const getStudentName = (v: StudentIdentifierDto) => {
         <div class="flex flex-col">
           <span class="input-label">Mailinhalt</span>
           <textarea v-model="mailText" class="input-text" rows="7"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" v-model="useMailToAddress" />
+            Testweise alle Mails an folgende Adresse senden:
+          </label>
+          <input type="email" :disabled="useMailToAddress === false" v-model="mailToAddress" class="input-text" />
         </div>
 
         <div class="flex items-center gap-2">

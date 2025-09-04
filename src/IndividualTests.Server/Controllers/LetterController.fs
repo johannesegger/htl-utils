@@ -77,6 +77,7 @@ module Letter =
             LetterText: string
             MailSubject: string
             MailText: string
+            OverwriteMailTo: string option
         }
 
     module Domain =
@@ -428,12 +429,12 @@ module Letter =
                 )
             stream.ToArray()
 
-        let sendMail (graphClient: GraphServiceClient) toMailAddress subject content (pdfLetterName, pdfLetterContent) = async {
+        let sendMail (graphClient: GraphServiceClient) mailToAddress subject content (pdfLetterName, pdfLetterContent) = async {
             let message = new Models.Message(
                 ToRecipients =
                     Collections.Generic.List<_>([
                         Models.Recipient(
-                            EmailAddress = Models.EmailAddress(Address = toMailAddress)
+                            EmailAddress = Models.EmailAddress(Address = mailToAddress)
                         )
                     ]),
                 // From = Models.Recipient(EmailAddress = Models.EmailAddress(Address = "office@htlvb.at")),
@@ -483,18 +484,17 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
         let! sendResults =
             Domain.generateStudentLetters (documentTemplate, contentTemplate, testRowTemplate) tests
             |> List.map (fun (student, htmlLetter) -> async {
-                let studentMailAddress = Some "eggj@htlvb.at" // student.MailAddress
-                match studentMailAddress with
-                | Some studentMailAddress ->
+                match data.OverwriteMailTo |> Option.orElse student.MailAddress with
+                | Some mailToAddress ->
                     let! pdfLetter = Domain.studentLetterToPdf student htmlLetter
                     try
                         let letterFileName =
                             match student.LastName, student.FirstName with
                             | Some studentLastName, Some studentFirstName -> $"Einteilung zu Wiederholungsprüfungen %s{studentFirstName} %s{studentLastName}.pdf"
                             | _, _ -> "Einteilung zu Wiederholungsprüfungen.pdf"
-                        do! Domain.sendMail graphClient studentMailAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
+                        do! Domain.sendMail graphClient mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
                         return Ok ()
-                    with e -> return Error {| Type = "sending-mail-failed"; StudentMailAddress = Some studentMailAddress; Student = None |}
+                    with e -> return Error {| Type = "sending-mail-failed"; StudentMailAddress = Some mailToAddress; Student = None |}
                 | None -> return Error {| Type = "student-has-no-mail-address"; StudentMailAddress = None; Student = Some {| ClassName = student.ClassName; LastName = student.LastName; FirstName = student.FirstName |} |}
             })
             |> Async.Sequential
