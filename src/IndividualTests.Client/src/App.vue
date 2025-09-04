@@ -12,6 +12,7 @@ import DataSyncView from './DataSyncView.vue'
 import { syncStudentData, syncTeacherData, type StudentDto, type TeacherDto } from './DataSync'
 import { TestData } from './TestData'
 import StudentLetters from './StudentLetters.vue'
+import TeacherLetters from './TeacherLetters.vue'
 
 const dataFile = ref<File>()
 const doc = ref<XLSX.WorkBook>()
@@ -201,6 +202,8 @@ const teacherLettersError = computed(() => {
       :synced-teacher-data="syncedTeacherData"
       @sync-teacher-data="resyncTeacherData" />
     <StudentLetters v-if="view === 'student-letters' && testData !== undefined"
+      :tests="testData" />
+    <TeacherLetters v-if="view === 'teacher-letters' && testData !== undefined"
       :tests="testData" />
   </div>
 </template>

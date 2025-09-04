@@ -2,22 +2,21 @@
 import { ref, watch } from 'vue'
 import { uiFetch } from './UIFetch'
 import type { TestData } from './TestData'
-import type { StudentIdentifierDto } from './DataSync'
 import { load, store } from './Store'
-import { replacer } from './Json'
+import { replacer } from './Json';
 
 const props = defineProps<{
   tests: TestData[]
 }>()
 
-const letterText = ref(load('student-letter-text'))
-watch(letterText, v => store('student-letter-text', v))
+const letterText = ref(localStorage.getItem('teacher-letter-text') || undefined)
+watch(letterText, v => store('teacher-letter-text', v))
 
 const isGeneratingLetters = ref(false)
 const hasGeneratingLettersFailed = ref(false)
 const pdfObjectUrl = ref<string>()
 const generateLetters = async () => {
-  const result = await uiFetch(isGeneratingLetters, hasGeneratingLettersFailed, '/api/letter/students', {
+  const result = await uiFetch(isGeneratingLetters, hasGeneratingLettersFailed, '/api/letter/teachers', {
     method: 'QUERY',
     headers: {
       'Content-Type': 'application/json'
@@ -33,10 +32,10 @@ const generateLetters = async () => {
   }
 }
 
-const mailSubject = ref(localStorage.getItem('student-letter-mail-subject') || undefined)
-watch(mailSubject, v => store('student-letter-mail-subject', v))
-const mailText = ref(localStorage.getItem('student-letter-mail-text') || undefined)
-watch(mailText, v => store('student-letter-mail-text', v))
+const mailSubject = ref(load('teacher-letter-mail-subject'))
+watch(mailSubject, v => store('teacher-letter-mail-subject', v))
+const mailText = ref(load('teacher-letter-mail-text'))
+watch(mailText, v => store('teacher-letter-mail-text', v))
 
 const useMailToAddress = ref(false)
 const mailToAddress = ref('')
@@ -44,14 +43,14 @@ const mailToAddress = ref('')
 const isSendingLetters = ref(false)
 const hasSendingLettersFailed = ref(false)
 type SendLetterError =
-  { type: 'sending-mail-failed', studentMailAddress: string } |
-  { type: 'student-has-no-mail-address', student: StudentIdentifierDto }
+  { type: 'sending-mail-failed', teacherMailAddress: string } |
+  { type: 'teacher-has-no-mail-address', teacherShortName: string | undefined }
 const sendLetterErrors = ref([] as SendLetterError[])
 const sendingLettersSucceeded = ref(false)
 const sendLetters = async () => {
   sendLetterErrors.value = []
   sendingLettersSucceeded.value = false
-  const result = await uiFetch(isSendingLetters, hasSendingLettersFailed, '/api/letter/students', {
+  const result = await uiFetch(isSendingLetters, hasSendingLettersFailed, '/api/letter/teachers', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -63,15 +62,6 @@ const sendLetters = async () => {
   }
   else if (result.response !== undefined) {
     sendLetterErrors.value = await result.response.json()
-  }
-}
-
-const getStudentName = (v: StudentIdentifierDto) => {
-  if ('fullName' in v) {
-    return `${v.fullName} (${v.className})`
-  }
-  else {
-    return `${v.lastName} ${v.firstName} (${v.className})`
   }
 }
 </script>
@@ -113,18 +103,18 @@ const getStudentName = (v: StudentIdentifierDto) => {
         <div class="flex items-center gap-2">
           <button class="btn text-red-800" :disabled="tests.length === 0 || isSendingLetters" @click="sendLetters">Briefe per Mail versenden</button>
           <span v-if="hasSendingLettersFailed" class="text-red-800">Fehler beim Versenden der Briefe.</span>
-          <span v-else-if="sendingLettersSucceeded" class="text-green-500">Alle Schülerbriefe wurden erfolgreich versendet.</span>
+          <span v-else-if="sendingLettersSucceeded" class="text-green-500">Alle Lehrerbriefe wurden erfolgreich versendet.</span>
         </div>
 
         <ul v-if="sendLetterErrors" class="list-disc ml-4">
           <li v-for="error in sendLetterErrors" :key="JSON.stringify(error)" class="text-red-800">
-            <span v-if="error.type === 'sending-mail-failed'">Fehler beim Senden der Mail an {{ error.studentMailAddress }}.</span>
-            <span v-else-if="error.type === 'student-has-no-mail-address'">Mail-Adresse von {{ getStudentName(error.student) }} wurde nicht gefunden.</span>
+            <span v-if="error.type === 'sending-mail-failed'">Fehler beim Senden der Mail an {{ error.teacherMailAddress }}.</span>
+            <span v-else-if="error.type === 'teacher-has-no-mail-address'">Mail-Adresse von {{ error.teacherShortName }} wurde nicht gefunden.</span>
           </li>
         </ul>
       </div>
     </div>
 
-    <iframe v-if="pdfObjectUrl !== undefined" :src="pdfObjectUrl" class="w-[210mm] h-[297mm]"></iframe>
+    <iframe v-if="pdfObjectUrl !== undefined" :src="pdfObjectUrl" class="w-[297mm] h-[210mm]"></iframe>
   </div>
 </template>

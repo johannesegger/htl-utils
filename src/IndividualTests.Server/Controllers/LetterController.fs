@@ -67,12 +67,12 @@ module Letter =
             |} list
         }
 
-        type GenerateStudentLettersDto = {
+        type GenerateLettersDto = {
             Tests: TestData list
             LetterText: string
         }
 
-        type SendStudentLettersDto = {
+        type SendLettersDto = {
             Tests: TestData list
             LetterText: string
             MailSubject: string
@@ -290,46 +290,42 @@ module Letter =
                     |> List.sortBy TestData.toSortable
                     |> List.map (fun test ->
                         let additionalProperties = [
-                            "row-class", (if test.Teacher1.ShortName = Some teacherShortName then "is-pruefer" else "is-beisitz")
-                            "pruefer-reference", (if test.Teacher2 |> Option.bind _.ShortName = Some teacherShortName then sprintf "s. %s" (test.Teacher1.ShortName |> Option.defaultValue "Prüfer") else "&nbsp;")
+                            "row-class", (if test.Teacher1.ShortName = teacherShortName then "is-pruefer" else "is-beisitz")
+                            "pruefer-reference", (if test.Teacher2 |> Option.bind _.ShortName = teacherShortName then sprintf "s. %s" (test.Teacher1.ShortName |> Option.defaultValue "Prüfer") else "&nbsp;")
                         ]
                         generateTestRow testRowTemplate additionalProperties test
                     )
                     |> String.concat ""
                 letterTemplate
                 |> String.replace "{{date}}" (date |> Option.map Date.toString |> Option.defaultValue "-")
-                |> String.replace "{{teacherShortName}}" teacherShortName
+                |> String.replace "{{teacherShortName}}" (teacherShortName |> Option.defaultValue "-")
                 |> String.replace "{{testTableRows}}" testTableRows
             )
             |> String.concat ""
 
-        let generateTeacherLetters (documentTemplate, letterTemplate, testRowTemplate) tests includeRoom =
-            let teachers =
-                tests
-                |> List.collect (fun v -> [ yield! Option.toList v.Teacher1.ShortName; yield! v.Teacher2 |> Option.bind _.ShortName |> Option.toList ])
-                |> List.distinct
-                |> List.sort
-            let letters =
-                teachers
-                |> List.map (fun teacherShortName ->
-                    let teacherTests =
-                        tests
-                        |> List.filter (fun v -> Some teacherShortName = v.Teacher1.ShortName || Some teacherShortName = (v.Teacher2 |> Option.bind _.ShortName))
-                    let teacherLetter = generateTeacherLetter letterTemplate testRowTemplate teacherShortName teacherTests
-                    (teacherShortName, teacherLetter)
-                )
-
-            let includeRoomStyle =
+        let generateTeacherLetters (documentTemplate, letterTemplate, testRowTemplate) tests =
+            let includeRoom = tests |> List.exists (fun v -> v.PartOral |> Option.bind TestPart.tryGetRoom |> Option.isSome)
+            let styles = [
                 if includeRoom then ".room-unavailable { display: none; }"
                 else ".room-available { display: none; }"
-            letters
-            |> List.map (fun (teacherShortName, content) ->
+            ]
+            let teachers =
+                tests
+                |> List.collect (fun v -> [ v.Teacher1; yield! Option.toList v.Teacher2 ])
+                |> List.distinctBy _.ShortName
+                |> List.sort
+            teachers
+            |> List.map (fun teacher ->
+                let teacherTests =
+                    tests
+                    |> List.filter (fun v -> teacher.ShortName = v.Teacher1.ShortName || (v.Teacher2 |> Option.exists (fun t -> t.ShortName = teacher.ShortName)))
+                let teacherLetter = generateTeacherLetter letterTemplate testRowTemplate teacher.ShortName teacherTests
                 let document =
                     documentTemplate
-                    |> String.replace "{{header}}" $"<style>%s{includeRoomStyle}</style>"
-                    |> String.replace "{{teacherShortName}}" teacherShortName
-                    |> String.replace "{{content}}" content
-                (teacherShortName, document)
+                    |> String.replace "{{header}}" $"""<style>%s{styles |> String.concat "\n"}</style>"""
+                    |> String.replace "{{teacherShortName}}" (teacher.ShortName |> Option.defaultValue "-")
+                    |> String.replace "{{content}}" teacherLetter
+                (teacher, document)
             )
 
         let generateStudentLetter letterTemplate testRowTemplate student tests =
@@ -390,6 +386,33 @@ module Letter =
             return! Puppeteer.LaunchAsync(LaunchOptions(Headless = true, Browser = downloadedBrowser.Browser, ExecutablePath = downloadedBrowser.GetExecutablePath())) |> Async.AwaitTask
         }
 
+        let teacherLetterToPdf teacherShortName (htmlLetter: string) = async {
+            use! browser = startBrowser
+            let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
+            File.WriteAllText(htmlFilePath, htmlLetter)
+            use! page = browser.NewPageAsync() |> Async.AwaitTask
+            let! _ = page.GoToAsync(Uri(htmlFilePath).AbsoluteUri) |> Async.AwaitTask
+            return! page.PdfDataAsync(
+                PdfOptions(
+                    PrintBackground = true,
+                    DisplayHeaderFooter = true,
+                    Format = PuppeteerSharp.Media.PaperFormat.A4,
+                    Landscape = true,
+                    MarginOptions = PuppeteerSharp.Media.MarginOptions(
+                        Top = "1cm",
+                        Left = "1cm",
+                        Right = "1cm",
+                        Bottom = "1cm"
+                    ),
+                    HeaderTemplate = $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; text-align: center; font-size: 12px">
+                        <span>%s{Option.defaultValue "-" teacherShortName}</span>
+                    </div>""",
+                    FooterTemplate = $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; text-align: center; font-size: 12px">
+                        Seite <span class="pageNumber"></span>/<span class="totalPages"></span>
+                    </div>"""
+                )) |> Async.AwaitTask
+        }
+
         let studentLetterToPdf (student: Student) (htmlLetter: string) = async {
             use! browser = startBrowser
             let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
@@ -407,7 +430,7 @@ module Letter =
                         Right = "0cm",
                         Bottom = "1cm"
                     ),
-                    FooterTemplate = $"""<div style="font-family: &quot;Segoe UI Light&quot;; width: 297mm; font-size: 12px">
+                    FooterTemplate = $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; font-size: 12px">
                         <div style="margin-right: 1cm; text-align: right;"><span>%s{student.ClassName |> Option.defaultValue ""}</span></div>
                     </div>"""
                 )) |> Async.AwaitTask
@@ -437,7 +460,6 @@ module Letter =
                             EmailAddress = Models.EmailAddress(Address = mailToAddress)
                         )
                     ]),
-                // From = Models.Recipient(EmailAddress = Models.EmailAddress(Address = "office@htlvb.at")),
                 Subject = subject,
                 Body = new Models.ItemBody(
                     ContentType = Models.BodyType.Text,
@@ -462,7 +484,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
 
     [<HttpQuery>]
     [<Route("students")>]
-    member this.GenerateStudentLetters ([<FromBody>]data: Dto.GenerateStudentLettersDto) = async {
+    member this.GenerateStudentLetters ([<FromBody>]data: Dto.GenerateLettersDto) = async {
         let documentTemplate = File.ReadAllText config.["StudentLetterDocumentTemplatePath"]
         let contentTemplate = File.ReadAllText config.["StudentLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
         let testRowTemplate = File.ReadAllText config.["StudentLetterTestRowTemplatePath"]
@@ -476,7 +498,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
 
     [<HttpPost>]
     [<Route("students")>]
-    member this.SendStudentLetters ([<FromBody>]data: Dto.SendStudentLettersDto) = async {
+    member this.SendStudentLetters ([<FromBody>]data: Dto.SendLettersDto) = async {
         let documentTemplate = File.ReadAllText config.["StudentLetterDocumentTemplatePath"]
         let contentTemplate = File.ReadAllText config.["StudentLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
         let testRowTemplate = File.ReadAllText config.["StudentLetterTestRowTemplatePath"]
@@ -505,6 +527,43 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
 
     [<HttpQuery>]
     [<Route("teachers")>]
-    member _.GenerateTeacherLetters () = async {
-        return ()
+    member this.GenerateTeacherLetters ([<FromBody>]data: Dto.GenerateLettersDto) = async {
+        let documentTemplate = File.ReadAllText config.["TeacherLetterDocumentTemplatePath"]
+        let contentTemplate = File.ReadAllText config.["TeacherLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
+        let testRowTemplate = File.ReadAllText config.["TeacherLetterTestRowTemplatePath"]
+        let tests = data.Tests |> List.map Domain.TestData.fromDto
+        let! pdfLetters =
+            Domain.generateTeacherLetters (documentTemplate, contentTemplate, testRowTemplate) tests
+            |> List.map (fun (teacher, htmlLetter) -> Domain.teacherLetterToPdf teacher.ShortName htmlLetter)
+            |> Async.Sequential
+        return this.File(Domain.combinePdfs pdfLetters, MediaTypeNames.Application.Pdf)
+    }
+
+    [<HttpPost>]
+    [<Route("teachers")>]
+    member this.SendTeacherLetters ([<FromBody>]data: Dto.SendLettersDto) = async {
+        let documentTemplate = File.ReadAllText config.["TeacherLetterDocumentTemplatePath"]
+        let contentTemplate = File.ReadAllText config.["TeacherLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
+        let testRowTemplate = File.ReadAllText config.["TeacherLetterTestRowTemplatePath"]
+        let tests = data.Tests |> List.map Domain.TestData.fromDto
+        let! sendResults =
+            Domain.generateTeacherLetters (documentTemplate, contentTemplate, testRowTemplate) tests
+            |> List.map (fun (teacher, htmlLetter) -> async {
+                match data.OverwriteMailTo |> Option.orElse teacher.MailAddress with
+                | Some mailToAddress ->
+                    let! pdfLetter = Domain.teacherLetterToPdf teacher.ShortName htmlLetter
+                    try
+                        let letterFileName =
+                            match teacher.ShortName with
+                            | Some teacherShortName -> $"Einteilung zu Wiederholungsprüfungen %s{teacherShortName}.pdf"
+                            | _ -> "Einteilung zu Wiederholungsprüfungen.pdf"
+                        do! Domain.sendMail graphClient mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
+                        return Ok ()
+                    with e -> return Error {| Type = "sending-mail-failed"; TeacherMailAddress = Some mailToAddress; TeacherShortName = None |}
+                | None -> return Error {| Type = "teacher-has-no-mail-address"; TeacherMailAddress = None; TeacherShortName = teacher.ShortName |}
+            })
+            |> Async.Sequential
+        match Array.sequenceResultA sendResults with
+        | Ok _ -> return this.Ok() :> IActionResult
+        | Error errors -> return this.StatusCode(StatusCodes.Status500InternalServerError, errors)
     }
