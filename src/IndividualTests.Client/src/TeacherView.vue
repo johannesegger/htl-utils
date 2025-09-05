@@ -60,26 +60,34 @@ const teacherTables = computed(() => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <div v-for="table in teacherTables" :key="table.teacher" class="flex flex-col gap-2">
-      <h2 class="text-xl text-blue-800">{{ table.teacher }}</h2>
-      <table>
-        <thead class="bg-blue-500/25">
-          <tr>
-            <th v-for="columnName in columnNames" :key="columnName" class="px-2 py-1 border border-gray-300 cursor-pointer" @click="setTeacherSortColumn(columnName)">
-              <div class="flex gap-2">
-                <span>{{ columnName }}</span>
-                <span v-if="teacherDataSortColumns.some(v => v.name === columnName && v.direction === 'asc')">↑</span>
-                <span v-else-if="teacherDataSortColumns.some(v => v.name === columnName && v.direction === 'desc')">↓</span>
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in table.rows" :key="JSON.stringify(row)">
-            <td v-for="col in row" :key="col.text" class="px-2 py-1 border border-gray-300" :class="{ 'bg-yellow-300/50': col.mappedToColumn !== undefined && col.value === undefined, 'bg-green-500/50': col.mappedToColumn !== undefined && col.value !== undefined }">{{ col.text }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="flex items-center gap-2">
+      <span class="shrink-0">Springe zu:</span>
+      <div class="flex flex-wrap gap-2">
+        <a v-for="teacher in teacherTables.map(v => v.teacher)" :key="teacher" :href="`#${teacher}`" class="text-blue-800 hover:underline">{{ teacher }}</a>
+      </div>
+    </div>
+    <div class="flex flex-col gap-4">
+      <div v-for="table in teacherTables" :key="table.teacher" class="flex flex-col gap-2">
+        <h2 :id="table.teacher" class="text-xl text-blue-800">{{ table.teacher }}</h2>
+        <table>
+          <thead class="bg-blue-500/25">
+            <tr>
+              <th v-for="columnName in columnNames" :key="columnName" class="px-2 py-1 border border-gray-300 cursor-pointer" @click="setTeacherSortColumn(columnName)">
+                <div class="flex gap-2">
+                  <span>{{ columnName }}</span>
+                  <span v-if="teacherDataSortColumns.some(v => v.name === columnName && v.direction === 'asc')">↑</span>
+                  <span v-else-if="teacherDataSortColumns.some(v => v.name === columnName && v.direction === 'desc')">↓</span>
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in table.rows" :key="JSON.stringify(row)">
+              <td v-for="col in row" :key="col.text" class="px-2 py-1 border border-gray-300" :class="{ 'bg-yellow-300/50': col.mappedToColumn !== undefined && col.value === undefined, 'bg-green-500/50': col.mappedToColumn !== undefined && col.value !== undefined }">{{ col.text }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
