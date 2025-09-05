@@ -11,8 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Expecto" Version="9.*" />
-    <PackageReference Include="YoloDev.Expecto.TestSdk" Version="0.*" />
+    <PackageReference Include="Expecto" Version="10.*" />
+    <PackageReference Include="YoloDev.Expecto.TestSdk" Version="0.14.*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.*" />
   </ItemGroup>
 
