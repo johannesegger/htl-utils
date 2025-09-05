@@ -36,4 +36,4 @@ jobs:
           context: ./
           file: ./src/IndividualTests.Server/Dockerfile
           push: true
-          tags: ghcr.io/htlvb/individual-tests:${{ github.sha }}
+          tags: ghcr.io/johannesegger/individual-tests:${{ github.sha }}
