@@ -8,7 +8,7 @@ import { Cell } from './Excel'
 import ListView from './ListView.vue'
 import TeacherView from './TeacherView.vue'
 import DataSyncView from './DataSyncView.vue'
-import { syncStudentData, syncTeacherData, type StudentDto, type TeacherDto } from './DataSync'
+import { getStudentDataSyncErrors, getTeacherDataSyncErrors, syncStudentData, syncTeacherData, type StudentDto, type TeacherDto } from './DataSync'
 import { TestData } from './TestData'
 import StudentLetters from './StudentLetters.vue'
 import TeacherLetters from './TeacherLetters.vue'
@@ -141,6 +141,11 @@ const resyncTeacherData = async () => {
 watch(teacherNames, async () => {
   await resyncTeacherData()
 }, { immediate: true })
+const hasSyncErrors = computed(() => {
+  if (syncedStudentData.value === undefined || syncedTeacherData.value === undefined) return false
+  return (syncedStudentData.value !== undefined && getStudentDataSyncErrors(syncedStudentData.value).length > 0) ||
+    (syncedTeacherData.value !== undefined && getTeacherDataSyncErrors(syncedTeacherData.value).length > 0)
+})
 
 const testData = computed<TestData[] | undefined>(() => {
   return TestData.create(tableData.value, syncedStudentData.value, syncedTeacherData.value)
@@ -175,7 +180,7 @@ const teacherLettersError = computed(() => {
       <div class="flex gap-2">
         <button class="btn" :class="{ 'bg-green-500 text-white': view === 'test-list' }" @click="view = 'test-list'">Prüfungsliste</button>
         <button class="btn" :disabled="teacherViewError !== undefined" :title="teacherViewError" :class="{ 'bg-green-500 text-white': view === 'teacher-lists' }" @click="view = 'teacher-lists'">Lehrerlisten</button>
-        <button class="btn" :disabled="dataSyncError !== undefined" :title="dataSyncError" :class="{ 'bg-green-500 text-white': view === 'data-sync' }" @click="view = 'data-sync'">Datenabgleich mit Sokrates</button>
+        <button class="btn" :disabled="dataSyncError !== undefined" :title="dataSyncError" :class="{ 'bg-green-500 text-white': view === 'data-sync', 'text-yellow-500': view !== 'data-sync' && hasSyncErrors }" @click="view = 'data-sync'">Datenabgleich mit Sokrates</button>
         <button class="btn" :disabled="studentLettersError !== undefined" :title="studentLettersError" :class="{ 'bg-green-500 text-white': view === 'student-letters' }" @click="view = 'student-letters'">Schülerbriefe erstellen</button>
         <button class="btn" :disabled="teacherLettersError !== undefined" :title="teacherLettersError" :class="{ 'bg-green-500 text-white': view === 'teacher-letters' }" @click="view = 'teacher-letters'">Lehrerbriefe erstellen</button>
       </div>

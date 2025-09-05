@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { StudentDto, StudentIdentifierDto, TeacherDto } from './DataSync'
+import { getStudentDataSyncErrors, getTeacherDataSyncErrors, type StudentDto, type TeacherDto } from './DataSync'
 import ErrorWithRetry from './ErrorWithRetry.vue'
 import * as _ from 'lodash-es'
 
@@ -13,44 +13,15 @@ const props = defineProps<{
   syncedTeacherData: TeacherDto[] | undefined
 }>()
 
-type StudentDataSyncError = {
-  type: 'no-match'
-  studentName: StudentIdentifierDto
-} | {
-  type: 'mail-address-not-found'
-  studentName: {
-    lastName: string
-    firstName: string
-    className: string
-  }
-} | {
-  type: 'address-not-found'
-  studentName: {
-    lastName: string
-    firstName: string
-    className: string
-  }
-}
 const studentDataSyncErrors = computed(() => {
   if (props.syncedStudentData === undefined) return []
-
-  return props.syncedStudentData.flatMap(v => [
-    ...(v.type === 'no-match' ? [ <StudentDataSyncError>{ type: 'no-match', studentName: v.name } ] : []),
-    ...(v.type === 'exact-match' && v.data.mailAddress === undefined ? [ <StudentDataSyncError>{ type: 'mail-address-not-found', studentName: { lastName: v.data.lastName, firstName: v.data.firstName, className: v.data.className } } ] : []),
-    ...(v.type === 'exact-match' && v.data.address === undefined ? [ <StudentDataSyncError>{ type: 'address-not-found', studentName: { lastName: v.data.lastName, firstName: v.data.firstName, className: v.data.className } } ] : []),
-  ])
+  return getStudentDataSyncErrors(props.syncedStudentData)
 })
 
-type TeacherDataSyncError = {
-  type: 'no-match'
-  teacherName: string
-}
 const teacherDataSyncErrors = computed(() => {
   if (props.syncedTeacherData === undefined) return []
 
-  return props.syncedTeacherData.flatMap(v => [
-    ...(v.type === 'no-match' ? [ <TeacherDataSyncError>{ type: 'no-match', teacherName: v.name } ] : []),
-  ])
+  return getTeacherDataSyncErrors(props.syncedTeacherData)
 })
 
 defineEmits<{
