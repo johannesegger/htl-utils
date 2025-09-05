@@ -5,7 +5,6 @@ import { computed, reactive, ref, watch } from 'vue'
 import * as _ from 'lodash-es'
 import { ColumnMapping, type MappedCell } from './ColumnMapping'
 import { Cell } from './Excel'
-import ColumnMappingForm from './ColumnMappingForm.vue'
 import ListView from './ListView.vue'
 import TeacherView from './TeacherView.vue'
 import DataSyncView from './DataSyncView.vue'
@@ -172,10 +171,6 @@ const teacherLettersError = computed(() => {
       </div>
     </div>
     <div v-if="tableData !== undefined" class="flex flex-col gap-2">
-      <span class="input-label">Spaltenzuordnung</span>
-      <ColumnMappingForm :column-names="tableData.columnNames" v-model="columnMappings" />
-    </div>
-    <div v-if="tableData !== undefined" class="flex flex-col gap-2">
       <span class="input-label">Ansicht</span>
       <div class="flex gap-2">
         <button class="btn" :class="{ 'bg-green-500 text-white': view === 'test-list' }" @click="view = 'test-list'">Prüfungsliste</button>
@@ -187,7 +182,8 @@ const teacherLettersError = computed(() => {
     </div>
     <ListView v-if="view === 'test-list' && tableData !== undefined"
       :column-names="tableData.columnNames"
-      :rows="tableData.rows" />
+      :rows="tableData.rows"
+      v-model:column-mappings="columnMappings" />
     <TeacherView v-else-if="view === 'teacher-lists' && tableData !== undefined"
       :column-names="tableData.columnNames"
       :rows="tableData.rows"

@@ -1,13 +1,20 @@
 <script setup lang="ts">
-import type { MappedCell } from './ColumnMapping'
+import { ColumnMapping, type MappedCell } from './ColumnMapping'
+import ColumnMappingForm from './ColumnMappingForm.vue'
 
 defineProps<{
   columnNames: string[]
   rows: MappedCell[][]
 }>()
+defineModel<ColumnMapping[]>('column-mappings')
 </script>
 
 <template>
+  <div class="flex flex-col gap-2">
+    <span class="input-label">Spaltenzuordnung</span>
+    <ColumnMappingForm :column-names="columnNames" v-model="columnMappings" />
+  </div>
+
   <table class="border border-gray-300">
     <thead class="bg-blue-500/25">
       <tr>
