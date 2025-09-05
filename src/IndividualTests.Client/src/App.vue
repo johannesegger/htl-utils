@@ -116,6 +116,7 @@ const hasSyncingStudentDataFailed = ref(false)
 const syncedStudentData = ref<StudentDto[]>()
 let syncStudentDataAbortController = new AbortController()
 const resyncStudentData = async () => {
+  syncedStudentData.value = undefined
   if (studentNames.value === undefined) return
 
   syncStudentDataAbortController.abort()
@@ -131,6 +132,7 @@ const hasSyncingTeacherDataFailed = ref(false)
 const syncedTeacherData = ref<TeacherDto[]>()
 let syncTeacherDataAbortController = new AbortController()
 const resyncTeacherData = async () => {
+  syncedTeacherData.value = undefined
   if (teacherNames.value === undefined) {
     return
   }
@@ -142,7 +144,6 @@ watch(teacherNames, async () => {
   await resyncTeacherData()
 }, { immediate: true })
 const hasSyncErrors = computed(() => {
-  if (syncedStudentData.value === undefined || syncedTeacherData.value === undefined) return false
   return (syncedStudentData.value !== undefined && getStudentDataSyncErrors(syncedStudentData.value).length > 0) ||
     (syncedTeacherData.value !== undefined && getTeacherDataSyncErrors(syncedTeacherData.value).length > 0)
 })
