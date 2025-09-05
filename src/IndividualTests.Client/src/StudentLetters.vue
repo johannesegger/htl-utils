@@ -43,6 +43,7 @@ const mailToAddress = ref('')
 
 const isSendingLetters = ref(false)
 const hasSendingLettersFailed = ref(false)
+const isNotAllowedToSendLetters = ref(false)
 type SendLetterError =
   { type: 'sending-mail-failed', studentMailAddress: string } |
   { type: 'student-has-no-mail-address', student: StudentIdentifierDto }
@@ -51,6 +52,8 @@ const sendingLettersSucceeded = ref(false)
 const sendLetters = async () => {
   sendLetterErrors.value = []
   sendingLettersSucceeded.value = false
+  isNotAllowedToSendLetters.value = false
+
   const result = await uiFetch(isSendingLetters, hasSendingLettersFailed, '/api/letter/students', {
     method: 'POST',
     headers: {
@@ -62,6 +65,7 @@ const sendLetters = async () => {
     sendingLettersSucceeded.value = true
   }
   else if (result.response !== undefined) {
+    isNotAllowedToSendLetters.value = result.response.status === 403
     sendLetterErrors.value = await result.response.json()
   }
 }
@@ -112,7 +116,8 @@ const getStudentName = (v: StudentIdentifierDto) => {
 
         <div class="flex items-center gap-2">
           <button class="btn text-red-800" :disabled="tests.length === 0 || isSendingLetters" @click="sendLetters">Briefe per Mail versenden</button>
-          <span v-if="hasSendingLettersFailed" class="text-red-800">Fehler beim Versenden der Briefe.</span>
+          <span v-if="isNotAllowedToSendLetters" class="text-red-800">Sie sind nicht berechtigt, die Briefe zu versenden.</span>
+          <span v-else-if="hasSendingLettersFailed" class="text-red-800">Fehler beim Versenden der Briefe.</span>
           <span v-else-if="sendingLettersSucceeded" class="text-green-500">Alle Schülerbriefe wurden erfolgreich versendet.</span>
         </div>
 

@@ -24,6 +24,12 @@ let main args =
         .AddMicrosoftGraph(builder.Configuration.GetSection("Graph"))
         .AddInMemoryTokenCaches() |> ignore
 
+    builder.Services.AddAuthorization(fun v ->
+        v.AddPolicy("SendLetters", fun policy ->
+            policy.RequireRole("IndividualTests.LetterSender") |> ignore
+        )
+    ) |> ignore
+
     builder.Services.AddSingleton(builder.Configuration.GetSection("Sokrates").Get<Sokrates.Config>()) |> ignore
     builder.Services.AddSingleton<Sokrates.SokratesApi>() |> ignore
 

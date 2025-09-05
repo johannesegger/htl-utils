@@ -498,6 +498,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
 
     [<HttpPost>]
     [<Route("students")>]
+    [<Authorize("SendLetters")>]
     member this.SendStudentLetters ([<FromBody>]data: Dto.SendLettersDto) = async {
         let documentTemplate = File.ReadAllText config.["StudentLetterDocumentTemplatePath"]
         let contentTemplate = File.ReadAllText config.["StudentLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
@@ -541,6 +542,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
 
     [<HttpPost>]
     [<Route("teachers")>]
+    [<Authorize("SendLetters")>]
     member this.SendTeacherLetters ([<FromBody>]data: Dto.SendLettersDto) = async {
         let documentTemplate = File.ReadAllText config.["TeacherLetterDocumentTemplatePath"]
         let contentTemplate = File.ReadAllText config.["TeacherLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
