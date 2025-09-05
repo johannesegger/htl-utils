@@ -78,8 +78,8 @@ const getStudentName = (v: StudentIdentifierDto) => {
 
 <template>
   <div class="flex flex-col gap-2">
-    <div class="grid grid-cols-2 gap-4">
-      <div class="flex flex-col gap-2">
+    <div class="flex gap-4">
+      <div class="basis-50 grow-1 flex flex-col gap-2">
         <div class="flex flex-col">
           <span class="input-label">Brieftext</span>
           <textarea v-model="letterText" class="input-text" rows="10"></textarea>
@@ -91,7 +91,7 @@ const getStudentName = (v: StudentIdentifierDto) => {
         </div>
       </div>
 
-      <div class="flex flex-col gap-2">
+      <div class="basis-50 grow-1 flex flex-col gap-2">
         <div class="flex flex-col">
           <span class="input-label">Mailbetreff</span>
           <input v-model="mailSubject" class="input-text" />
