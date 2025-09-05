@@ -1,0 +1,39 @@
+name: Publish
+
+on:
+  push:
+    branches: '*'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v4
+
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.x
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container image to registry
+        uses: docker/build-push-action@v6
+        with:
+          context: ./
+          file: ./src/IndividualTests.Server/Dockerfile
+          push: true
+          tags: ghcr.io/htlvb/individual-tests:${{ github.sha }}
