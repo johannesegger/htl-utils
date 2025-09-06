@@ -2,14 +2,14 @@
 import { ref, watch } from 'vue'
 import { uiFetch } from './UIFetch'
 import type { TestData } from './TestData'
-import { load, store } from './Store'
+import { loadOrDefault, store } from './Store'
 import { replacer } from './Json';
 
 const props = defineProps<{
   tests: TestData[]
 }>()
 
-const letterText = ref(localStorage.getItem('teacher-letter-text') || undefined)
+const letterText = ref(loadOrDefault('teacher-letter-text'))
 watch(letterText, v => store('teacher-letter-text', v))
 
 const isGeneratingLetters = ref(false)
@@ -32,9 +32,9 @@ const generateLetters = async () => {
   }
 }
 
-const mailSubject = ref(load('teacher-letter-mail-subject'))
+const mailSubject = ref(loadOrDefault('teacher-letter-mail-subject'))
 watch(mailSubject, v => store('teacher-letter-mail-subject', v))
-const mailText = ref(load('teacher-letter-mail-text'))
+const mailText = ref(loadOrDefault('teacher-letter-mail-text'))
 watch(mailText, v => store('teacher-letter-mail-text', v))
 
 const useMailToAddress = ref(false)
