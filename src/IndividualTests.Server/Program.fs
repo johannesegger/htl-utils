@@ -39,6 +39,10 @@ let main args =
 
     app.UseHttpsRedirection() |> ignore
 
+    if app.Environment.IsProduction() then
+        app.UseDefaultFiles() |> ignore
+        app.UseStaticFiles() |> ignore
+
     app.UseAuthentication() |> ignore
     app.UseAuthorization() |> ignore
     app.MapControllers() |> ignore
