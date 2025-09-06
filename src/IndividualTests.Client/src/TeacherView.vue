@@ -41,11 +41,7 @@ const teacherTables = computed(() => {
 
   const teacherColumnIndices = teacherColumnNames.map(v => props.columnNames.indexOf(v))
 
-  const teachers = _.chain(props.rows)
-    .flatMap(row => teacherColumnIndices.map(idx => row[idx].text))
-    .uniq()
-    .sort()
-    .value()
+  const teachers = _.sortBy(_.uniq(_.flatMap(props.rows, row => teacherColumnIndices.map(idx => row[idx].text))))
 
   return teachers.map(teacher => {
       const rows = props.rows.filter(row => teacherColumnIndices.map(idx => row[idx].text).includes(teacher))

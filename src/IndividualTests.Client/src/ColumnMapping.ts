@@ -170,21 +170,21 @@ export namespace ColumnMapping {
       className: columnNames.indexOf(studentClassNameColumnName)
     }
 
-    return _.chain(rows)
-      .map(row => {
-        if (studentNameColumnNames.fullName !== undefined) {
-          return { className: row[studentColumnIndices.className]?.text, fullName: row[studentColumnIndices.fullName]?.text }
-        }
-        else {
-          return {
-            className: row[studentColumnIndices.className]?.text,
-            lastName: row[studentColumnIndices.lastName]?.text,
-            firstName: row[studentColumnIndices.firstName]?.text,
+    return _.uniqWith(
+        _.map(rows, row => {
+          if (studentNameColumnNames.fullName !== undefined) {
+            return { className: row[studentColumnIndices.className]?.text, fullName: row[studentColumnIndices.fullName]?.text }
           }
-        }
-      })
-      .uniqWith(_.isEqual)
-      .value()
+          else {
+            return {
+              className: row[studentColumnIndices.className]?.text,
+              lastName: row[studentColumnIndices.lastName]?.text,
+              firstName: row[studentColumnIndices.firstName]?.text,
+            }
+          }
+        }),
+        _.isEqual
+      )
   }
 
   export const getTeacherNames = (columnMappings: ColumnMapping[], columnNames: string[], rows: MappedCell[][]) => {
@@ -205,9 +205,6 @@ export namespace ColumnMapping {
 
     const teacherNameColumnIndices = teacherNameColumnNames.map(v => columnNames.indexOf(v))
 
-    return _.chain(rows)
-      .flatMap(row => teacherNameColumnIndices.map(idx => row[idx].text))
-      .uniq()
-      .value()
+    return _.uniq(_.flatMap(rows, row => teacherNameColumnIndices.map(idx => row[idx].text)))
   }
 }
