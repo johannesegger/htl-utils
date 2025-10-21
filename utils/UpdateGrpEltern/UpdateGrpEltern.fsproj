@@ -3,9 +3,15 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <UserSecretsId>htl-utils</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Async.fs" />
+    <Compile Include="List.fs" />
+    <Compile Include="Domain.fs" />
+    <Compile Include="SokratesExtensions.fs" />
+    <Compile Include="MicrosoftGraphExtensions.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -15,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.11.0" />
+    <PackageReference Include="Azure.Identity" Version="1.16.0" />
   </ItemGroup>
 
 </Project>

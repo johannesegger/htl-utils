@@ -1,5 +1,6 @@
 namespace AAD.Configuration
 
+open Microsoft.Extensions.Configuration
 open System.Text.RegularExpressions
 
 type PredefinedGroup =
@@ -27,22 +28,30 @@ type Config = {
     PredefinedGroups: PredefinedGroup list
 }
 module Config =
-    let fromEnvironment () =
-        {
+    type AADConfig() =
+        member val ClientId = "" with get, set
+        member val ClientSecret = "" with get, set
+        member val Instance = "" with get, set
+        member val Domain = "" with get, set
+        member val TenantId = "" with get, set
+        member val PredefinedGroupPrefix = "" with get, set
+        member val ManuallyManagedGroupsPattern : string option = None with get, set
+        member val PredefinedGroups = "" with get, set
+        member val ProfessionalGroupsSubjects = "" with get, set
+        member x.Build() : Config = {
             OidcConfig = {
-                AppId = Environment.getEnvVarOrFail "AAD_SERVICE_APP_ID"
-                AppSecret = Environment.getEnvVarOrFail "AAD_SERVICE_APP_KEY"
-                Instance = Environment.getEnvVarOrFail "AAD_INSTANCE"
-                Domain = Environment.getEnvVarOrFail "AAD_DOMAIN"
-                TenantId = Environment.getEnvVarOrFail "AAD_TENANT_ID"
+                AppId = x.ClientId
+                AppSecret = x.ClientSecret
+                Instance = x.Instance
+                Domain = x.Domain
+                TenantId = x.TenantId
             }
-            PredefinedGroupPrefix = Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUP_PREFIX"
+            PredefinedGroupPrefix = x.PredefinedGroupPrefix
             ManuallyManagedGroupsPattern =
-                Environment.getEnvVar "AAD_MANUALLY_MANAGED_GROUPS_PATTERN"
-                |> Option.ofObj
+                x.ManuallyManagedGroupsPattern
                 |> Option.map Regex
             PredefinedGroups =
-                Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUPS"
+                x.PredefinedGroups
                 |> String.split ";"
                 |> Seq.collect (fun row ->
                     let rowParts = String.split "," row
@@ -50,14 +59,14 @@ module Config =
                     let groupName =
                         Array.tryItem 1 rowParts
                         |> Option.defaultWith (fun () -> failwithf "Error in row \"%s\" of predefined groups settings: Can't get group name." row)
-                        |> sprintf "%s%s" (Environment.getEnvVarOrFail "AAD_PREDEFINED_GROUP_PREFIX")
+                        |> sprintf "%s%s" x.PredefinedGroupPrefix
                     match CIString groupId with
                     | CIString "Teachers" -> [ Teachers groupName ]
                     | CIString "FormTeachers" -> [ FormTeachers groupName ]
                     | CIString "FinalThesesMentors" -> [ FinalThesesMentors groupName ]
                     | CIString "ClassTeachers" -> [ ClassTeachers (fun className -> String.replace "<class>" className groupName) ]
                     | CIString "ProfessionalGroups" ->
-                        Environment.getEnvVarOrFail "AAD_PROFESSIONAL_GROUPS_SUBJECTS"
+                        x.ProfessionalGroupsSubjects
                         |> String.split ";"
                         |> Seq.map (fun row ->
                             let (rawGroupName, subjectString) =
@@ -78,3 +87,6 @@ module Config =
                 )
                 |> Seq.toList
         }
+    let fromEnvironment () =
+        let config = ConfigurationBuilder().AddEnvironmentVariables().AddUserSecrets("htl-utils").Build()
+        ConfigurationBinder.Get<AADConfig>(config.GetSection("AAD")).Build()
