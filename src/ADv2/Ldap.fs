@@ -80,7 +80,6 @@ type Ldap(config: LdapConnectionConfig) =
             AuthType.Basic
         )
         c.SessionOptions.SecureSocketLayer <- true
-        c.SessionOptions.VerifyServerCertificate <- fun conn cert -> true
         c.SessionOptions.ProtocolVersion <- 3 // v2 e.g. doesn't allow ModifyDNRequest to move object to different OU
         c
 
@@ -128,6 +127,7 @@ type Ldap(config: LdapConnectionConfig) =
     }
 
     let createNodeIfNotExists (DistinguishedName nodeDn) nodeType properties = async {
+        printfn "Creating %A" nodeDn
         let attributes =
             [|
                 DirectoryAttribute("objectClass", NodeType.toString nodeType)
