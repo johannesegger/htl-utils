@@ -79,7 +79,8 @@ type ADApi(config: Config) =
                         yield "department", Text department
                         yield "division", Text division
                         yield "mail", Text userPrincipalName
-                        yield "proxyAddresses", newUser.MailAliases |> List.map (MailAlias.toProxyAddress config.Properties.MailDomain >> ProxyAddress.toString) |> TextList
+                        if List.length newUser.MailAliases > 0 then
+                            yield "proxyAddresses", newUser.MailAliases |> List.map (MailAlias.toProxyAddress config.Properties.MailDomain >> ProxyAddress.toString) |> TextList
                         yield "homeDirectory", Text userHomePath
                         yield "homeDrive", Text config.Properties.HomeDrive
                         yield "userAccountControl", Text $"{UserAccountControl.NORMAL_ACCOUNT ||| UserAccountControl.PASSWD_NOTREQD}"
@@ -121,7 +122,8 @@ type ADApi(config: Config) =
                         "displayName", Text (sprintf "%s %s" newLastName newFirstName)
                         "sAMAccountName", (let (UserName userName) = newUserName in Text userName)
                         "mail", Text userPrincipalName
-                        "proxyAddresses", newMailAliases |> List.map (MailAlias.toProxyAddress config.Properties.MailDomain >> ProxyAddress.toString) |> TextList
+                        if List.length newMailAliases > 0 then
+                            "proxyAddresses", newMailAliases |> List.map (MailAlias.toProxyAddress config.Properties.MailDomain >> ProxyAddress.toString) |> TextList
                     ]
                 |}
             match userType with
