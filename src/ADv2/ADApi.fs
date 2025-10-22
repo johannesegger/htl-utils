@@ -17,14 +17,14 @@ type ADApi(config: Config) =
     let getGroupHomePath userType =
         match userType with
         | Teacher -> config.Properties.TeacherHomePath
-        | Student (GroupName className) -> Path.Combine(config.Properties.StudentHomePath, className)
+        | Student (GroupName className) -> $"%s{config.Properties.StudentHomePath}\\%s{className}"
 
     let getUserHomePath (UserName userName) userType =
         let groupHomePath = getGroupHomePath userType
-        Path.Combine(groupHomePath, userName)
+        $"%s{groupHomePath}\\%s{userName}"
 
     let getTeacherExercisePath basePath (UserName userName) =
-        Path.Combine(basePath, userName)
+        $"%s{basePath}\\%s{userName}"
 
     let getUserContainer userType =
         match userType with
