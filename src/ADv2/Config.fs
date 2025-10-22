@@ -103,5 +103,9 @@ module Config =
             Properties = x.Properties.Build()
         }
     let fromEnvironment () =
-        let config = ConfigurationBuilder().AddEnvironmentVariables().Build()
+        let config =
+            ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddUserSecrets<Config>()
+                .Build()
         ConfigurationBinder.Get<Config>(config.GetSection("AD")).Build()
