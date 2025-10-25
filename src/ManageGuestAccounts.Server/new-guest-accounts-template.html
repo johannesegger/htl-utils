@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gäste-Accounts</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    .grid {
+      display: grid;
+    }
+    .grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .grid-cols-auto-1fr {
+      grid-template-columns: auto 1fr;
+    }
+    .justify-items-stretch {
+      justify-items: stretch;
+    }
+    .items-center {
+      align-items: center;
+    }
+    .gap-2 {
+      gap: 0.5rem;
+    }
+    .gap-4 {
+      gap: 1rem;
+    }
+    .p-4 {
+      padding: 1rem;
+    }
+    .text-sm {
+      font-size: 0.875rem;
+      line-height: calc(1.25 / 0.875);
+    }
+    .text-lg {
+      font-size: 1.125rem;
+      line-height: calc(1.75 / 1.125);
+    }
+    .font-mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    }
+    .border-4 {
+      border-width: 4px;
+    }
+    .rounded-2xl {
+      border-radius: 1rem;
+    }
+    .border-dashed {
+      border-style: dashed;
+    }
+    .break-inside-avoid {
+      break-inside: avoid;
+    }
+  </style>
+</head>
+<body>
+  <ul class="grid grid-cols-2 justify-items-stretch gap-4">
+    <li fs-for="account in accounts" class="border-4 rounded-2xl border-dashed p-4 break-inside-avoid">
+      <div class="grid grid-cols-auto-1fr items-center gap-2">
+        <span class="text-sm opacity-75">Benutzer:</span>
+        <span class="font-mono text-lg">{{{account.userName}}}</span>
+        <span class="text-sm opacity-75">Passwort:</span>
+        <span class="font-mono text-lg">{{{account.password}}}</span>
+      </div>
+    </li>
+  </ul>
+</body>
+</html>

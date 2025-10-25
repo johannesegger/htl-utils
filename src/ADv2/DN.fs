@@ -49,4 +49,5 @@ let tryCN path =
 
 let domainBase path =
     parentsAndSelf path
-    |> List.findBack (fun v -> head v |> fst |> CIString = CIString "DC")
+    |> List.tryFindBack (fun v -> head v |> fst |> CIString = CIString "DC")
+    |> Option.defaultWith (fun () -> failwith $"Can't find domain base of %A{path}")

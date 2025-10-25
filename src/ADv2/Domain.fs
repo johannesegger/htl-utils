@@ -103,3 +103,16 @@ type DirectoryModification =
     | CreateGroup of UserType
     | UpdateGroup of UserType * GroupUpdate
     | DeleteGroup of UserType
+
+type NewGuestAccount = {
+    UserName: UserName
+    Password: string
+    Notes: string option
+}
+
+type ExistingGuestAccount = {
+    Name: UserName
+    CreatedAt: DateTime
+    WLANOnly: bool
+    Notes: string option
+}

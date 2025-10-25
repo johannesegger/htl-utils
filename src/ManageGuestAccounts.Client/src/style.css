@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@import '@fortawesome/fontawesome-free/css/fontawesome.css';
+@import '@fortawesome/fontawesome-free/css/regular.css';
+@import '@fortawesome/fontawesome-free/css/solid.css';
+@import '@fortawesome/fontawesome-free/css/brands.css';
+
+@theme {
+    --animate-pulse2: pulse2 1s ease-in-out infinite;
+    
+    @keyframes pulse2 {
+        50% {
+            transform: scale(2);
+            opacity: 0.5;
+        }
+    }
+}
+
+.small-caps {
+  font-variant-caps: small-caps;
+}
+
+.btn {
+  @apply inline-block text-center cursor-pointer font-semibold py-2 px-4 border rounded-md hover:[&:not(:disabled)]:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.input-text {
+  @apply text-sm outline-0 shadow-sm/50 rounded p-2 ring-1 focus:ring-indigo-700 focus:shadow-indigo-700! disabled:bg-gray-500/15 disabled:cursor-not-allowed invalid:ring-red-700 invalid:shadow-red-700!
+}

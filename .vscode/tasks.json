@@ -63,5 +63,31 @@
 			"label": "IndividualTests",
 			"dependsOn": [ "IndividualTests (Server)", "IndividualTests (Client)" ]
 		},
+        {
+			"label": "ManageGuestAccounts (Server)",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"watch",
+				"run",
+				"--environment", "Development",
+				"--urls", "https://localhost:5001",
+			],
+			"problemMatcher": "$msCompile",
+			"options": {
+				"cwd": "${workspaceFolder}/src/ManageGuestAccounts.Server",
+			},
+		},
+		{
+			"label": "ManageGuestAccounts (Client)",
+			"type": "npm",
+			"script": "dev",
+			"path": "src/ManageGuestAccounts.Client",
+			"problemMatcher": [],
+		},
+		{
+			"label": "ManageGuestAccounts",
+			"dependsOn": [ "ManageGuestAccounts (Server)", "ManageGuestAccounts (Client)" ]
+		},
     ]
 }

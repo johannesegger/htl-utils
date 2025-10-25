@@ -7,8 +7,13 @@ open AD.Ldap
 open AD.Operations
 open NetworkShare
 open System
-open System.IO
+open System.Security.Cryptography
 open System.Text.RegularExpressions
+
+let private timeProvider =
+    { new TimeProvider() with
+        member _.LocalTimeZone with get (): TimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Europe/Vienna")
+    }
 
 type ADApi(config: Config) =
     let ldap = new Ldap(config.ConnectionConfig.Ldap)
@@ -505,6 +510,144 @@ type ADApi(config: Config) =
         return
             classGroups
             |> List.map (SearchResultEntry.getStringAttributeValue "sAMAccountName" >> GroupName)
+    }
+
+    member _.GetGuestAccounts() = async {
+        let! guestAccounts =
+            ldap.FindFullGroupMembers(
+                config.Properties.GuestGroup,
+                [| "sAMAccountName"; "whenCreated"; "description"; "memberOf" |]
+            )
+        return guestAccounts
+            |> List.map (fun searchResult ->
+                {
+                    Name = SearchResultEntry.getStringAttributeValue "sAMAccountName" searchResult |> UserName
+                    CreatedAt = SearchResultEntry.getDateTimeAttributeValue "whenCreated" searchResult
+                    WLANOnly =
+                        SearchResultEntry.getStringAttributeValues "memberOf" searchResult
+                        |> Seq.map DistinguishedName
+                        |> Seq.contains config.Properties.WLANOnlyGroup
+                    Notes = SearchResultEntry.getOptionalStringAttributeValue "description" searchResult
+                }
+            )
+            |> List.groupBy (fun account ->
+                let (UserName userName) = account.Name
+                userName
+                |> fun v -> Regex.Replace(v, @"^htlgast\.", "")
+                |> fun v -> Regex.Replace(v, @"-\d+$", "")
+            )
+    }
+
+    member this.CreateGuestAccounts(group: string, count: int, wlanOnly: bool, notes: string option) = async {
+        let! existingUserNames = async {
+            let! existingAccounts =
+                ldap.FindFullGroupMembers(
+                    config.Properties.GuestGroup,
+                    [| "sAMAccountName" |]
+                )
+            return existingAccounts
+            |> Seq.map (SearchResultEntry.getStringAttributeValue "sAMAccountName" >> UserName)
+            |> Set.ofSeq
+        }
+        let newAccounts =
+            Seq.initInfinite ((+) 1 >> fun userNumber ->
+                let userName = $"htlgast.%s{group}-%02d{userNumber}"
+                let passwordChars = ['A'..'Z'] @ ['a'..'z'] @ ['0'..'9'] |> List.toArray
+                let password = RandomNumberGenerator.GetString(passwordChars, 5)
+                {
+                    UserName = UserName userName
+                    Password = password
+                    Notes = notes
+                }
+            )
+            |> Seq.filter (fun v -> not <| Set.contains v.UserName existingUserNames)
+            |> Seq.take count
+            |> Seq.toList
+        
+        let! results =
+            newAccounts
+            |> List.map (fun guest -> async {
+                let (UserName userName) = guest.UserName
+                let userDn = DN.childCN userName config.Properties.GuestContainer
+                let! results =
+                    [
+                        CreateNode {|
+                            Node = userDn
+                            NodeType = ADUser
+                            Properties = [
+                                "userPrincipalName", Text $"%s{userName}@%s{config.Properties.GuestMailDomain}"
+                                "displayName", Text "HTL Gast"
+                                "sAMAccountName", Text userName
+                                "userAccountControl", Text $"{UserAccountControl.NORMAL_ACCOUNT ||| UserAccountControl.PASSWD_NOTREQD}"
+                                "unicodePwd", Bytes (AD.password guest.Password)
+                                match guest.Notes with
+                                | Some notes ->
+                                    "description", Text notes
+                                | None -> ()
+                            ]
+                        |}
+                        // TODO don't allow password change, but this is tricky because we would have to work with permissions in SDDL format which is not so simple on non-Windows OSes
+                        AddObjectToGroup {| Object = userDn; Group = config.Properties.GuestGroup |}
+                        if wlanOnly then
+                            AddObjectToGroup {| Object = userDn; Group = config.Properties.WLANOnlyGroup |}
+                    ]
+                    |> List.map (fun v -> async {
+                        try
+                            do! Operation.run ldap networkShare v
+                            return Ok ()
+                        with e -> return Error $"Error while applying operation {v}: {e.Message}"
+                    })
+                    |> Async.Sequential
+                match Result.sequenceA results with
+                | Ok _ -> return (guest, Ok ())
+                | Error e -> return (guest, Error e)
+            })
+            |> Async.Sequential
+        return Array.toList results
+    }
+
+    member this.RemoveGuestAccounts(group: string) = async {
+        let! guestAccounts = this.GetGuestAccounts()
+        let groupAccounts =
+            guestAccounts
+            |> List.tryFind (fst >> (=) group)
+            |> Option.map snd
+            |> Option.defaultValue []
+        let! results =
+            groupAccounts
+            |> List.map (fun account -> async {
+                let (UserName userName) = account.Name
+                let userDn = DN.childCN userName config.Properties.GuestContainer
+                let newUserDn =
+                    let timestamp = timeProvider.GetLocalNow().ToString("yyyyMMdd-HHmmss")
+                    DN.childCN $"%s{timestamp}_%s{userName}" config.Properties.GuestContainer
+                let newUserName = userName.Replace("htlgast", "xxxgast")
+                let! results =
+                    [
+                        DisableAccount userDn
+                        RemoveGroupMemberships userDn
+                        SetNodeProperties {|
+                            Node = userDn
+                            Properties = [
+                                "userPrincipalName", Text $"%s{newUserName}@%s{config.Properties.GuestMailDomain}"
+                                "sAMAccountName", Text newUserName
+                            ]
+                        |}
+                        MoveNode {| Source = userDn; Target = newUserDn |}
+                    ]
+                    |> List.map (fun v -> async {
+                        try
+                            do! Operation.run ldap networkShare v
+                            return Ok ()
+                        with e -> return Error $"Error while applying operation {v}: {e.Message}"
+                    })
+                    |> Async.Sequential
+                match Result.sequenceA results with
+                | Ok _ -> return (account, Ok ())
+                | Error e -> return (account, Error e)
+            })
+            |> Async.Sequential
+        return List.ofArray results
     }
 
     static member FromEnvironment () = new ADApi(Config.fromEnvironment ())

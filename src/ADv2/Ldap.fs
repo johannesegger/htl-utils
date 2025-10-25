@@ -127,7 +127,6 @@ type Ldap(config: LdapConnectionConfig) =
     }
 
     let createNodeIfNotExists (DistinguishedName nodeDn) nodeType properties = async {
-        printfn "Creating %A" nodeDn
         let attributes =
             [|
                 DirectoryAttribute("objectClass", NodeType.toString nodeType)

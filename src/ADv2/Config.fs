@@ -33,6 +33,10 @@ type Properties = {
     TeacherExercisePath: string
     StudentHomePath: string
     HomeDrive: string
+    GuestContainer: DistinguishedName
+    GuestGroup: DistinguishedName
+    GuestMailDomain: string
+    WLANOnlyGroup: DistinguishedName
 }
 type Config = {
     ConnectionConfig: ConnectionConfig
@@ -78,6 +82,10 @@ module Config =
         member val TeacherExercisePath = "" with get, set
         member val StudentHomePath = "" with get, set
         member val HomeDrive = "" with get, set
+        member val GuestContainer = "" with get, set
+        member val GuestGroup = "" with get, set
+        member val GuestMailDomain = "" with get, set
+        member val WLANOnlyGroup = "" with get, set
         member x.Build() = {
             ComputerContainer = DistinguishedName x.ComputerContainer
             TeacherContainer = DistinguishedName x.TeacherContainer
@@ -94,6 +102,10 @@ module Config =
             TeacherExercisePath = x.TeacherExercisePath
             StudentHomePath = x.StudentHomePath
             HomeDrive = x.HomeDrive
+            GuestContainer = DistinguishedName x.GuestContainer
+            GuestGroup = DistinguishedName x.GuestGroup
+            GuestMailDomain = x.GuestMailDomain
+            WLANOnlyGroup = DistinguishedName x.WLANOnlyGroup
         }
     type Config() =
         member val ConnectionConfig = ConnectionConfig() with get, set

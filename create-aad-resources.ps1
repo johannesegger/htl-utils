@@ -67,6 +67,20 @@ $serviceAppRoles = @(
         isEnabled = "true"
         value = "teacher"
     }
+    @{
+        allowedMemberTypes = @("User")
+        description = "Can send individual test letters"
+        displayName = "IndividualTests.LetterSender"
+        isEnabled = "true"
+        value = "IndividualTests.LetterSender"
+    }
+    @{
+        allowedMemberTypes = @("User")
+        description = "Can manage guest accounts"
+        displayName = "GuestAccounts.Manager"
+        isEnabled = "true"
+        value = "GuestAccounts.Manager"
+    }
 )
 ConvertTo-Json -Compress -Depth 10 $serviceAppRoles | az ad app update --id $serviceApp.objectId --app-roles "@-"
 
