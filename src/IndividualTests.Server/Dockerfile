@@ -1,4 +1,5 @@
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+RUN apt update && apt install -y chromium-driver && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443

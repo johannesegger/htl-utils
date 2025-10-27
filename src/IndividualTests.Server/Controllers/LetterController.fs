@@ -383,7 +383,12 @@ module Letter =
             let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlvb-individual-tests-browser")
             let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
             let! downloadedBrowser = browserFetcher.DownloadAsync() |> Async.AwaitTask
-            return! Puppeteer.LaunchAsync(LaunchOptions(Headless = true, Browser = downloadedBrowser.Browser, ExecutablePath = downloadedBrowser.GetExecutablePath())) |> Async.AwaitTask
+            return! Puppeteer.LaunchAsync(LaunchOptions(
+                Args = [| "--no-sandbox" |], // Required to run it in Docker as root
+                Headless = true,
+                Browser = downloadedBrowser.Browser,
+                ExecutablePath = downloadedBrowser.GetExecutablePath())
+            ) |> Async.AwaitTask
         }
 
         let teacherLetterToPdf teacherShortName (htmlLetter: string) = async {
