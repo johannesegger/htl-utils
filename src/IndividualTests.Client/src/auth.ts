@@ -14,11 +14,15 @@ const defaultScopes = [ "api://235fe3a7-8dbd-426c-b7b1-3d64cb37724b/.default" ]
 
 const redirectPromise = msalInstance.handleRedirectPromise()
 redirectPromise.then((tokenResponse) => {
-    if (tokenResponse) {
-        msalInstance.setActiveAccount(msalInstance.getAllAccounts()[0])
+    const account = msalInstance.getAllAccounts()[0]
+    if (account != undefined) {
+        msalInstance.setActiveAccount(account)
+    }
+    else if (tokenResponse === null) {
+        msalInstance.loginRedirect({ scopes: defaultScopes })
     }
     else {
-        msalInstance.loginRedirect({ scopes: defaultScopes })
+        console.error('No account although we come from a redirect - that is unexpected.')
     }
 }).catch(error => {
     console.error('Error while logging in', error)
