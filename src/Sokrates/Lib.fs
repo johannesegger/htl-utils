@@ -43,7 +43,11 @@ module Config =
         }
 
     let fromEnvironment () =
-        let config = ConfigurationBuilder().AddEnvironmentVariables().Build()
+        let config =
+            ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddUserSecrets<Config>()
+                .Build()
         ConfigurationBinder.Get<SokratesConfig>(config.GetSection("Sokrates")).Build()
 
 type SokratesId = SokratesId of string

@@ -81,6 +81,7 @@ type Ldap(config: LdapConnectionConfig) =
         )
         c.SessionOptions.SecureSocketLayer <- true
         c.SessionOptions.ProtocolVersion <- 3 // v2 e.g. doesn't allow ModifyDNRequest to move object to different OU
+        c.Timeout <- TimeSpan.FromSeconds 10.
         c
 
     let gate = Object()

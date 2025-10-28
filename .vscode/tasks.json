@@ -89,5 +89,31 @@
 			"label": "ManageGuestAccounts",
 			"dependsOn": [ "ManageGuestAccounts (Server)", "ManageGuestAccounts (Client)" ]
 		},
+		{
+			"label": "KnowName (Server)",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"watch",
+				"run",
+				"--environment", "Development",
+				"--urls", "https://localhost:5001",
+			],
+			"problemMatcher": "$msCompile",
+			"options": {
+				"cwd": "${workspaceFolder}/src/KnowName.Server",
+			},
+		},
+		{
+			"label": "KnowName (Client)",
+			"type": "npm",
+			"script": "dev",
+			"path": "src/KnowName.Client",
+			"problemMatcher": [],
+		},
+		{
+			"label": "KnowName",
+			"dependsOn": [ "KnowName (Server)", "KnowName (Client)" ]
+		},
     ]
 }

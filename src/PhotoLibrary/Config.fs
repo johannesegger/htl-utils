@@ -1,12 +1,23 @@
 namespace PhotoLibrary.Configuration
 
+open Microsoft.Extensions.Configuration
+
 type Config = {
     TeacherPhotosDirectory: string
     StudentPhotosDirectory: string
 }
 module Config =
-    let fromEnvironment () =
-        {
-            TeacherPhotosDirectory = Environment.getEnvVarOrFail "PHOTO_LIBRARY_TEACHER_PHOTOS_DIRECTORY"
-            StudentPhotosDirectory = Environment.getEnvVarOrFail "PHOTO_LIBRARY_STUDENT_PHOTOS_DIRECTORY"
+    type RawConfig() =
+        member val TeacherPhotosDirectory = "" with get, set
+        member val StudentPhotosDirectory = "" with get, set
+        member x.Build() = {
+            TeacherPhotosDirectory = x.TeacherPhotosDirectory
+            StudentPhotosDirectory = x.StudentPhotosDirectory
         }
+    let fromEnvironment () =
+        let config =
+            ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddUserSecrets<RawConfig>()
+                .Build()
+        ConfigurationBinder.Get<RawConfig>(config.GetSection("PhotoLibrary")).Build()

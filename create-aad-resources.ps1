@@ -81,6 +81,13 @@ $serviceAppRoles = @(
         isEnabled = "true"
         value = "GuestAccounts.Manager"
     }
+    @{
+        allowedMemberTypes = @("User")
+        description = "Can use KnowName"
+        displayName = "KnowName.User"
+        isEnabled = "true"
+        value = "KnowName.User"
+    }
 )
 ConvertTo-Json -Compress -Depth 10 $serviceAppRoles | az ad app update --id $serviceApp.objectId --app-roles "@-"
 
