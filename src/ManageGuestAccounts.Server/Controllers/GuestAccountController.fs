@@ -170,6 +170,7 @@ type GuestAccountController (ad: ADApi, config: IConfiguration, logger : ILogger
             |> List.sortByDescending (fun (group, accounts) ->
                 accounts
                 |> List.map _.CreatedAt
+                |> List.max
             )
             |> DataTransfer.existingAccountGroups
     }
