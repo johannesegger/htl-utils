@@ -165,7 +165,13 @@ type GuestAccountController (ad: ADApi, config: IConfiguration, logger : ILogger
     [<HttpGet>]
     member _.GetGuestAccounts() = async {
         let! guestAccounts = ad.GetGuestAccounts()
-        return DataTransfer.existingAccountGroups guestAccounts
+        return
+            guestAccounts
+            |> List.sortByDescending (fun (group, accounts) ->
+                accounts
+                |> List.map _.CreatedAt
+            )
+            |> DataTransfer.existingAccountGroups
     }
 
     [<HttpPost>]
