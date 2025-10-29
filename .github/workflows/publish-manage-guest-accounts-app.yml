@@ -36,4 +36,4 @@ jobs:
           context: ./
           file: ./src/ManageGuestAccounts.Server/Dockerfile
           push: true
-          tags: ghcr.io/johannesegger/htl-utils:${{ github.sha }}
+          tags: ghcr.io/johannesegger/manage-guest-accounts:${{ github.sha }}
