@@ -25,6 +25,12 @@ let main args =
         )
     ) |> ignore
 
+    builder.Services.AddAuthorization(fun v ->
+        v.AddPolicy("ManageSettings", fun policy ->
+            policy.RequireRole("KnowName.Admin") |> ignore
+        )
+    ) |> ignore
+
     builder.Services.AddSingleton(Sokrates.Config.fromEnvironment ()) |> ignore
     builder.Services.AddSingleton<Sokrates.SokratesApi>() |> ignore
     builder.Services.AddSingleton(PhotoLibrary.Configuration.Config.fromEnvironment()) |> ignore

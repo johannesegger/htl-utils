@@ -91,7 +91,7 @@ let handleAddTeachersAsContacts photoLibraryConfig (sokratesApi: Sokrates.Sokrat
                         AAD.Domain.Contact.MailAddresses = List.take 1 aadUser.MailAddresses
                         AAD.Domain.Contact.Photo =
                             photo
-                            |> Option.map (fun (PhotoLibrary.Domain.Base64EncodedImage data) ->
+                            |> Option.map (fun (PhotoLibrary.Domain.Base64EncodedJpgImage data) ->
                                 AAD.Domain.Base64EncodedImage data
                             )
                     }
@@ -198,7 +198,7 @@ let handleGetKnowNameTeacherPhoto photoLibraryConfig shortName : HttpHandler =
     fun next ctx -> task {
         match PhotoLibrary.Core.tryGetTeacherPhoto shortName (imageSizeFromRequest ctx.Request) |> Reader.run photoLibraryConfig with
         | Some teacherPhoto ->
-            let (PhotoLibrary.Domain.Base64EncodedImage data) = teacherPhoto.Data
+            let (PhotoLibrary.Domain.Base64EncodedJpgImage data) = teacherPhoto.Data
             let bytes = Convert.FromBase64String data
             return! Successful.ok (setBody bytes) next ctx
         | None ->
@@ -235,7 +235,7 @@ let handleGetKnowNameStudentPhoto photoLibraryConfig studentId : HttpHandler =
     fun next ctx -> task {
         match PhotoLibrary.Core.tryGetStudentPhoto studentId (imageSizeFromRequest ctx.Request) |> Reader.run photoLibraryConfig with
         | Some studentPhoto ->
-            let (PhotoLibrary.Domain.Base64EncodedImage data) = studentPhoto.Data
+            let (PhotoLibrary.Domain.Base64EncodedJpgImage data) = studentPhoto.Data
             let bytes = Convert.FromBase64String data
             return! Successful.ok (setBody bytes) next ctx
         | None ->

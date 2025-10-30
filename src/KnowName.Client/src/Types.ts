@@ -1,4 +1,4 @@
-import * as DataTransfer from './DataTransfer'
+import * as DataTransfer from './DataTransfer.User'
 
 export type SelectedPersonGroup = {
   displayName: string

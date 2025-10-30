@@ -20,21 +20,21 @@ export type WorkflowError<T> =
 export type WorkflowResult<TResult, TError> =
   { succeeded: true, result: TResult } |
   { succeeded: false, error: WorkflowError<TError> }
-export type Workflow<TResult, TError> = {
+export type Workflow<TParams extends unknown[], TResult, TError> = {
   isRunning: Ref<boolean>
-  run: () => Promise<void>
+  run: (...args: TParams) => Promise<void>
   result: Ref<WorkflowResult<TResult, TError> | undefined>
 }
 export namespace Workflow {
-  export const init = <TResult, TError>(fn: () => Promise<Result<TResult, TError>>) : Workflow<TResult, TError> => {
+  export const init = <TParams extends unknown[], TResult, TError>(fn: (...args: TParams) => Promise<Result<TResult, TError>>) : Workflow<TParams, TResult, TError> => {
     const isRunning = ref(false)
     const result = ref<WorkflowResult<TResult, TError>>()
     return {
       isRunning,
-      run: async () => {
+      run: async (...args: TParams) => {
         isRunning.value = true
         try {
-          const runResult = await fn()
+          const runResult = await fn(...args)
           switch (runResult.type)
           {
             case 'ok':

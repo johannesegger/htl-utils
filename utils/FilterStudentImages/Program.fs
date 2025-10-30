@@ -16,7 +16,7 @@ sokratesStudents
     let photo =
         PhotoLibrary.Core.tryGetStudentPhoto sokratesId (None, None)
         |> Reader.run photoLibraryConfig
-        |> Option.map (_.Data >> fun (Base64EncodedImage data) -> Convert.FromBase64String data)
+        |> Option.map (_.Data >> fun (Base64EncodedJpgImage data) -> Convert.FromBase64String data)
     (v, photo)
 )
 |> List.iter (fun (student, photo) ->

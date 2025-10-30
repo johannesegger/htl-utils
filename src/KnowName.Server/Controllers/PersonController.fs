@@ -5,18 +5,19 @@ open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Logging
 open System
 
-module DataTransfer =
-    type Person = {
-        DisplayName: string
-        ImageUrl: string option
-    }
-    let person displayName imageUrl = { DisplayName = displayName; ImageUrl = imageUrl }
+module Game =
+    module DataTransfer =
+        type Person = {
+            DisplayName: string
+            ImageUrl: string option
+        }
+        let person displayName imageUrl = { DisplayName = displayName; ImageUrl = imageUrl }
 
-    type PersonGroup = {
-        DisplayName: string
-        Persons: Person list
-    }
-    let personGroup displayName persons = { DisplayName = displayName; Persons = persons }
+        type PersonGroup = {
+            DisplayName: string
+            Persons: Person list
+        }
+        let personGroup displayName persons = { DisplayName = displayName; Persons = persons }
 
 [<ApiController>]
 [<Route("/api/person")>]
@@ -31,20 +32,20 @@ type PersonController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Ph
             let teachersWithPhotos =
                 PhotoLibrary.Core.getTeachersWithPhotos
                 |> Reader.run photoLibraryConfig
-                |> List.map CIString
+                |> List.map Sokrates.SokratesId
                 |> Set.ofList
             let persons =
                 teachers
-                |> List.sortBy (fun v -> v.LastName, v.FirstName)
+                |> List.sortBy (fun v -> PersonName v.LastName, PersonName v.FirstName)
                 |> List.map (fun (teacher: Sokrates.Teacher) ->
                     let displayName = $"%s{teacher.ShortName} - %s{teacher.LastName.ToUpper()} %s{teacher.FirstName}"
                     let imageUrl =
-                        if Set.contains (CIString teacher.ShortName) teachersWithPhotos
-                        then Some (this.Url.Action(nameof this.GetTeacherPhoto, {| shortName = teacher.ShortName |}))
+                        if Set.contains teacher.Id teachersWithPhotos
+                        then Some (this.Url.Action(nameof this.GetTeacherPhoto, {| teacherId = teacher.Id.Value |}))
                         else None
-                    DataTransfer.person displayName imageUrl
+                    Game.DataTransfer.person displayName imageUrl
                 )
-            return DataTransfer.personGroup "Lehrer" persons
+            return Game.DataTransfer.personGroup "Lehrer" persons
         }
         let! students = async {
             let! classNames = sokratesApi.FetchClasses None
@@ -57,22 +58,20 @@ type PersonController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Ph
                     let studentsWithPhotos =
                         PhotoLibrary.Core.getStudentsWithPhotos
                         |> Reader.run photoLibraryConfig
-                        |> List.map (fun (PhotoLibrary.Domain.SokratesId studentId) -> Sokrates.SokratesId studentId)
+                        |> List.map Sokrates.SokratesId
                         |> Set.ofList
                     let persons =
                         students
-                        |> List.sortBy (fun v -> v.LastName, v.FirstName1)
+                        |> List.sortBy (fun v -> PersonName v.LastName, PersonName v.FirstName1)
                         |> List.map (fun student ->
                             let displayName = $"%s{student.LastName.ToUpper()} %s{student.FirstName1}"
                             let imageUrl =
                                 if Set.contains student.Id studentsWithPhotos
-                                then
-                                    let (Sokrates.SokratesId studentId) = student.Id
-                                    Some (this.Url.Action(nameof this.GetStudentPhoto, {| studentId = studentId |}))
+                                then Some (this.Url.Action(nameof this.GetStudentPhoto, {| studentId = student.Id.Value |}))
                                 else None
-                            DataTransfer.person displayName imageUrl
+                            Game.DataTransfer.person displayName imageUrl
                         )
-                    DataTransfer.personGroup className persons
+                    Game.DataTransfer.personGroup className persons
                 )
         }
         return [
@@ -81,11 +80,11 @@ type PersonController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Ph
         ]
     }
 
-    [<HttpGet("groups/teachers/{shortName}/photo")>]
-    member this.GetTeacherPhoto(shortName: string, [<FromQuery>]width: Nullable<int>, [<FromQuery>]height: Nullable<int>) = async {
-        match PhotoLibrary.Core.tryGetTeacherPhoto shortName (Option.ofNullable width, Option.ofNullable height) |> Reader.run photoLibraryConfig with
+    [<HttpGet("groups/teachers/{teacherId}/photo")>]
+    member this.GetTeacherPhoto(teacherId: string, [<FromQuery>]width: Nullable<int>, [<FromQuery>]height: Nullable<int>) = async {
+        match PhotoLibrary.Core.tryGetTeacherPhoto teacherId (Option.ofNullable width, Option.ofNullable height) |> Reader.run photoLibraryConfig with
         | Some teacherPhoto ->
-            let (PhotoLibrary.Domain.Base64EncodedImage data) = teacherPhoto.Data
+            let (PhotoLibrary.Domain.Base64EncodedJpgImage data) = teacherPhoto.Data
             let bytes = Convert.FromBase64String data
             return this.File(bytes, "image/jpeg") :> IActionResult
         | None ->
@@ -96,7 +95,7 @@ type PersonController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Ph
     member this.GetStudentPhoto(studentId: string, [<FromQuery>]width: Nullable<int>, [<FromQuery>]height: Nullable<int>) = async {
         match PhotoLibrary.Core.tryGetStudentPhoto studentId (Option.ofNullable width, Option.ofNullable height) |> Reader.run photoLibraryConfig with
         | Some studentPhoto ->
-            let (PhotoLibrary.Domain.Base64EncodedImage data) = studentPhoto.Data
+            let (PhotoLibrary.Domain.Base64EncodedJpgImage data) = studentPhoto.Data
             let bytes = Convert.FromBase64String data
             return this.File(bytes, "image/jpeg") :> IActionResult
         | None ->

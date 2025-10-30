@@ -50,7 +50,11 @@ module Config =
                 .Build()
         ConfigurationBinder.Get<SokratesConfig>(config.GetSection("Sokrates")).Build()
 
-type SokratesId = SokratesId of string
+type SokratesId =
+    SokratesId of string
+        member this.Value =
+            let (SokratesId v) = this
+            v
 
 type Gender = Male | Female
 

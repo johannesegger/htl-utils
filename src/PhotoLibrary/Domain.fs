@@ -1,15 +1,16 @@
 module PhotoLibrary.Domain
 
-type Base64EncodedImage = Base64EncodedImage of string
+type Base64EncodedJpgImage = Base64EncodedJpgImage of string
 
-type TeacherPhoto = {
-    ShortName: string
-    Data: Base64EncodedImage
+type Photo = {
+    PersonId: string
+    Data: Base64EncodedJpgImage
 }
 
-type SokratesId = SokratesId of string
+type PhotoType =
+    | TeacherPhoto of teacherId: string
+    | StudentPhoto of studentId: string
 
-type StudentPhoto = {
-    StudentId: SokratesId
-    Data: Base64EncodedImage
-}
+type PhotoUpdate =
+    | AddPhoto of PhotoType * SixLabors.ImageSharp.Image
+    | RemovePhoto of PhotoType
