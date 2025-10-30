@@ -13,8 +13,6 @@ export type Settings = {
 }
 
 export type UploadPhotosResult = {
-  newTeacherPhotos: string[]
-  removedTeacherPhotos: string[]
-  newStudentPhotos: string[]
-  removedStudentPhotos: string[]
+  updatedTeacherPhotos: string[]
+  updatedStudentPhotos: string[]
 }

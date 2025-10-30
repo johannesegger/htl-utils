@@ -50,35 +50,21 @@ module Admin =
         let settings personGroups = { PersonGroups = personGroups }
 
         type UpdatePhotosResult = {
-            NewTeacherPhotos: string list
-            RemovedTeacherPhotos: string list
-            NewStudentPhotos: string list
-            RemovedStudentPhotos: string list
+            UpdatedTeacherPhotos: string list
+            UpdatedStudentPhotos: string list
         }
         let updatePhotoResult photoUpdates =
             {
-                NewTeacherPhotos =
+                UpdatedTeacherPhotos =
                     photoUpdates
                     |> List.choose (function
                         | PhotoLibrary.Domain.AddPhoto (PhotoLibrary.Domain.TeacherPhoto name, _) -> Some name
                         | _ -> None
                     )
-                RemovedTeacherPhotos =
-                    photoUpdates
-                    |> List.choose (function
-                        | PhotoLibrary.Domain.RemovePhoto (PhotoLibrary.Domain.TeacherPhoto name) -> Some name
-                        | _ -> None
-                    )
-                NewStudentPhotos =
+                UpdatedStudentPhotos =
                     photoUpdates
                     |> List.choose (function
                         | PhotoLibrary.Domain.AddPhoto (PhotoLibrary.Domain.StudentPhoto name, _) -> Some name
-                        | _ -> None
-                    )
-                RemovedStudentPhotos =
-                    photoUpdates
-                    |> List.choose (function
-                        | PhotoLibrary.Domain.RemovePhoto (PhotoLibrary.Domain.StudentPhoto name) -> Some name
                         | _ -> None
                     )
             }
@@ -174,15 +160,10 @@ type AdminController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Pho
             let! teachers = sokratesApi.FetchTeachers
             return teachers |> List.map (fun v -> CIString v.ShortName, v.Id.Value) |> Map.ofList
         }
-        let validTeacherPhotoNames = teacherPhotoNameMap.Values |> Seq.map CIString |> Set.ofSeq
         let! validStudentPhotoNames = async {
             let! students = sokratesApi.FetchStudents None None
             return students |> List.map (_.Id.Value >> CIString) |> Set.ofList
         }
-        let existingTeacherPhotos =
-            PhotoLibrary.Core.getTeachersWithPhotos |> Reader.run photoLibraryConfig
-        let existingStudentPhotos =
-            PhotoLibrary.Core.getStudentsWithPhotos |> Reader.run photoLibraryConfig
         let! newPhotos = async {
             let! photos = Admin.Photos.getFromUploadedFiles files
             return photos
@@ -195,20 +176,8 @@ type AdminController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Pho
                 )
                 |> List.map PhotoLibrary.Domain.AddPhoto
         }
-        let photosToRemove =
-            [
-                yield! existingTeacherPhotos
-                |> List.filter (fun v -> not <| Set.contains (CIString v) validTeacherPhotoNames)
-                |> List.map PhotoLibrary.Domain.TeacherPhoto
-
-                yield! existingStudentPhotos
-                |> List.filter (fun v -> not <| Set.contains (CIString v) validStudentPhotoNames)
-                |> List.map PhotoLibrary.Domain.StudentPhoto
-            ]
-            |> List.map PhotoLibrary.Domain.RemovePhoto
         let photoUpdates = [
             yield! newPhotos
-            yield! photosToRemove
         ]
         PhotoLibrary.Core.updates photoUpdates |> Reader.run photoLibraryConfig
 

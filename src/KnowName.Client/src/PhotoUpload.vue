@@ -52,11 +52,12 @@ watch(() => uploadFilesWorkflow.result.value?.succeeded, uploadSucceeded => {
       </label>
       <span v-if="uploadFilesWorkflow.isRunning.value === true">Fotos werden hochgeladen...</span>
     </div>
-    <div v-if="uploadFilesWorkflow.isRunning.value === false && uploadFilesWorkflow.result.value?.succeeded === true" class="flex flex-col gap-1">
-      <span>{{ pluralize(uploadFilesWorkflow.result.value.result.newTeacherPhotos.length, 'Lehrerfoto wurde', 'Lehrerfotos wurden') }} <span class="text-green-500">aktualisiert</span>.</span>
-      <span>{{ pluralize(uploadFilesWorkflow.result.value.result.removedTeacherPhotos.length, 'Lehrerfoto wurde', 'Lehrerfotos wurden') }} <span class="text-red-500">entfernt</span>.</span>
-      <span>{{ pluralize(uploadFilesWorkflow.result.value.result.newStudentPhotos.length, 'Schülerfoto wurde', 'Schülerfotos wurden') }} <span class="text-green-500">aktualisiert</span>.</span>
-      <span>{{ pluralize(uploadFilesWorkflow.result.value.result.removedStudentPhotos.length, 'Schülerfoto wurde', 'Schülerfotos wurden') }} <span class="text-red-500">entfernt</span>.</span>
-    </div>
+    <template v-if="uploadFilesWorkflow.isRunning.value === false">
+      <span v-if="uploadFilesWorkflow.result.value?.succeeded === false" class="text-red-500">Fehler beim Hochladen der Fotos.</span>
+      <div v-else-if="uploadFilesWorkflow.result.value?.succeeded === true" class="flex flex-col gap-1">
+        <span>{{ pluralize(uploadFilesWorkflow.result.value.result.updatedTeacherPhotos.length, 'Lehrerfoto wurde', 'Lehrerfotos wurden') }} aktualisiert.</span>
+        <span>{{ pluralize(uploadFilesWorkflow.result.value.result.updatedStudentPhotos.length, 'Schülerfoto wurde', 'Schülerfotos wurden') }} aktualisiert.</span>
+      </div>
+    </template>
   </div>
 </template>
