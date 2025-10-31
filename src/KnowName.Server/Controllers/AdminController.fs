@@ -8,6 +8,7 @@ open Microsoft.Extensions.Logging
 open System
 open System.IO
 open System.Security.Cryptography.X509Certificates
+open System.Text.RegularExpressions
 
 module Admin =
     module Photos =
@@ -251,7 +252,13 @@ type AdminController (appConfigStorage: AppConfigStorage, sokratesApi: Sokrates.
     member _.AddPhotos(files: IFormFile[]) = async {
         let! teacherPhotoNameMap = async {
             let! teachers = sokratesApi.FetchTeachers
-            return teachers |> List.map (fun v -> CIString v.ShortName, v.Id.Value) |> Map.ofList
+            return teachers
+                |> List.map (fun v ->
+                    let shortName = Regex.Escape v.ShortName
+                    let lastName = Regex.Escape v.LastName
+                    let firstName = Regex.Escape v.FirstName
+                    Regex($"^({shortName}|{lastName}.?{firstName})$", RegexOptions.IgnoreCase), v.Id.Value
+                )
         }
         let! validStudentPhotoNames = async {
             let! students = sokratesApi.FetchStudents None None
@@ -261,7 +268,12 @@ type AdminController (appConfigStorage: AppConfigStorage, sokratesApi: Sokrates.
             let! photos = Admin.Photos.getFromUploadedFiles files
             return photos
                 |> List.choose (fun (name, image) ->
-                    teacherPhotoNameMap |> Map.tryFind (CIString name) |> Option.map (fun teacherId -> PhotoLibrary.Domain.TeacherPhoto teacherId, image)
+                    teacherPhotoNameMap
+                    |> List.tryPick (fun (pattern, teacherId) ->
+                        if pattern.IsMatch(name) then Some teacherId
+                        else None
+                    )
+                    |> Option.map (fun teacherId -> PhotoLibrary.Domain.TeacherPhoto teacherId, image)
                     |> Option.orElse (
                         if validStudentPhotoNames |> Set.contains (CIString name) then Some (PhotoLibrary.Domain.StudentPhoto name, image)
                         else None
