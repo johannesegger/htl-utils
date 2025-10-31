@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { Result, uiFetch, Workflow } from './UIFetch'
-import * as DataTransfer from './DataTransfer.User'
-import * as Types from './Types'
+import * as DataTransfer from './user/DataTransfer'
+import * as Types from './user/Types'
 import ErrorWithRetry from './ErrorWithRetry.vue'
-import GroupSelection from './GroupSelection.vue'
-import { filter, shuffle } from 'lodash-es'
-import SelectablePerson from './SelectablePerson.vue'
+import GroupSelection from './user/GroupSelection.vue'
+import { shuffle } from 'lodash-es'
+import SelectablePerson from './user/SelectablePerson.vue'
 import { PersonImage } from './PersonImage'
 
 const showGroups = ref(false)

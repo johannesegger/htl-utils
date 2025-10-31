@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { Result, uiFetch, Workflow } from './UIFetch'
-import * as DataTransfer from './DataTransfer.Admin'
-import { pluralize } from './Utils'
+import { Result, uiFetch, Workflow } from '@/UIFetch'
+import * as DataTransfer from './DataTransfer'
+import { pluralize } from '@/Utils'
 import { computed, watch } from 'vue'
 
 const props = defineProps<{
@@ -48,7 +48,7 @@ watch(() => uploadFilesWorkflow.result.value?.succeeded, uploadSucceeded => {
     <div class="flex items-center gap-2">
       <label>
         <input class="hidden" type="file" multiple :disabled="disabled === true" v-on:change="uploadFiles" />
-        <a class="btn" :class="{ 'opacity-50 cursor-not-allowed!': disabled === true }">Fotos hochladen und Archiv bereinigen</a>
+        <a class="btn" :class="{ 'opacity-50 cursor-not-allowed!': disabled === true }">Fotos hochladen</a>
       </label>
       <span v-if="uploadFilesWorkflow.isRunning.value === true">Fotos werden hochgeladen...</span>
     </div>

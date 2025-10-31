@@ -1,4 +1,4 @@
-import { uiFetch } from "./UIFetch"
+import { uiFetch } from "@/UIFetch"
 
 export type PersonImage =
   { type: 'link', url: string } |

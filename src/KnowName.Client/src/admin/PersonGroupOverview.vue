@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
-import * as DataTransfer from './DataTransfer.Admin'
+import * as DataTransfer from './DataTransfer'
 import PersonListItem from './PersonListItem.vue'
 
 const props = defineProps<{

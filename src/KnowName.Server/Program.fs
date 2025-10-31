@@ -2,9 +2,11 @@ module KnowName.Server.Program
 
 open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Builder
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Identity.Web
+open System
 
 [<EntryPoint>]
 let main args =
@@ -31,8 +33,32 @@ let main args =
         )
     ) |> ignore
 
-    builder.Services.AddSingleton(Sokrates.Config.fromEnvironment ()) |> ignore
-    builder.Services.AddSingleton<Sokrates.SokratesApi>() |> ignore
+    builder.Services.AddSingleton(AppConfigStorage(builder.Configuration.GetValue<string>("AppConfigPath"))) |> ignore
+    builder.Services.AddScoped<Sokrates.Config>(fun (ctx: IServiceProvider) ->
+        let appConfigStorage = ctx.GetRequiredService<AppConfigStorage>()
+        match appConfigStorage.TryReadConfig() with
+        | Some config ->
+            let sokratesConfig : Sokrates.Config = {
+                WebServiceUrl = config.Sokrates.WebServiceUrl
+                UserName = config.Sokrates.UserName
+                Password = config.Sokrates.Password
+                SchoolId = config.Sokrates.SchoolId
+                ClientCertificate = config.Sokrates.ClientCertificate
+                ClientCertificatePassphrase = ""
+            }
+            sokratesConfig
+        | None ->
+            let sokratesConfig : Sokrates.Config = {
+                WebServiceUrl = ""
+                UserName = ""
+                Password = ""
+                SchoolId = ""
+                ClientCertificate = [||]
+                ClientCertificatePassphrase = ""
+            }
+            sokratesConfig
+    ) |> ignore
+    builder.Services.AddScoped<Sokrates.SokratesApi>() |> ignore
     builder.Services.AddSingleton(PhotoLibrary.Configuration.Config.fromEnvironment()) |> ignore
 
     let app = builder.Build()

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref, watch } from 'vue'
-import { PersonImage } from './PersonImage'
-import type { Person } from './DataTransfer.Admin'
+import { PersonImage } from '@/PersonImage'
+import type { Person } from './DataTransfer'
 
 const props = defineProps<{
   person: Person

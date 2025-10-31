@@ -2,6 +2,7 @@ module Sokrates
 
 open FSharp.Data
 open System
+open System.IO
 open System.Net.Http
 open System.Security.Cryptography.X509Certificates
 open System.Text
@@ -20,7 +21,7 @@ type Config = {
     UserName: string
     Password: string
     SchoolId: string
-    ClientCertificatePath: string
+    ClientCertificate: byte[]
     ClientCertificatePassphrase: string
 }
 module Config =
@@ -38,7 +39,7 @@ module Config =
             UserName = x.UserName
             Password = x.Password
             SchoolId = x.SchoolId
-            ClientCertificatePath = x.ClientCertificatePath
+            ClientCertificate = File.ReadAllBytes(x.ClientCertificatePath)
             ClientCertificatePassphrase = x.ClientCertificatePassphrase
         }
 
@@ -166,7 +167,7 @@ type SokratesApi(config: Config) =
 
     let createHttpClient () =
         let httpClientHandler = new HttpClientHandler()
-        let cert = new X509Certificate2(config.ClientCertificatePath, config.ClientCertificatePassphrase)
+        let cert = new X509Certificate2(config.ClientCertificate, config.ClientCertificatePassphrase)
         httpClientHandler.ClientCertificates.Add(cert) |> ignore
         new HttpClient(httpClientHandler)
 

@@ -1,11 +1,13 @@
 namespace KnowName.Server.Controllers
 
+open KnowName.Server
 open Microsoft.AspNetCore.Authorization
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Logging
 open System
 open System.IO
+open System.Security.Cryptography.X509Certificates
 
 module Admin =
     module Photos =
@@ -44,11 +46,6 @@ module Admin =
         }
         let personGroup displayName persons = { DisplayName = displayName; Persons = persons }
 
-        type Settings = {
-            PersonGroups: PersonGroup list
-        }
-        let settings personGroups = { PersonGroups = personGroups }
-
         type UpdatePhotosResult = {
             UpdatedTeacherPhotos: string list
             UpdatedStudentPhotos: string list
@@ -69,14 +66,114 @@ module Admin =
                     )
             }
 
+        type ExistingConfig = {
+            Sokrates: {|
+                WebServiceUrl: string
+                UserName: string
+                Password: string
+                SchoolId: string
+                ClientCertificate: {|
+                    Subject: string
+                    Issuer: string
+                    ValidFrom: DateTime
+                    ValidUntil: DateTime
+                |}
+            |} option
+        }
+        let existingConfig (config: AppConfig option) = {
+            Sokrates =
+                config
+                |> Option.map (fun v ->
+                    use cert = new X509Certificate2(v.Sokrates.ClientCertificate)
+
+                    {|
+                        WebServiceUrl = v.Sokrates.WebServiceUrl
+                        UserName = v.Sokrates.UserName
+                        Password = v.Sokrates.Password
+                        SchoolId = v.Sokrates.SchoolId
+                        ClientCertificate = {|
+                            Subject = cert.Subject
+                            Issuer = cert.Issuer
+                            ValidFrom = cert.NotBefore
+                            ValidUntil = cert.NotAfter
+                        |}
+                    |})
+        }
+        
+        type NewConfig = {
+            Sokrates: {|
+                WebServiceUrl: string option
+                SchoolId: string option
+                UserName: string option
+                Password: string option
+                ClientCertificate: string option // base64
+                ClientCertificatePassphrase: string
+            |}
+        }
+
+    module Parse =
+        open FsToolkit.ErrorHandling
+
+        let certificate (cert: string) (passphrase: string) = validation {
+            try
+                let certBytes = Convert.FromBase64String(cert)
+                let cert = new X509Certificate2(certBytes, passphrase)
+                return cert.Export(X509ContentType.Pkcs12)
+            with e ->
+                return! Error e
+        }
+        let optCert cert passphrase = validation {
+            match cert with
+            | Some cert ->
+                let! cert = certificate cert passphrase
+                return Some cert
+            | None -> return None
+        }
+        let newConfig (dto: DataTransfer.NewConfig) : Validation<AppConfigUpdate, string> = validation {
+            let! cert =
+                optCert dto.Sokrates.ClientCertificate dto.Sokrates.ClientCertificatePassphrase
+                |> Validation.mapError (fun _ -> "invalid-sokrates-certificate")
+            return {
+                Sokrates = {|
+                    WebServiceUrl = dto.Sokrates.WebServiceUrl
+                    SchoolId = dto.Sokrates.SchoolId
+                    UserName = dto.Sokrates.UserName
+                    Password = dto.Sokrates.Password
+                    ClientCertificate = cert
+                |}
+            }
+        }
+
 [<ApiController>]
 [<Route("/api/admin")>]
 [<Authorize("ManageSettings")>]
-type AdminController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: PhotoLibrary.Configuration.Config, logger : ILogger<AdminController>) =
+type AdminController (appConfigStorage: AppConfigStorage, sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: PhotoLibrary.Configuration.Config, logger : ILogger<AdminController>) =
     inherit ControllerBase()
 
-    [<HttpGet>]
-    member this.GetSettings() = async {
+    [<HttpGet("settings")>]
+    member _.GetSettings() = async {
+        return appConfigStorage.TryReadConfig()
+            |> Admin.DataTransfer.existingConfig
+    }
+
+    [<HttpPost("settings")>]
+    member this.SaveSettings([<FromBody>]newConfig: Admin.DataTransfer.NewConfig) = async {
+        match Admin.Parse.newConfig newConfig with
+        | Ok configUpdate ->
+            let config =
+                match appConfigStorage.TryReadConfig() with
+                | Some existingConfig -> AppConfigUpdate.tryApply existingConfig configUpdate
+                | None -> AppConfigUpdate.tryConvertToConfig configUpdate
+            match config with
+            | Some config ->
+                appConfigStorage.WriteConfig config
+                return this.Ok(Admin.DataTransfer.existingConfig (Some config)) :> IActionResult
+            | None -> return this.BadRequest(["incomplete-config"])
+        | Error e -> return this.BadRequest(e)
+    }
+
+    [<HttpGet("persons")>]
+    member this.GetPersons() = async {
         let! teachers = async {
             let! teachers = sokratesApi.FetchTeachers
             let teachersWithPhotos =
@@ -124,14 +221,10 @@ type AdminController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Pho
                     Admin.DataTransfer.personGroup className persons
                 )
         }
-        return Admin.DataTransfer.settings
-            [
-                teachers
-                yield! students
-            ]
+        return [ teachers; yield! students ]
     }
 
-    [<HttpGet("groups/teachers/{teacherId}/photo")>]
+    [<HttpGet("persons/teachers/{teacherId}/photo")>]
     member this.GetTeacherPhoto(teacherId: string, [<FromQuery>]width: Nullable<int>, [<FromQuery>]height: Nullable<int>) = async {
         match PhotoLibrary.Core.tryGetTeacherPhoto teacherId (Option.ofNullable width, Option.ofNullable height) |> Reader.run photoLibraryConfig with
         | Some teacherPhoto ->
@@ -142,7 +235,7 @@ type AdminController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: Pho
             return this.NotFound()
     }
 
-    [<HttpGet("groups/students/{studentId}/photo")>]
+    [<HttpGet("persons/students/{studentId}/photo")>]
     member this.GetStudentPhoto(studentId: string, [<FromQuery>]width: Nullable<int>, [<FromQuery>]height: Nullable<int>) = async {
         match PhotoLibrary.Core.tryGetStudentPhoto studentId (Option.ofNullable width, Option.ofNullable height) |> Reader.run photoLibraryConfig with
         | Some studentPhoto ->

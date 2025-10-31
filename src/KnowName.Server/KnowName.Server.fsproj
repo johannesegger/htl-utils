@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AppConfig.fs" />
     <Compile Include="Controllers/AdminController.fs" />
     <Compile Include="Controllers/PersonController.fs" />
     <Compile Include="Program.fs" />
@@ -19,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.1.0" />
     <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
     <PackageReference Include="Microsoft.Identity.Web.GraphServiceClient" Version="4.0.1" />
   </ItemGroup>
