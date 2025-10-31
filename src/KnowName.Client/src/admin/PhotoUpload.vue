@@ -36,8 +36,8 @@ const uploadFiles = async (e: Event) => {
   await uploadFilesWorkflow.run([...fileList])
 }
 
-watch(() => uploadFilesWorkflow.result.value?.succeeded, uploadSucceeded => {
-  if (uploadSucceeded === true) {
+watch(uploadFilesWorkflow.result, uploadResult => {
+  if (uploadResult?.succeeded === true) {
     emit('uploaded')
   }
 })
