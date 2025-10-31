@@ -134,9 +134,9 @@ watch(saveSettingsWorkflow.result, v => {
 </script>
 
 <template>
-  <div v-if="loadedSettings === undefined">Einstellungen werden geladen...</div>
+  <div v-if="loadSettingsWorkflow.isRunning.value === true">Einstellungen werden geladen...</div>
   <ErrorWithRetry v-else-if="loadSettingsWorkflow.result.value?.succeeded === false" @retry="loadSettingsWorkflow.run">Fehler beim Laden der Einstellungen</ErrorWithRetry>
-  <div v-else>
+  <div v-else-if="loadedSettings !== undefined">
     <form @submit.prevent="saveSettingsWorkflow.run">
       <fieldset class="flex flex-col gap-4" :disabled="saveSettingsWorkflow.isRunning.value === true">
         <h2 class="text-xl small-caps">Einstellungen</h2>
