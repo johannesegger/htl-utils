@@ -196,12 +196,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 
 <template>
   <header class="grid grid-cols-3 items-center p-8 bg-amber-200">
-    <div class="justify-self-start flex items-center gap-2">
+    <div class="justify-self-start flex flex-col sm:flex-row items-center gap-2">
       <img src="/logo.svg" width="32px" height="32px" />
-      <h1 class="text-3xl small-caps">Know Name</h1>
+      <h1 class="text-lg sm:text-3xl text-center small-caps">Know Name</h1>
     </div>
     <div class="justify-self-center">
-      <button class="btn"
+      <button class="btn max-sm:text-sm"
         :class="{
           'bg-amber-50': showGroups === false,
           'bg-amber-300': showGroups === true
@@ -219,25 +219,23 @@ onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
       <ErrorWithRetry v-if="loadGroupsErrorMessage !== undefined" @retry="loadGroupsWorkflow.run">{{ loadGroupsErrorMessage }}</ErrorWithRetry>
       <GroupSelection v-if="loadGroupsWorkflow.result.value?.succeeded" v-model="selectedGroups" />
     </div>
-    <div class="grow grid grid-cols-[2fr_1fr] gap-2 min-h-0">
-      <template v-if="allPersons.length > 0">
-        <div class="grow shadow-xl/30 p-4 min-h-0">
-          <img v-if="nextPerson?.image?.type === 'blob'"
-            :src="nextPerson.image.url"
-            class="object-contain w-full h-full" />
+    <div v-if="allPersons.length > 0" class="grow grid grid-cols-[2fr_1fr] gap-2 min-h-50">
+      <div class="grow shadow-xl/30 p-4 min-h-0">
+        <img v-if="nextPerson?.image?.type === 'blob'"
+          :src="nextPerson.image.url"
+          class="object-contain w-full h-full" />
+      </div>
+      <div class="flex flex-col gap-2 px-2 py-4 shadow-xl/30 min-h-0">
+        <input ref="filter-input" class="input-text" placeholder="Name" v-model="nameFilter" />
+        <div class="overflow-y-auto">
+          <SelectablePerson v-for="person in filteredPersons" :key="person.id"
+            :display-name="person.displayName"
+            :group-name="person.groupName"
+            :is-selectable="person.image !== undefined"
+            :is-selected="person.id === selectedPerson?.id"
+            @select="submitGuess(person)" />
         </div>
-        <div class="flex flex-col gap-2 px-2 py-4 shadow-xl/30 min-h-0">
-          <input ref="filter-input" class="input-text" placeholder="Name" v-model="nameFilter" />
-          <div class="overflow-y-auto">
-            <SelectablePerson v-for="person in filteredPersons" :key="person.id"
-              :display-name="person.displayName"
-              :group-name="person.groupName"
-              :is-selectable="person.image !== undefined"
-              :is-selected="person.id === selectedPerson?.id"
-              @select="submitGuess(person)" />
-          </div>
-        </div>
-      </template>
+      </div>
     </div>
     <div class="flex justify-end gap-1">
       <div v-for="guess in guesses" class="rounded flex flex-col items-center p-2 gap-1 min-w-fit" :class="{ 'bg-green-100': guess.correct === true, 'bg-red-100': guess.correct === false }">
