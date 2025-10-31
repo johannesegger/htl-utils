@@ -75,7 +75,7 @@ type AppConfigStorage(path: string) =
             use stream = File.OpenRead path
             JsonSerializer.Deserialize<AppConfig>(stream, jsonConfig)
             |> Some
-        with :? FileNotFoundException -> None
+        with _ -> None
 
     member _.WriteConfig(config: AppConfig) : unit =
         use stream = File.OpenWrite path
