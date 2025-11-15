@@ -1,11 +1,12 @@
 namespace IndividualTests.Server.Controllers
 
+open AAD
 open IndividualTests.Server
 open Microsoft.AspNetCore.Authorization
 open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.Logging
-open Microsoft.Graph
+open Microsoft.Graph.Beta
 open Sokrates
 open System
 open System.Text.RegularExpressions
@@ -136,15 +137,14 @@ type SyncController (graphClient: GraphServiceClient, sokratesApi: SokratesApi, 
                     o.QueryParameters.Select <- [| sokratesIdAttributeName; "mail" |]
                 )
                 |> graphClient.ReadAll<_, Models.User>
-                |> AsyncEnumerable.toList
             return users
-                |> List.choose (fun v ->
+                |> Seq.choose (fun v ->
                     v.AdditionalData.TryGetValue(sokratesIdAttributeName)
                     |> Option.fromTryPattern
                     |> Option.bind ((fun v -> v :?> string) >> Option.ofObj)
                     |> Option.map (fun sokratesId -> sokratesId, v.Mail)
                 )
-                |> Map.ofList
+                |> Map.ofSeq
         }
         return students
             |> List.map (fun student ->
@@ -178,13 +178,12 @@ type SyncController (graphClient: GraphServiceClient, sokratesApi: SokratesApi, 
                     o.QueryParameters.Select <- [| "userPrincipalName"; "surname"; "givenName"; "mail" |]
                 )
                 |> graphClient.ReadAll<_, Models.User>
-                |> AsyncEnumerable.toList
             return users
-                |> List.map (fun v ->
+                |> Seq.map (fun v ->
                     let teacherShortName = Regex.Replace(v.UserPrincipalName, "@.*$", "")
                     (TeacherName.create teacherShortName, v)
                 )
-                |> Map.ofList
+                |> Map.ofSeq
         }
         return teacherShortNames
             |> List.map (fun shortName ->

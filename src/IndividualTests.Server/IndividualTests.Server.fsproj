@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Sokrates/Sokrates.fsproj" />
+    <ProjectReference Include="..\AAD\AAD.fsproj" />
   </ItemGroup>
 
 </Project>
