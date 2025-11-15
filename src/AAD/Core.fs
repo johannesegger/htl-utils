@@ -3,29 +3,9 @@ module AAD.Core
 open AAD.Configuration
 open AAD.Domain
 open Microsoft.Graph.Beta
-open Microsoft.Kiota.Abstractions.Serialization
 open System
 open System.IO
-open System.Threading.Tasks
-
-type Regex = System.Text.RegularExpressions.Regex
-
-let readAll<'a, 'b when 'a: (new: unit -> 'a) and 'a :> IParsable and 'a :> IAdditionalDataHolder> (graphClient: GraphServiceClient) (query: Task<'a>) = async {
-    let result = Collections.Generic.List<_>()
-    let! firstResponse = query |> Async.AwaitTask
-    let iterator =
-        Microsoft.Graph.PageIterator<'b, 'a>
-            .CreatePageIterator(
-                graphClient,
-                firstResponse,
-                (fun item ->
-                    result.Add(item)
-                    true // continue iteration
-                )
-            )
-    do! iterator.IterateAsync() |> Async.AwaitTask
-    return result
-}
+open System.Text.RegularExpressions
 
 module private User =
     let internal fields = [| "id"; "userPrincipalName"; "givenName"; "surname"; "proxyAddresses" |]
@@ -59,7 +39,8 @@ let private getFilteredGroups (graphServiceClient: GraphServiceClient) prefix (e
             config.QueryParameters.Filter <- $"startsWith(displayName,'%s{prefix}')"
             config.QueryParameters.Select <- [| "id"; "displayName"; "mail" |]
         )
-        |> readAll<_, Models.Group> graphServiceClient
+        |> graphServiceClient.ReadAll<_, Models.Group>
+        |> GraphServiceClient.formatError "Error while getting groups"
     return!
         graphGroups
         |> Seq.filter (fun (g: Models.Group) ->
@@ -72,7 +53,8 @@ let private getFilteredGroups (graphServiceClient: GraphServiceClient) prefix (e
                 graphServiceClient.Groups[g.Id].Members.GraphUser.GetAsync(fun config ->
                     config.QueryParameters.Select <- User.fields
                 )
-                |> readAll<_, Models.User> graphServiceClient
+                |> graphServiceClient.ReadAll<_, Models.User>
+                |> GraphServiceClient.formatError "Error while getting group members"
             return
                 {
                     Id = GroupId g.Id
@@ -98,7 +80,8 @@ let getUsers (graphServiceClient: GraphServiceClient) = async {
         graphServiceClient.Users.GetAsync(fun config ->
             config.QueryParameters.Select <- User.fields
         )
-        |> readAll<_, Models.User> graphServiceClient
+        |> graphServiceClient.ReadAll<_, Models.User>
+        |> GraphServiceClient.formatError "Error while getting users"
     return users |> Seq.map User.toDomain |> Seq.toList
 }
 
@@ -180,7 +163,8 @@ let private getAutoContactIds (graphServiceClient: GraphServiceClient) (UserId u
             config.QueryParameters.Select <- [| "id" |]
             config.QueryParameters.Filter <- "categories/any(category: category eq 'htl-utils-auto-generated')"
         )
-        |> readAll<_, Models.Contact> graphServiceClient
+        |> graphServiceClient.ReadAll<_, Models.Contact>
+        |> GraphServiceClient.formatError "Error while getting user contacts"
     return
         contacts
         |> Seq.map (fun c -> c.Id)
@@ -248,20 +232,21 @@ type private Calendar = {
     Name: string
 }
 
-let private getCalendars (graphServiceClient: GraphServiceClient) = async {
+let private getCalendars (graphServiceClient: GraphServiceClient) (UserId userId) = async {
     let! calendars =
-        graphServiceClient.Me.Calendars.GetAsync(fun config ->
+        graphServiceClient.Users.[userId].Calendars.GetAsync(fun config ->
             config.QueryParameters.Select <- [| "id"; "name" |]
         )
-        |> readAll<_, Models.Calendar> graphServiceClient
+        |> graphServiceClient.ReadAll<_, Models.Calendar>
+        |> GraphServiceClient.formatError "Error while getting calendars"
     return
         calendars
         |> Seq.map (fun c -> { Id = c.Id; Name = c.Name })
         |> Seq.toList
 }
 
-let private getBirthdayCalendarId (graphServiceClient: GraphServiceClient) = async {
-    let! calendars = getCalendars graphServiceClient
+let private getBirthdayCalendarId (graphServiceClient: GraphServiceClient) userId = async {
+    let! calendars = getCalendars graphServiceClient userId
 
     return
         calendars
@@ -276,35 +261,36 @@ let private getBirthdayCalendarId (graphServiceClient: GraphServiceClient) = asy
         )
 }
 
-let private getCalendarEventIds (graphServiceClient: GraphServiceClient) calendarId = async {
+let private getCalendarEventIds (graphServiceClient: GraphServiceClient) (UserId userId) calendarId = async {
     let! events =
-        graphServiceClient.Me.Calendars.[calendarId].Events.GetAsync()
-        |> readAll<_, Models.Event> graphServiceClient
+        graphServiceClient.Users.[userId].Calendars.[calendarId].Events.GetAsync()
+        |> graphServiceClient.ReadAll<_, Models.Event>
+        |> GraphServiceClient.formatError "Error while getting calendar events"
     return
         events
         |> Seq.map (fun e -> e.Id)
         |> Seq.toList
 }
 
-let private updateCalendarEvent (graphServiceClient: GraphServiceClient) eventId updatedEvent = async {
-    do! graphServiceClient.Me.Events.[eventId].PatchAsync(updatedEvent) |> Async.AwaitTask |> Async.Ignore
+let private updateCalendarEvent (graphServiceClient: GraphServiceClient) (UserId userId) eventId updatedEvent = async {
+    do! graphServiceClient.Users.[userId].Events.[eventId].PatchAsync(updatedEvent) |> Async.AwaitTask |> Async.Ignore
 }
 
-let private getBirthdayCalendarEventCount (graphServiceClient: GraphServiceClient) = async {
-    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient
-    let! birthdayEventIds = getCalendarEventIds graphServiceClient birthdayCalendarId
+let private getBirthdayCalendarEventCount (graphServiceClient: GraphServiceClient) userId = async {
+    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient userId
+    let! birthdayEventIds = getCalendarEventIds graphServiceClient userId birthdayCalendarId
     return List.length birthdayEventIds
 }
 
-let private configureBirthdayReminders (graphServiceClient: GraphServiceClient) = async {
-    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient
-    let! birthdayEventIds = getCalendarEventIds graphServiceClient birthdayCalendarId
+let private configureBirthdayReminders (graphServiceClient: GraphServiceClient) userId = async {
+    let! birthdayCalendarId = getBirthdayCalendarId graphServiceClient userId
+    let! birthdayEventIds = getCalendarEventIds graphServiceClient userId birthdayCalendarId
 
     do!
         birthdayEventIds
         |> Seq.map (fun eventId -> async {
             let event' = Models.Event(IsReminderOn = Nullable<_> true, ReminderMinutesBeforeStart = Nullable 0)
-            return! updateCalendarEvent graphServiceClient eventId event'
+            return! updateCalendarEvent graphServiceClient userId eventId event'
         })
         |> Async.Sequential
         |> Async.Ignore
@@ -319,7 +305,7 @@ let rec private waitUntil workflow = async {
 }
 
 let updateAutoContacts (graphServiceClient: GraphServiceClient) userId contacts = async {
-    let! birthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
+    let! birthdayEventCount = getBirthdayCalendarEventCount graphServiceClient userId
 
     printfn "%O: Removing existing contacts" DateTime.Now
     let! autoContactIds = getAutoContactIds graphServiceClient userId
@@ -327,22 +313,22 @@ let updateAutoContacts (graphServiceClient: GraphServiceClient) userId contacts 
 
     printfn "%O: Waiting until birthday calendar is cleared" DateTime.Now
     do! waitUntil (async {
-        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
+        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient userId
         return newBirthdayEventCount = birthdayEventCount - (List.length autoContactIds)
     })
-    let! birthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
+    let! birthdayEventCount = getBirthdayCalendarEventCount graphServiceClient userId
 
     printfn "%O: Adding new contacts" DateTime.Now
     do! addAutoContacts graphServiceClient userId contacts
 
     printfn "%O: Waiting until birthday calendar is filled" DateTime.Now
     do! waitUntil (async {
-        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient
+        let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient userId
         return newBirthdayEventCount = birthdayEventCount + (List.length contacts)
     })
 
     printfn "%O: Configuring birthday events" DateTime.Now
-    do! configureBirthdayReminders graphServiceClient
+    do! configureBirthdayReminders graphServiceClient userId
 
     printfn "%O: Finished" DateTime.Now
 }

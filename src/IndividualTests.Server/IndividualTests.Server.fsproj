@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <Compile Include="HttpQueryAttribute.fs" />
-    <Compile Include="MicrosoftGraphExtensions.fs" />
     <Compile Include="AsyncEnumerableExtensions.fs" />
     <Compile Include="WeatherForecast.fs" />
     <Compile Include="Controllers/SyncController.fs" />

@@ -1,4 +1,5 @@
-﻿open Domain
+﻿open AAD
+open Domain
 open Microsoft.Graph.Beta
 open Sokrates
 
@@ -32,8 +33,8 @@ async {
 
     let aadConfig = AAD.Configuration.Config.fromEnvironment ()
     let graphClient =
-        // GraphServiceClientFactory.create aadConfig.OidcConfig [| "https://graph.microsoft.com/.default" |]
-        GraphServiceClientFactory.create aadConfig.OidcConfig [| "Directory.ReadWrite.All" |]
+        // GraphServiceClientFactory.createWithAppSecret aadConfig.OidcConfig
+        GraphServiceClientFactory.createWithDeviceCode aadConfig.OidcConfig [| "Directory.ReadWrite.All" |] "HtlUtils.UpdateGrpEltern"
 
     let! (existingParentGroups: ExistingParentGroup list) = graphClient.GetParentGroups()
     let existingParentGroups: ExistingParentGroup list = []

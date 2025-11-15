@@ -20,3 +20,14 @@ let shuffle<'a> =
         let a = Array.ofList l
         Array.iteri (fun i _ -> swap a i (rand.Next(i, Array.length a))) a
         Array.toList a
+
+let diff (oldItems, oldItemToKey) (newItems, newItemToKey) =
+    let oldItemsSet = oldItems |> List.map oldItemToKey |> Set.ofList
+    let newItemsSet = newItems |> List.map newItemToKey |> Set.ofList
+    let removed =
+        oldItems
+        |> List.filter (fun v -> not <| Set.contains (oldItemToKey v) newItemsSet)
+    let added =
+        newItems
+        |> List.filter (fun v -> not <| Set.contains (newItemToKey v) oldItemsSet)
+    (added, removed)

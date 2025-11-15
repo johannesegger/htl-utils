@@ -1,11 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
+    <UserSecretsId>htl-utils</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="Config.fs" />
+    <Compile Include="MicrosoftGraphExtensions.fs" />
     <Compile Include="Domain.fs" />
     <Compile Include="Core.fs" />
     <Compile Include="Auth.fs" />
@@ -17,8 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.17.0" />
     <PackageReference Include="Giraffe" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Graph.Beta" Version="5.47.0-preview" />
+    <PackageReference Include="Microsoft.Graph.Beta" Version="5.125.0-preview" />
     <PackageReference Include="Polly" Version="7.1.1" />
   </ItemGroup>
 

@@ -88,5 +88,9 @@ module Config =
                 |> Seq.toList
         }
     let fromEnvironment () =
-        let config = ConfigurationBuilder().AddEnvironmentVariables().AddUserSecrets("htl-utils").Build()
+        let config =
+            ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddUserSecrets<AADConfig>()
+                .Build()
         ConfigurationBinder.Get<AADConfig>(config.GetSection("AAD")).Build()
