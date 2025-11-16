@@ -37,26 +37,33 @@ module TeacherLocation =
             Address = { Street = address.Street; City = $"{address.Zip} {address.City}" }
         }
 
-let searchUrl (address: string) = $"http://localhost:8080/search?format=json&q=%s{HttpUtility.UrlEncode address}"
-// let searchUrl (address: string) = $"https://nominatim.openstreetmap.org/search?format=json&q=%s{HttpUtility.UrlEncode address}"
+let getCountryCode v =
+    if v = "A" then "at"
+    else failwith $"Unknown country code for country \"%s{v}\""
 
-let getSearchAddress (address: Sokrates.Address) =
-    let street =
-        address.Street
-        |> fun v ->
-            match v.IndexOf('/') with
-            | -1 -> v
-            | x -> v.Substring(0, x)
-        |> fun v -> Regex.Replace(v, @" (Haus|Top) \d+", "")
-    $"%s{street}, %s{address.Zip}"
+let getRawAddress v =
+    Regex.Replace(v, $"(?<=/)\d+$", "")
+
+let searchUrl (address: Sokrates.Address) =
+    let searchParams =
+        [
+            "street", getRawAddress address.Street
+            "postalcode", address.Zip
+            "city", address.City
+            "country", getCountryCode address.Country
+        ]
+        |> List.map (fun (n, v) -> $"%s{n}=%s{HttpUtility.UrlEncode v}")
+        |> String.concat "&"
+    $"http://localhost:8080/search?format=json&%s{searchParams}"
+// let searchUrl (address: string) = $"https://nominatim.openstreetmap.org/search?format=json&q=%s{HttpUtility.UrlEncode address}"
 
 let tryFetchCoordinates (teacher: Sokrates.Teacher) = async {
     match teacher.Address with
     | Some address ->
         // do! Async.Sleep 1000 // when using nominatim.openstreetmap.org
         printfn $"Loading address of %s{teacher.ShortName}"
-        let fullAddress = getSearchAddress address
-        let url = searchUrl fullAddress
+        // let fullAddress = getSearchAddress address
+        let url = searchUrl address
         use httpClient = new HttpClient()
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("HTL Utils Person Map 1.0");
         let serializerOptions = JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
@@ -71,7 +78,7 @@ let tryFetchCoordinates (teacher: Sokrates.Teacher) = async {
                 |> Some
         | x :: _ ->
             Console.ForegroundColor <- ConsoleColor.Blue
-            printfn $"Warning: Multiple locations for %s{teacher.ShortName} (Address: %s{fullAddress}):"
+            printfn $"Warning: Multiple locations for %s{teacher.ShortName}, address: %A{teacher.Address} (using first one):"
             response
             |> List.iter (fun v -> printfn $"  * (%s{v.Lat}, {v.Lon}): {v.DisplayName}")
             Console.ResetColor()
@@ -84,7 +91,7 @@ let tryFetchCoordinates (teacher: Sokrates.Teacher) = async {
                 |> Some
         | [] ->
             Console.ForegroundColor <- ConsoleColor.Red
-            printfn $"Warning: Couldn't resolve address of %s{teacher.ShortName} (%s{fullAddress})"
+            printfn $"Warning: Couldn't resolve address of %s{teacher.ShortName} (%A{teacher.Address})"
             Console.ResetColor()
             return None
     | None ->

@@ -1,0 +1,8 @@
+services:
+  nominatim:
+    image: mediagis/nominatim:5.2
+    environment:
+      - PBF_URL=https://download.geofabrik.de/europe/austria-latest.osm.pbf
+      - REPLICATION_URL=https://download.geofabrik.de/europe/austria-updates
+    ports:
+      - 8080:8080
