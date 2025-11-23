@@ -3,7 +3,7 @@ module Domain
 open System
 
 type ParentGroupDefinition = {
-    GroupName: string
+    Name: string
     StudentsWithoutAddresses: string list
     StudentAddresses: string list
 }
@@ -24,7 +24,10 @@ let getParentsDiff parentGroupDefinitions existingParentGroups =
     let existingParents =
         existingParentGroups
         |> List.collect _.Members
-    let existingGuests = existingParents |> List.filter (fun v -> v.UserType = GuestUser)
+        |> List.distinct
+    let existingGuests =
+        existingParents
+        |> List.filter (fun v -> v.UserType = GuestUser)
     let newGuests =
         parentGroupDefinitions
         |> List.collect _.StudentAddresses

@@ -30,7 +30,7 @@ type SokratesApi with
         |> List.groupBy (fst >> _.SchoolClass)
         |> List.map (fun (schoolClass, students) ->
             {
-                GroupName = $"GrpEltern%s{schoolClass}"
+                Name = $"GrpEltern%s{schoolClass}"
                 StudentsWithoutAddresses =
                     students
                     |> List.filter (snd >> List.isEmpty)
