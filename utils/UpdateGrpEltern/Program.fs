@@ -36,7 +36,7 @@ async {
                 |> List.tryFind (fun v -> v.Name = group.Name)
                 |> Option.defaultWith (fun () -> failwith $"Can't find %s{group.Name}")
             let users = group.StudentAddresses
-            let (usersToAdd, usersToRemove) = List.diff (parentGroup.Members, id) (users, id)
+            let (usersToAdd, usersToRemove) = List.diff (parentGroup.Members, CIString) (users, CIString)
             if usersToAdd.Length > 0 || usersToRemove.Length > 0 then
                 let groupDescription =
                     match group.StudentsWithoutAddresses with

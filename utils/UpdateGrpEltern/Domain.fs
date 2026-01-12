@@ -32,8 +32,7 @@ let getParentsDiff parentGroupDefinitions existingParentGroups =
         parentGroupDefinitions
         |> List.collect _.StudentAddresses
         |> List.filter (fun v -> not <| v.EndsWith($"@htlvb.at", StringComparison.InvariantCultureIgnoreCase))
-        |> List.map (fun v -> v.ToLowerInvariant())
-        |> List.distinct
+        |> List.distinctBy CIString
     List.diff
-        (existingGuests, _.MailAddress.ToLowerInvariant())
-        (newGuests, id)
+        (existingGuests, _.MailAddress >> CIString)
+        (newGuests, CIString)
