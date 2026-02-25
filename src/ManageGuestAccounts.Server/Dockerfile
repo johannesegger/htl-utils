@@ -1,10 +1,10 @@
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 RUN apt update && apt install -y chromium-driver libldap-2.5-0 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build-server
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-server
 WORKDIR /src
 COPY ["src/ManageGuestAccounts.Server/ManageGuestAccounts.Server.fsproj", "ManageGuestAccounts.Server/"]
 RUN dotnet restore "ManageGuestAccounts.Server/ManageGuestAccounts.Server.fsproj"
