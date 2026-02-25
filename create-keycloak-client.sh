@@ -36,6 +36,11 @@ CLIENT_ID=`$KCADM get clients --target-realm htlvb --fields id,clientId | jq '.[
 
 $KCADM create clients/$CLIENT_ID/roles --target-realm htlvb --set name=knowname-user
 $KCADM create clients/$CLIENT_ID/roles --target-realm htlvb --set name=knowname-admin
-
 $KCADM add-roles --target-realm htlvb --uusername eggj --cclientid htl-utils --rolename knowname-admin
 $KCADM add-roles --target-realm htlvb --gname Lehrer --cclientid htl-utils --rolename knowname-user
+
+$KCADM create clients/$CLIENT_ID/roles --target-realm htlvb --set name=guestaccounts-manager
+$KCADM add-roles --target-realm htlvb --uusername eggj --cclientid htl-utils --rolename guestaccounts-manager
+$KCADM add-roles --target-realm htlvb --uusername pacr --cclientid htl-utils --rolename guestaccounts-manager
+$KCADM add-roles --target-realm htlvb --uusername molj --cclientid htl-utils --rolename guestaccounts-manager
+$KCADM add-roles --target-realm htlvb --gname Sekretariat --cclientid htl-utils --rolename guestaccounts-manager

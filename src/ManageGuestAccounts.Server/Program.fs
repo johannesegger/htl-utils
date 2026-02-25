@@ -2,11 +2,11 @@ module ManageGuestAccounts.Server.Program
 
 open AD.Configuration
 open AD.Core
-open Microsoft.AspNetCore.Authentication.JwtBearer
+open Microsoft.AspNetCore.Authentication
 open Microsoft.AspNetCore.Builder
+open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
-open Microsoft.Identity.Web
 open System.Text.Json.Serialization
 
 [<EntryPoint>]
@@ -19,15 +19,17 @@ let main args =
             options.JsonSerializerOptions.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
         ) |> ignore
 
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AAD"))
-        .EnableTokenAcquisitionToCallDownstreamApi()
-        .AddMicrosoftGraph(builder.Configuration.GetSection("Graph"))
-        .AddInMemoryTokenCaches() |> ignore
+    builder.Services.AddAuthentication()
+        .AddJwtBearer(fun options ->
+            builder.Configuration.GetSection("Oidc").Bind(options)
+        ) |> ignore
+    builder.Services.AddTransient<IClaimsTransformation>(fun provider ->
+        new KeycloakRolesClaimsTransformation("htl-utils")
+    ) |> ignore
 
     builder.Services.AddAuthorization(fun v ->
         v.AddPolicy("ManageGuestAccounts", fun policy ->
-            policy.RequireRole("GuestAccounts.Manager") |> ignore
+            policy.RequireRole("guestaccounts-manager") |> ignore
         )
     ) |> ignore
 

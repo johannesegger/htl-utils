@@ -5,7 +5,7 @@ export type FetchResult =
   { succeeded: false, response?: Response }
 
 export const uiFetch = async (fetchUrl: string, fetchParams?: RequestInit) : Promise<FetchResult> => {
-  const authHeader = await getFetchHeaderWithAccessToken([])
+  const authHeader = await getFetchHeaderWithAccessToken()
   try {
     const { headers, ...rest } = fetchParams ?? { headers: {} }
     const response = await fetch(fetchUrl, { headers: { ...authHeader, ...headers }, ...rest})
