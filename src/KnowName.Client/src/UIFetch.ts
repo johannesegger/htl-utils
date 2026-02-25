@@ -2,7 +2,7 @@ import { getFetchHeaderWithAccessToken } from '@/auth'
 import { ref, type Ref } from 'vue'
 
 export const uiFetch = async (fetchUrl: string, fetchParams?: RequestInit) : Promise<Response> => {
-  const authHeader = await getFetchHeaderWithAccessToken([])
+  const authHeader = await getFetchHeaderWithAccessToken()
   const { headers, ...rest } = fetchParams ?? { headers: {} }
   return await fetch(fetchUrl, { headers: { ...authHeader, ...headers }, ...rest})
 }
