@@ -552,7 +552,7 @@ type ADApi(config: Config) =
         let newAccounts =
             Seq.initInfinite ((+) 1 >> fun userNumber ->
                 let userName = $"htlgast.%s{group}-%02d{userNumber}"
-                let passwordChars = ['A'..'Z'] @ ['a'..'z'] @ ['0'..'9'] |> List.toArray
+                let passwordChars = ['a'..'z'] @ ['0'..'9'] |> List.toArray
                 let password = RandomNumberGenerator.GetString(passwordChars, 5)
                 {
                     UserName = UserName userName
