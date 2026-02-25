@@ -1,5 +1,5 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
-RUN apt update && apt install -y chromium-driver libldap2 && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y chromium-driver libnspr4 libldap2 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443
