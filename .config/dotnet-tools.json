@@ -6,7 +6,15 @@
       "version": "4.1.4",
       "commands": [
         "fable"
-      ]
+      ],
+      "rollForward": false
+    },
+    "microsoft.openapi.kiota": {
+      "version": "1.30.0",
+      "commands": [
+        "kiota"
+      ],
+      "rollForward": false
     }
   }
 }

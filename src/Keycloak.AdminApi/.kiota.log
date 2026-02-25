@@ -1,0 +1,14 @@
+Warning: KiotaBuilder OpenAPI warning: #/ - A servers entry (v3) or host + basePath + schemes properties (v2) was not present in the OpenAPI description. The root URL will need to be set manually with the request adapter.
+Warning: KiotaBuilder No server url found in the OpenAPI document. The base url will need to be set when using the client.
+Warning: KiotaBuilder Ignoring duplicate parameter _id
+Warning: KiotaBuilder Ignoring duplicate parameter deep
+Warning: KiotaBuilder Ignoring duplicate parameter exactName
+Warning: KiotaBuilder Ignoring duplicate parameter first
+Warning: KiotaBuilder Ignoring duplicate parameter matchingUri
+Warning: KiotaBuilder Ignoring duplicate parameter max
+Warning: KiotaBuilder Ignoring duplicate parameter name
+Warning: KiotaBuilder Ignoring duplicate parameter owner
+Warning: KiotaBuilder Ignoring duplicate parameter scope
+Warning: KiotaBuilder Ignoring duplicate parameter type
+Warning: KiotaBuilder Ignoring duplicate parameter uri
+Warning: KiotaBuilder Ignoring duplicate parameter name

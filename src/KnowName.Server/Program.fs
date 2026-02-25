@@ -1,12 +1,11 @@
 module KnowName.Server.Program
 
-open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
-open Microsoft.Identity.Web
 open System
+open Microsoft.AspNetCore.Authentication
 
 [<EntryPoint>]
 let main args =
@@ -15,21 +14,23 @@ let main args =
 
     builder.Services.AddControllers() |> ignore
 
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AAD"))
-        .EnableTokenAcquisitionToCallDownstreamApi()
-        .AddMicrosoftGraph(builder.Configuration.GetSection("Graph"))
-        .AddInMemoryTokenCaches() |> ignore
+    builder.Services.AddAuthentication()
+        .AddJwtBearer(fun options ->
+            builder.Configuration.GetSection("Oidc").Bind(options)
+        ) |> ignore
+    builder.Services.AddTransient<IClaimsTransformation>(fun provider ->
+        new KeycloakRolesClaimsTransformation("htl-utils")
+    ) |> ignore
 
     builder.Services.AddAuthorization(fun v ->
         v.AddPolicy("ReadPersonData", fun policy ->
-            policy.RequireRole("KnowName.User") |> ignore
+            policy.RequireRole("knowname-user") |> ignore
         )
     ) |> ignore
 
     builder.Services.AddAuthorization(fun v ->
         v.AddPolicy("ManageSettings", fun policy ->
-            policy.RequireRole("KnowName.Admin") |> ignore
+            policy.RequireRole("knowname-admin") |> ignore
         )
     ) |> ignore
 
