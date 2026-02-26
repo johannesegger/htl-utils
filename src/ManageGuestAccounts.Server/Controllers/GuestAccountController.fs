@@ -206,14 +206,7 @@ type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, con
     member this.CreateGuestAccounts([<FromBody>]data: DataTransfer.CreateGuestAccountsRequestBody) = async {
         match Parse.createGuestAccountsData data with
         | Ok data ->
-            // let! accounts = ad.CreateGuestAccounts(data.Group, data.Count, data.WLANOnly, data.Notes)
-            let accounts = [
-                {
-                    AD.Domain.NewGuestAccount.UserName = AD.Domain.UserName "htlgast.eggj-01"
-                    AD.Domain.NewGuestAccount.Password = "12345"
-                    AD.Domain.NewGuestAccount.Notes = Some "bla blub"
-                }, Ok()
-            ]
+            let! accounts = ad.CreateGuestAccounts(data.Group, data.Count, data.WLANOnly, data.Notes)
             let htmlTemplate =
                 config.GetValue<string>("NewGuestAccountsHtmlTemplateFilePath")
                 |> File.ReadAllText
