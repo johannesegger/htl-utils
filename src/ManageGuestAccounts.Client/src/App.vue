@@ -85,7 +85,6 @@ const createGuestAccounts = async () => {
       if (createdAccountGroup.accounts.every(v => v.errors.length === 0)) {
         resetNewAccountsForm()
       }
-      printPdf(createdAccountGroup.pdf)
     }
     else if (result.response?.status === 400) {
       const errorCode = await result.response.text() as DataTransfer.CreateGuestAccountsValidationError
@@ -133,7 +132,7 @@ const createGuestAccounts = async () => {
             <span class="text-sm">Nur WLAN-Zugriff</span>
           </label>
           <div class="flex flex-col items-start gap-1">
-            <button type="submit" class="btn text-green-600 border-green-600">Accounts anlegen und drucken</button>
+            <button type="submit" class="btn text-green-600 border-green-600">Accounts anlegen</button>
             <template v-if="createAccountsResponse !== undefined">
               <span v-if="createAccountsResponse.type === 'not-authorized'" class="text-sm text-red-700">Sie sind nicht berechtigt.</span>
               <template v-if="createAccountsResponse.type === 'validation-error'">
@@ -143,7 +142,10 @@ const createGuestAccounts = async () => {
               </template>
               <template v-else-if="createAccountsResponse.type === 'accounts-created'">
                 <span v-if="createAccountsResponse.result.accounts.some(v => v.errors.length > 0)" class="text-sm text-red-700">Beim Anlegen eines oder mehrerer Accounts sind Fehler aufgetreten.</span>
-                <span v-else class="text-sm text-green-600">{{ pluralize(createAccountsResponse.result.accounts.length, 'Account wurde', 'Accounts wurden') }} erfolgreich angelegt.</span>
+                <span v-else class="text-sm text-green-600">
+                  {{ pluralize(createAccountsResponse.result.accounts.length, 'Account wurde', 'Accounts wurden') }} erfolgreich angelegt.
+                  <a class="underline cursor-pointer" @click="printPdf(createAccountsResponse.result.pdf)">Zugangsdaten drucken</a>
+                </span>
               </template>
               <span v-else-if="createAccountsResponse.type === 'other-error'" class="text-sm text-red-700">Beim Anlegen der Accounts ist ein Fehler aufgetreten. Bitte prüfen Sie, ob Accounts angelegt wurden und entfernen Sie sie ggf. wieder.</span>
             </template>
