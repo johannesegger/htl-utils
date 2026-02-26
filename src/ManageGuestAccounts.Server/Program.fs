@@ -38,6 +38,7 @@ let main args =
     builder.Services.AddTransient<ADApi>(fun ctx ->
         new ADApi(Config.fromEnvironment())
     ) |> ignore
+    builder.Services.AddSingleton<Controllers.Html.BrowserFactory>() |> ignore
 
     let app = builder.Build()
 

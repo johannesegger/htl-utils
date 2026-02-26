@@ -85,23 +85,50 @@ module Parse =
 module Html =
     open PuppeteerSharp
 
-    let convertToPdf (headerTemplate, footerTemplate) (html: string) = task {
+    type BrowserFactory(logger: ILogger<BrowserFactory>) =
+        member _.LaunchBrowser() = task {
+            if Environment.getEnvVar "DOTNET_RUNNING_IN_CONTAINER" = "true" then
+                logger.LogInformation("Launching browser in container environment")
+                let browserPath =
+                    Directory.GetDirectories("/chromium", "linux-*")
+                    |> Seq.tryPick(fun v ->
+                        let path = Path.Combine(v, "chrome-linux/chrome")
+                        if File.Exists path then Some path
+                        else None
+                    )
+                    |> function
+                    | Some v ->
+                        logger.LogInformation("Browser path: {BrowserPath}", v)
+                        v
+                    | None -> failwith "Browser not found: /chromium/linux-*/chrome-linux/chrome doesn't exist"
+
+                return! LaunchOptions(
+                    Args = [| "--no-sandbox" |], // Required to run it in Docker as root
+                    Headless = true,
+                    Browser = SupportedBrowser.Chromium,
+                    ExecutablePath = browserPath
+                )
+                |> Puppeteer.LaunchAsync
+            else
+                logger.LogInformation("Launching browser in normal environment")
+                let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-manage-guest-accounts-browser")
+                let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
+                let! downloadedBrowser = browserFetcher.DownloadAsync()
+                return!
+                    LaunchOptions(
+                        Headless = true,
+                        Browser = downloadedBrowser.Browser,
+                        ExecutablePath = downloadedBrowser.GetExecutablePath()
+                    )
+                    |> Puppeteer.LaunchAsync
+        }
+
+    let convertToPdf (browserFactory: BrowserFactory) (headerTemplate, footerTemplate) (html: string) = task {
         let tempFilePath = Path.GetTempFileName() |> fun v -> Path.ChangeExtension(v, ".html")
         File.WriteAllText(tempFilePath, html)
         use __ = { new IDisposable with member _.Dispose() = File.Delete tempFilePath }
-        
-        let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-manage-guest-accounts-browser")
-        let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
-        let! downloadedBrowser = browserFetcher.DownloadAsync()
-        let! browser =
-            LaunchOptions(
-                Args = [| "--no-sandbox" |], // Required to run it in Docker as root
-                Headless = true,
-                Browser = downloadedBrowser.Browser,
-                ExecutablePath = downloadedBrowser.GetExecutablePath()
-            )
-            |> Puppeteer.LaunchAsync
 
+        use! browser = browserFactory.LaunchBrowser()
         let! page = browser.NewPageAsync()
         let! response = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
         return! page.PdfDataAsync(PdfOptions(
@@ -130,7 +157,7 @@ module NewGuestAccounts =
 
     let private culture = CultureInfo.GetCultureInfo("de-AT")
 
-    let createPdf htmlTemplate (group: string) (accounts: AD.Domain.NewGuestAccount list) = async {
+    let createPdf (browserFactory: Html.BrowserFactory) htmlTemplate (group: string) (accounts: AD.Domain.NewGuestAccount list) = async {
         let logoBase64 = File.ReadAllBytes("logo.svg") |> Convert.ToBase64String
         let headerTemplate =
             $"""<div style="width: 297mm; margin: 0 1cm; font-size: 12px; font-variant-caps: small-caps; display: flex; align-items: center; justify-content: space-between">
@@ -153,13 +180,13 @@ module NewGuestAccounts =
                     {| userName = userName; password = account.Password; notes = account.Notes |}
             ]
             |> fromText htmlTemplate
-        return! Html.convertToPdf (headerTemplate, footerTemplate) html |> Async.AwaitTask
+        return! Html.convertToPdf browserFactory (headerTemplate, footerTemplate) html |> Async.AwaitTask
     }
 
 [<ApiController>]
 [<Route("api/guest-accounts")>]
 [<Authorize("ManageGuestAccounts")>]
-type GuestAccountController (ad: ADApi, config: IConfiguration, logger : ILogger<GuestAccountController>) =
+type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, config: IConfiguration, logger : ILogger<GuestAccountController>) =
     inherit ControllerBase()
 
     [<HttpGet>]
@@ -179,11 +206,18 @@ type GuestAccountController (ad: ADApi, config: IConfiguration, logger : ILogger
     member this.CreateGuestAccounts([<FromBody>]data: DataTransfer.CreateGuestAccountsRequestBody) = async {
         match Parse.createGuestAccountsData data with
         | Ok data ->
-            let! accounts = ad.CreateGuestAccounts(data.Group, data.Count, data.WLANOnly, data.Notes)
+            // let! accounts = ad.CreateGuestAccounts(data.Group, data.Count, data.WLANOnly, data.Notes)
+            let accounts = [
+                {
+                    AD.Domain.NewGuestAccount.UserName = AD.Domain.UserName "htlgast.eggj-01"
+                    AD.Domain.NewGuestAccount.Password = "12345"
+                    AD.Domain.NewGuestAccount.Notes = Some "bla blub"
+                }, Ok()
+            ]
             let htmlTemplate =
                 config.GetValue<string>("NewGuestAccountsHtmlTemplateFilePath")
                 |> File.ReadAllText
-            let! pdf = NewGuestAccounts.createPdf htmlTemplate data.Group (accounts |> List.map fst)
+            let! pdf = NewGuestAccounts.createPdf browserFactory htmlTemplate data.Group (accounts |> List.map fst)
             return this.Ok(DataTransfer.createdAccountsWithResults data.Group accounts pdf) :> IActionResult
         | Error e ->
             return this.BadRequest(e)
@@ -193,4 +227,15 @@ type GuestAccountController (ad: ADApi, config: IConfiguration, logger : ILogger
     member _.RemoveGuestAccounts(group: string) = async {
         let! result = ad.RemoveGuestAccounts group
         return DataTransfer.removedAccounts result
+    }
+
+[<ApiController>]
+[<Route("api/test-pdf-generation")>]
+type TestPdfGenerationController (browserFactory: Html.BrowserFactory, logger : ILogger<TestPdfGenerationController>) =
+    inherit ControllerBase()
+
+    [<HttpGet>]
+    member _.GetSamplePdf() = async {
+        let! pdfContent = Html.convertToPdf browserFactory ("", "") "<h1>Yay. That works.<h1>" |> Async.AwaitTask
+        return FileContentResult(pdfContent, Net.Mime.MediaTypeNames.Application.Pdf)
     }
