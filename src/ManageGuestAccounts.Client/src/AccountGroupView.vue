@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import * as DataTransfer from './DataTransfer'
 import { uiFetch } from './UIFetch'
 import { pluralize } from './Utils'
@@ -7,6 +7,8 @@ import { pluralize } from './Utils'
 const props = defineProps<{
   accountGroup: DataTransfer.ExistingAccountGroup
 }>()
+
+const isCollapsed = ref(true)
 
 const formatAccountCreatedTimestamp = (date: Date) => {
   const format = new Intl.DateTimeFormat('de-AT', { weekday: 'short', day: '2-digit', 'month': '2-digit', 'year': 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -32,6 +34,12 @@ const removeGroup = async () => {
   }
 }
 
+watch(isCollapsed, isCollapsed => {
+  if (isCollapsed === true) {
+    removeState.value = 'none'
+  }
+})
+
 const removeButtonTitle = computed(() => {
   switch(removeState.value) {
     case 'none': return 'Gruppe entfernen'
@@ -45,9 +53,12 @@ const removeButtonTitle = computed(() => {
 
 <template>
   <div :class="{ 'opacity-50': removeState === 'is-removed' }">
-    <div class="flex items-center gap-4">
-      <span>Gruppe "{{ accountGroup.group }}" ({{ pluralize(accountGroup.accounts.length, 'Account', 'Accounts') }})</span>
-      <button class="btn"
+    <div class="flex items-top gap-4">
+      <a class="cursor-pointer" @click="isCollapsed = !isCollapsed">
+        <i class="fa-solid fa-angle-right" :class="{ 'fa-angle-right': isCollapsed === true, 'fa-angle-down': isCollapsed === false }"></i>
+        Gruppe "{{ accountGroup.group }}" ({{ pluralize(accountGroup.accounts.length, 'Account', 'Accounts') }})
+      </a>
+      <button v-if="isCollapsed === false" class="btn"
         :class="{ 'text-red-700 border-red-700': removeState === 'is-marked-for-removal' }"
         :title="removeButtonTitle"
         :disabled="removeState === 'is-removing' || removeState === 'is-removed'"
@@ -56,7 +67,7 @@ const removeButtonTitle = computed(() => {
       </button>
       <span v-if="removeState === 'has-removing-failed'" class="text-sm text-red-700">Fehler beim Entfernen der Gruppe.</span>
     </div>
-    <ul class="ml-4 list-disc text-sm">
+    <ul v-if="isCollapsed === false" class="ml-4 list-disc text-sm">
       <li v-for="account in accountGroup.accounts" :key="account.name">
         {{ account.name }}
         <ul class="ml-4 list-[circle] text-xs">
