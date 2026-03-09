@@ -2,9 +2,6 @@
 open Domain
 open Sokrates
 
-let debug = false
-let dryRun = true
-
 async {
     let sokratesApi = SokratesApi.FromEnvironment()
     let! sokratesParentAddresses = sokratesApi.GetParentGroups()
