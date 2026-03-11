@@ -12,7 +12,7 @@ $KCADM create clients --target-realm htlvb \
     --set enabled=true \
     --set rootUrl=https://bro.htlvb.at/ \
     --set baseUrl=https://bro.htlvb.at/ \
-    --set "redirectUris=[\"http://localhost:5173/*\", \"https://bro.htlvb.at/*\"]" \
+    --set "redirectUris=[\"http://localhost:5173/*\", \"https://htlvb-htlutils2:4170/*\", \"https://htlvb-htlutils2:4171/*\", \"https://bro.htlvb.at:4170/*\", \"https://bro.htlvb.at:4171/*\"]" \
     --set "webOrigins=[\"+\"]" \
     --set publicClient=true \
     --set frontchannelLogout=true \
