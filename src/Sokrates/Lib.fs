@@ -2,6 +2,7 @@ module Sokrates
 
 open FSharp.Data
 open System
+open System.Globalization
 open System.IO
 open System.Net.Http
 open System.Security.Cryptography.X509Certificates
@@ -120,6 +121,49 @@ type StudentContact = {
     ContactAddresses: StudentContactAddress list
 }
 
+let private parseGender text =
+    if CIString text = CIString "m" then Male
+    elif CIString text = CIString "w" then Female
+    else failwith $"Unknown gender \"%s{text}\""
+
+module Teachers =
+    let fromCsvExport (filePath: string) =
+        let file = CsvFile.Load (filePath, ";")
+        file.Rows
+        |> Seq.map (fun row ->
+            {
+                Id = row.["LR_ID"] |> SokratesId
+                Title = row.["Amtstitel"] |> Option.ofString
+                LastName = row.["Familienname"]
+                FirstName = row.["Vorname"]
+                ShortName = row.["Kürzel"]
+                DateOfBirth = DateTime.ParseExact(row.["Geburtsdatum"], "dd.MM.yyyy", CultureInfo.InvariantCulture)
+                DegreeFront = row.["AkadGrad"] |> Option.ofString
+                DegreeBack = row.["AkadGradNach"] |> Option.ofString
+                Phones = []
+                Address = None
+                Gender = None
+            }
+        )
+        |> Seq.toList
+
+module Students =
+    let fromCsvExport (filePath: string) =
+        let file = CsvFile.Load (filePath, ";")
+        file.Rows
+        |> Seq.map (fun row ->
+            {
+                Id = row.["Schülerkennzahl"] |> SokratesId
+                LastName = row.["Familienname"]
+                FirstName1 = row.["Vorname"]
+                FirstName2 = row.["Vornamen"] |> Option.ofString
+                DateOfBirth = DateTime.ParseExact(row.["Geburtsdatum"], "dd.MM.yyyy", CultureInfo.InvariantCulture)
+                SchoolClass = row.["Klasse"]
+                Gender = row.["Geschlecht"] |> parseGender
+            }
+        )
+        |> Seq.toList
+
 [<Literal>]
 let private SchemaFile = __SOURCE_DIRECTORY__ + "/sokrates.xsd"
 type private SokratesWebService = XmlProvider<Schema = SchemaFile>
@@ -222,11 +266,6 @@ type SokratesApi(config: Config) =
             Mobile text
         else
             Home text
-
-    let parseGender text =
-        if CIString text = CIString "m" then Male
-        elif CIString text = CIString "w" then Female
-        else failwith $"Unknown gender \"%s{text}\""
 
     let parseTeachers (xmlElement: XElement) =
         SokratesWebService.TeacherList(xmlElement).TeacherEntries
