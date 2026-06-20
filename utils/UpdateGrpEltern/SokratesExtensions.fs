@@ -7,11 +7,11 @@ open System.Text.RegularExpressions
 
 type SokratesApi with
     member this.GetParentGroups() = async {
-        let allStudents = this.FetchStudents None None |> Async.RunSynchronously
+        let! allStudents = this.FetchStudents None None
         let students =
             allStudents
             |> List.filter (fun v -> not <| Regex.IsMatch(v.SchoolClass, @"^\d+(AVMB|ABMB)$"))
-        let studentContacts = this.FetchStudentContactInfos (students |> List.map _.Id) None |> Async.RunSynchronously
+        let! studentContacts = this.FetchStudentContactInfos (students |> List.map _.Id) None
         let studentContactsById =
             studentContacts
             |> List.map (fun v ->
