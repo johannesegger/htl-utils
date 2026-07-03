@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 RUN apt update && apt install -y --no-install-recommends \
-    npm \
+    curl \
+    unzip \
     libnspr4 \
     libnss3 \
     libatk1.0-0t64 \
@@ -15,7 +16,10 @@ RUN apt update && apt install -y --no-install-recommends \
     libcairo2 \
     libpango-1.0-0 \
     libasound2t64 && \
-    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/lib/apt/lists/*
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh | bash && \
+    . "$HOME/.nvm/nvm.sh" && \
+    nvm install 24 && \
     npx --yes @puppeteer/browsers install chromium
 WORKDIR /app
 EXPOSE 80
