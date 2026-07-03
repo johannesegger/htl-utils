@@ -10,13 +10,77 @@ open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.Logging
 open Microsoft.Graph.Beta
-open PuppeteerSharp
 open System
 open System.Globalization
 open System.IO
 open System.Net.Mime
 open System.Security.Claims
 open System.Text.RegularExpressions
+
+module Html =
+    open PuppeteerSharp
+
+    type BrowserFactory(logger: ILogger<BrowserFactory>) =
+        member _.LaunchBrowser() = task {
+            if Environment.getEnvVar "DOTNET_RUNNING_IN_CONTAINER" = "true" then
+                logger.LogInformation("Launching browser in container environment")
+                let browserPath =
+                    Directory.GetDirectories("/chromium", "linux-*")
+                    |> Seq.tryPick(fun v ->
+                        let path = Path.Combine(v, "chrome-linux/chrome")
+                        if File.Exists path then Some path
+                        else None
+                    )
+                    |> function
+                    | Some v ->
+                        logger.LogInformation("Browser path: {BrowserPath}", v)
+                        v
+                    | None -> failwith "Browser not found: /chromium/linux-*/chrome-linux/chrome doesn't exist"
+
+                return! LaunchOptions(
+                    Args = [| "--no-sandbox" |], // Required to run it in Docker as root
+                    Headless = true,
+                    Browser = SupportedBrowser.Chromium,
+                    ExecutablePath = browserPath
+                )
+                |> Puppeteer.LaunchAsync
+            else
+                logger.LogInformation("Launching browser in normal environment")
+                let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-manage-guest-accounts-browser")
+                let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
+                let! downloadedBrowser = browserFetcher.DownloadAsync()
+                return!
+                    LaunchOptions(
+                        Headless = true,
+                        Browser = downloadedBrowser.Browser,
+                        ExecutablePath = downloadedBrowser.GetExecutablePath()
+                    )
+                    |> Puppeteer.LaunchAsync
+        }
+
+    let convertToPdf (browserFactory: BrowserFactory) (headerTemplate, footerTemplate) (marginTop, marginRight, marginBottom, marginLeft) isLandscape (html: string) = task {
+        let tempFilePath = Path.GetTempFileName() |> fun v -> Path.ChangeExtension(v, ".html")
+        File.WriteAllText(tempFilePath, html)
+        use __ = { new IDisposable with member _.Dispose() = File.Delete tempFilePath }
+
+        use! browser = browserFactory.LaunchBrowser()
+        let! page = browser.NewPageAsync()
+        let! response = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
+        return! page.PdfDataAsync(PdfOptions(
+            PrintBackground = true,
+            DisplayHeaderFooter = true,
+            HeaderTemplate = headerTemplate,
+            FooterTemplate = footerTemplate,
+            Format = Media.PaperFormat.A4,
+            Landscape = isLandscape,
+            MarginOptions = Media.MarginOptions(
+                Bottom = marginBottom,
+                Left = marginLeft,
+                Right = marginRight,
+                Top = marginTop
+            )
+        ))
+    }
 
 [<AutoOpen>]
 module Letter =
@@ -380,66 +444,26 @@ module Letter =
                 (student, document)
             )
 
-        let startBrowser = async {
-            let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlvb-individual-tests-browser")
-            let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
-            let! downloadedBrowser = browserFetcher.DownloadAsync() |> Async.AwaitTask
-            return! Puppeteer.LaunchAsync(LaunchOptions(
-                Args = [| "--no-sandbox" |], // Required to run it in Docker as root
-                Headless = true,
-                Browser = downloadedBrowser.Browser,
-                ExecutablePath = downloadedBrowser.GetExecutablePath())
-            ) |> Async.AwaitTask
+        let teacherLetterToPdf (browserFactory: Html.BrowserFactory) teacherShortName (htmlLetter: string) = async {
+            let headerTemplate =
+                $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; text-align: center; font-size: 12px">
+                    <span>%s{Option.defaultValue "-" teacherShortName}</span>
+                </div>"""
+            let footerTemplate =
+                $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; text-align: center; font-size: 12px">
+                    Seite <span class="pageNumber"></span>/<span class="totalPages"></span>
+                </div>"""
+            let margin = ("1cm", "1cm", "1cm", "1cm")
+            return! Html.convertToPdf browserFactory (headerTemplate, footerTemplate) margin true htmlLetter |> Async.AwaitTask
         }
 
-        let teacherLetterToPdf teacherShortName (htmlLetter: string) = async {
-            use! browser = startBrowser
-            let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
-            File.WriteAllText(htmlFilePath, htmlLetter)
-            use! page = browser.NewPageAsync() |> Async.AwaitTask
-            let! _ = page.GoToAsync(Uri(htmlFilePath).AbsoluteUri) |> Async.AwaitTask
-            return! page.PdfDataAsync(
-                PdfOptions(
-                    PrintBackground = true,
-                    DisplayHeaderFooter = true,
-                    Format = PuppeteerSharp.Media.PaperFormat.A4,
-                    Landscape = true,
-                    MarginOptions = PuppeteerSharp.Media.MarginOptions(
-                        Top = "1cm",
-                        Left = "1cm",
-                        Right = "1cm",
-                        Bottom = "1cm"
-                    ),
-                    HeaderTemplate = $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; text-align: center; font-size: 12px">
-                        <span>%s{Option.defaultValue "-" teacherShortName}</span>
-                    </div>""",
-                    FooterTemplate = $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; text-align: center; font-size: 12px">
-                        Seite <span class="pageNumber"></span>/<span class="totalPages"></span>
-                    </div>"""
-                )) |> Async.AwaitTask
-        }
-
-        let studentLetterToPdf (student: Student) (htmlLetter: string) = async {
-            use! browser = startBrowser
-            let htmlFilePath = Path.ChangeExtension(Path.GetTempFileName(), ".html")
-            File.WriteAllText(htmlFilePath, htmlLetter)
-            use! page = browser.NewPageAsync() |> Async.AwaitTask
-            let! _ = page.GoToAsync(Uri(htmlFilePath).AbsoluteUri) |> Async.AwaitTask
-            return! page.PdfDataAsync(
-                PdfOptions(
-                    PrintBackground = true,
-                    DisplayHeaderFooter = true,
-                    Format = PuppeteerSharp.Media.PaperFormat.A4,
-                    MarginOptions = PuppeteerSharp.Media.MarginOptions(
-                        Top = "0cm",
-                        Left = "0cm",
-                        Right = "0cm",
-                        Bottom = "1cm"
-                    ),
-                    FooterTemplate = $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; font-size: 12px">
-                        <div style="margin-right: 1cm; text-align: right;"><span>%s{student.ClassName |> Option.defaultValue ""}</span></div>
-                    </div>"""
-                )) |> Async.AwaitTask
+        let studentLetterToPdf (browserFactory: Html.BrowserFactory) (student: Student) (htmlLetter: string) = async {
+            let footerTemplate =
+                $"""<div style="font-family: 'Segoe UI Light', 'Segoe UI Variable Static Text Light'; width: 297mm; font-size: 12px">
+                    <div style="margin-right: 1cm; text-align: right;"><span>%s{student.ClassName |> Option.defaultValue ""}</span></div>
+                </div>"""
+            let margin = ("0cm", "0cm", "1cm", "0cm")
+            return! Html.convertToPdf browserFactory ("", footerTemplate) margin false htmlLetter |> Async.AwaitTask
         }
 
         let combinePdfs docs =
@@ -485,7 +509,7 @@ module Letter =
 [<ApiController>]
 [<Route("api/letter")>]
 [<Authorize>]
-type LetterController (graphClient: GraphServiceClient, config: IConfiguration, logger : ILogger<LetterController>) =
+type LetterController (graphClient: GraphServiceClient, browserFactory: Html.BrowserFactory, config: IConfiguration, logger : ILogger<LetterController>) =
     inherit ControllerBase()
 
     [<HttpQuery>]
@@ -497,7 +521,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
         let tests = data.Tests |> List.map Domain.TestData.fromDto
         let! pdfLetters =
             Domain.generateStudentLetters (documentTemplate, contentTemplate, testRowTemplate) tests
-            |> List.map (fun (student, htmlLetter) -> Domain.studentLetterToPdf student htmlLetter)
+            |> List.map (fun (student, htmlLetter) -> Domain.studentLetterToPdf browserFactory student htmlLetter)
             |> Async.Sequential
         return this.File(Domain.combinePdfs pdfLetters, MediaTypeNames.Application.Pdf)
     }
@@ -516,7 +540,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
             |> List.map (fun (student, htmlLetter) -> async {
                 match data.OverwriteMailTo |> Option.orElse student.MailAddress with
                 | Some mailToAddress ->
-                    let! pdfLetter = Domain.studentLetterToPdf student htmlLetter
+                    let! pdfLetter = Domain.studentLetterToPdf browserFactory student htmlLetter
                     try
                         let letterFileName =
                             match student.LastName, student.FirstName with
@@ -542,7 +566,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
         let tests = data.Tests |> List.map Domain.TestData.fromDto
         let! pdfLetters =
             Domain.generateTeacherLetters (documentTemplate, contentTemplate, testRowTemplate) tests
-            |> List.map (fun (teacher, htmlLetter) -> Domain.teacherLetterToPdf teacher.ShortName htmlLetter)
+            |> List.map (fun (teacher, htmlLetter) -> Domain.teacherLetterToPdf browserFactory teacher.ShortName htmlLetter)
             |> Async.Sequential
         return this.File(Domain.combinePdfs pdfLetters, MediaTypeNames.Application.Pdf)
     }
@@ -561,7 +585,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
             |> List.map (fun (teacher, htmlLetter) -> async {
                 match data.OverwriteMailTo |> Option.orElse teacher.MailAddress with
                 | Some mailToAddress ->
-                    let! pdfLetter = Domain.teacherLetterToPdf teacher.ShortName htmlLetter
+                    let! pdfLetter = Domain.teacherLetterToPdf browserFactory teacher.ShortName htmlLetter
                     try
                         let letterFileName =
                             match teacher.ShortName with

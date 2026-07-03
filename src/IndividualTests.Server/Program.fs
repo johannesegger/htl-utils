@@ -49,6 +49,8 @@ let main args =
         new GraphServiceClient(credential, scopes)
     ) |> ignore
 
+    builder.Services.AddSingleton<Controllers.Html.BrowserFactory>() |> ignore
+
     let app = builder.Build()
 
     if app.Environment.IsDevelopment() then IdentityModelEventSource.ShowPII <- true
