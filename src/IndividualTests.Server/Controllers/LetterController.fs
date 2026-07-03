@@ -9,12 +9,13 @@ open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.Logging
-open Microsoft.Graph
+open Microsoft.Graph.Beta
 open PuppeteerSharp
 open System
 open System.Globalization
 open System.IO
 open System.Net.Mime
+open System.Security.Claims
 open System.Text.RegularExpressions
 
 [<AutoOpen>]
@@ -457,7 +458,7 @@ module Letter =
                 )
             stream.ToArray()
 
-        let sendMail (graphClient: GraphServiceClient) mailToAddress subject content (pdfLetterName, pdfLetterContent) = async {
+        let sendMail (graphClient: GraphServiceClient) senderAddress mailToAddress subject content (pdfLetterName, pdfLetterContent) = async {
             let message = new Models.Message(
                 ToRecipients =
                     Collections.Generic.List<_>([
@@ -478,7 +479,7 @@ module Letter =
                     ) :> Models.Attachment
                 ])
             )
-            do! graphClient.Me.SendMail.PostAsync(Me.SendMail.SendMailPostRequestBody(Message = message)) |> Async.AwaitTask
+            do! graphClient.Users.[senderAddress].SendMail.PostAsync(Users.Item.SendMail.SendMailPostRequestBody(Message = message)) |> Async.AwaitTask
         }
 
 [<ApiController>]
@@ -505,6 +506,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
     [<Route("students")>]
     [<Authorize("SendLetters")>]
     member this.SendStudentLetters ([<FromBody>]data: Dto.SendLettersDto) = async {
+        let senderAddress = this.User.FindFirst(ClaimTypes.Email).Value |> Option.ofObj |> Option.defaultWith (fun () -> failwith "Mail address of authenticated user not found")
         let documentTemplate = File.ReadAllText config.["StudentLetterDocumentTemplatePath"]
         let contentTemplate = File.ReadAllText config.["StudentLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
         let testRowTemplate = File.ReadAllText config.["StudentLetterTestRowTemplatePath"]
@@ -520,7 +522,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
                             match student.LastName, student.FirstName with
                             | Some studentLastName, Some studentFirstName -> $"Einteilung zu Wiederholungsprüfungen %s{studentFirstName} %s{studentLastName}.pdf"
                             | _, _ -> "Einteilung zu Wiederholungsprüfungen.pdf"
-                        do! Domain.sendMail graphClient mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
+                        do! Domain.sendMail graphClient senderAddress mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
                         return Ok ()
                     with e -> return Error {| Type = "sending-mail-failed"; StudentMailAddress = Some mailToAddress; Student = None |}
                 | None -> return Error {| Type = "student-has-no-mail-address"; StudentMailAddress = None; Student = Some {| ClassName = student.ClassName; LastName = student.LastName; FirstName = student.FirstName |} |}
@@ -549,6 +551,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
     [<Route("teachers")>]
     [<Authorize("SendLetters")>]
     member this.SendTeacherLetters ([<FromBody>]data: Dto.SendLettersDto) = async {
+        let senderAddress = this.User.FindFirst(ClaimTypes.Email).Value |> Option.ofObj |> Option.defaultWith (fun () -> failwith "Mail address of authenticated user not found")
         let documentTemplate = File.ReadAllText config.["TeacherLetterDocumentTemplatePath"]
         let contentTemplate = File.ReadAllText config.["TeacherLetterContentTemplatePath"] |> String.replace "{{letterText}}" data.LetterText
         let testRowTemplate = File.ReadAllText config.["TeacherLetterTestRowTemplatePath"]
@@ -564,7 +567,7 @@ type LetterController (graphClient: GraphServiceClient, config: IConfiguration, 
                             match teacher.ShortName with
                             | Some teacherShortName -> $"Einteilung zu Wiederholungsprüfungen %s{teacherShortName}.pdf"
                             | _ -> "Einteilung zu Wiederholungsprüfungen.pdf"
-                        do! Domain.sendMail graphClient mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
+                        do! Domain.sendMail graphClient senderAddress mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
                         return Ok ()
                     with e -> return Error {| Type = "sending-mail-failed"; TeacherMailAddress = Some mailToAddress; TeacherShortName = None |}
                 | None -> return Error {| Type = "teacher-has-no-mail-address"; TeacherMailAddress = None; TeacherShortName = teacher.ShortName |}

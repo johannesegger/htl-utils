@@ -7,7 +7,7 @@ export const uiFetch = async (isLoadingRef: Ref<boolean>, hasFailedRef: Ref<bool
   isLoadingRef.value = true
   hasFailedRef.value = false
 
-  const authHeader = await getFetchHeaderWithAccessToken([])
+  const authHeader = await getFetchHeaderWithAccessToken()
   try {
     const { headers, ...rest } = fetchParams ?? { headers: {} }
     const response = await fetch(fetchUrl, { headers: { ...authHeader, ...headers }, ...rest})

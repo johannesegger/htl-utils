@@ -1,12 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <NoDefaultLaunchSettingsFile>True</NoDefaultLaunchSettingsFile>
-    <UserSecretsId>HTLUtilsService</UserSecretsId>
+    <UserSecretsId>htl-utils</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="KeycloakRolesClaimsTransformation.fs" />
     <Compile Include="HttpQueryAttribute.fs" />
     <Compile Include="AsyncEnumerableExtensions.fs" />
     <Compile Include="WeatherForecast.fs" />
@@ -17,11 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.0.1" />
     <PackageReference Include="itext7" Version="9.3.0" />
     <PackageReference Include="itext7.bouncy-castle-adapter" Version="9.3.0" />
-    <PackageReference Include="Microsoft.Identity.Web" Version="3.14.0" />
-    <PackageReference Include="Microsoft.Identity.Web.GraphServiceClient" Version="3.14.0" />
+    <PackageReference Include="Microsoft.Graph.Beta" Version="6.2.0-preview" />
     <PackageReference Include="PuppeteerSharp" Version="20.2.2" />
   </ItemGroup>
 
