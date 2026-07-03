@@ -38,82 +38,112 @@
             }
         },
         {
-			"label": "IndividualTests (Server)",
-			"type": "process",
-			"command": "dotnet",
-			"args": [
-				"watch",
-				"run",
-				"--environment", "Development",
-				"--urls", "https://localhost:5001",
-			],
-			"problemMatcher": "$msCompile",
-			"options": {
-				"cwd": "${workspaceFolder}/src/IndividualTests.Server",
-			},
-		},
-		{
-			"label": "IndividualTests (Client)",
-			"type": "npm",
-			"script": "dev",
-			"path": "src/IndividualTests.Client",
-			"problemMatcher": [],
-		},
-		{
-			"label": "IndividualTests",
-			"dependsOn": [ "IndividualTests (Server)", "IndividualTests (Client)" ]
-		},
+            "label": "IndividualTests (Server)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "watch",
+                "run",
+                "--",
+                "--environment", "Development",
+                "--urls", "https://localhost:5001",
+            ],
+            "problemMatcher": "$msCompile",
+            "options": {
+                "cwd": "${workspaceFolder}/src/IndividualTests.Server",
+            },
+        },
         {
-			"label": "ManageGuestAccounts (Server)",
-			"type": "process",
-			"command": "dotnet",
-			"args": [
-				"watch",
-				"run",
-				"--environment", "Development",
-				"--urls", "https://localhost:5001",
-			],
-			"problemMatcher": "$msCompile",
-			"options": {
-				"cwd": "${workspaceFolder}/src/ManageGuestAccounts.Server",
-			},
-		},
-		{
-			"label": "ManageGuestAccounts (Client)",
-			"type": "npm",
-			"script": "dev",
-			"path": "src/ManageGuestAccounts.Client",
-			"problemMatcher": [],
-		},
-		{
-			"label": "ManageGuestAccounts",
-			"dependsOn": [ "ManageGuestAccounts (Server)", "ManageGuestAccounts (Client)" ]
-		},
-		{
-			"label": "KnowName (Server)",
-			"type": "process",
-			"command": "dotnet",
-			"args": [
-				"watch",
-				"run",
-				"--environment", "Development",
-				"--urls", "https://localhost:5001",
-			],
-			"problemMatcher": "$msCompile",
-			"options": {
-				"cwd": "${workspaceFolder}/src/KnowName.Server",
-			},
-		},
-		{
-			"label": "KnowName (Client)",
-			"type": "npm",
-			"script": "dev",
-			"path": "src/KnowName.Client",
-			"problemMatcher": [],
-		},
-		{
-			"label": "KnowName",
-			"dependsOn": [ "KnowName (Server)", "KnowName (Client)" ]
-		},
+            "label": "IndividualTests (Client)",
+            "type": "npm",
+            "script": "dev",
+            "path": "src/IndividualTests.Client",
+            "problemMatcher": [],
+        },
+        {
+            "label": "IndividualTests",
+            "dependsOn": [ "IndividualTests (Server)", "IndividualTests (Client)" ]
+        },
+        {
+            "label": "ManageGuestAccounts (Server)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "watch",
+                "run",
+                "--",
+                "--environment", "Development",
+                "--urls", "https://localhost:5001",
+            ],
+            "problemMatcher": "$msCompile",
+            "options": {
+                "cwd": "${workspaceFolder}/src/ManageGuestAccounts.Server",
+            },
+        },
+        {
+            "label": "ManageGuestAccounts (Client)",
+            "type": "npm",
+            "script": "dev",
+            "path": "src/ManageGuestAccounts.Client",
+            "problemMatcher": [],
+        },
+        {
+            "label": "ManageGuestAccounts",
+            "dependsOn": [ "ManageGuestAccounts (Server)", "ManageGuestAccounts (Client)" ]
+        },
+        {
+            "label": "KnowName (Server)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "watch",
+                "run",
+                "--",
+                "--environment", "Development",
+                "--urls", "https://localhost:5001",
+            ],
+            "problemMatcher": "$msCompile",
+            "options": {
+                "cwd": "${workspaceFolder}/src/KnowName.Server",
+            },
+        },
+        {
+            "label": "KnowName (Client)",
+            "type": "npm",
+            "script": "dev",
+            "path": "src/KnowName.Client",
+            "problemMatcher": [],
+        },
+        {
+            "label": "KnowName",
+            "dependsOn": [ "KnowName (Server)", "KnowName (Client)" ]
+        },
+        {
+            "label": "Managementv2 (Server)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "watch",
+                "run",
+                "--",
+                "--environment", "Development",
+                "--urls", "https://localhost:5001",
+            ],
+            "problemMatcher": "$msCompile",
+            "options": {
+                "cwd": "${workspaceFolder}/src/Managementv2.Server",
+            },
+        },
+        {
+            "label": "Managementv2 (Client)",
+            "type": "npm",
+            "script": "dev",
+            "path": "src/Managementv2.Client",
+            "problemMatcher": [],
+        },
+        {
+            "label": "Managementv2",
+            "dependsOn": [ "Managementv2 (Server)", "Managementv2 (Client)" ]
+        },
     ]
 }
