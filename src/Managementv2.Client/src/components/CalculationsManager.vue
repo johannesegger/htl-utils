@@ -4,26 +4,34 @@ import { api, type OperationOverview } from '@/api'
 import ErrorMessage from './ErrorMessage.vue'
 import { pluralize } from '@/utils.ts'
 
-interface OpResult {
-  calculating: boolean
-  data: null | unknown[]
-  error: string | null
-  hasCalculated: boolean
-  controller: AbortController | null
+type ExecutionState =
+  { type: 'notExecuted' } |
+  { type: 'executing' } |
+  { type: 'executed', output: unknown } |
+  { type: 'executionError', message: string }
+
+interface Calculation {
+  data: unknown
+  execution: ExecutionState
 }
 
-const operations = ref<OperationOverview[]>([])
+type OperationState =
+  { type: 'notCalculated' } |
+  { type: 'calculating', abortController: AbortController } |
+  { type: 'calculated', calculations: Calculation[] } |
+  { type: 'calculationError', message: string }
+
+type ExecutableOperation = {
+  data: OperationOverview
+  state: OperationState
+}
+
+const operations = ref<ExecutableOperation[]>([])
 const loading = ref(false)
 const loadError = ref<string | null>(null)
 const calculatingAll = ref(false)
-const results = reactive<Record<string, OpResult>>({})
 
-const calculable = computed(() => operations.value.filter((o) => o.canCalculate))
-
-function resultFor(name: string): OpResult {
-  if (!results[name]) results[name] = { calculating: false, data: null, error: null, hasCalculated: false, controller: null }
-  return results[name]
-}
+const calculable = computed(() => operations.value.filter((o) => o.data.canCalculate))
 
 function isAbort(e: unknown): boolean {
   return e instanceof DOMException && e.name === 'AbortError'
@@ -33,7 +41,8 @@ async function load() {
   loading.value = true
   loadError.value = null
   try {
-    operations.value = await api.getOperationOverviews()
+    const data = await api.getOperationOverviews()
+    operations.value = data.map(v => ({ data: v, state: { type: 'notCalculated' } }))
   } catch (e) {
     loadError.value = (e as Error).message
   } finally {
@@ -41,45 +50,61 @@ async function load() {
   }
 }
 
-async function calculateOne(name: string) {
-  const result = resultFor(name)
-  const controller = new AbortController()
-  result.controller = controller
-  result.calculating = true
-  result.error = null
+async function calculateOne(operation: ExecutableOperation) {
+  operation.state = { type: 'calculating', abortController: new AbortController() }
   try {
-    result.data = await api.calculateOperation(name, controller.signal) as unknown[]
-    result.hasCalculated = true
-  } catch (e) {
-    if (!isAbort(e)) {
-      result.error = (e as Error).message
-      result.hasCalculated = true
+    const data = (await api.calculateOperation(operation.data.name, operation.state.abortController.signal)) as unknown[]
+    operation.state = {
+      type: 'calculated',
+      calculations: data.map((entry) => ({ data: entry, execution: { type: 'notExecuted' } }))
     }
-  } finally {
-    result.calculating = false
-    result.controller = null
+  } catch (e) {
+    if (isAbort(e)) {
+      operation.state = { type: 'notCalculated' }
+    }
+    else {
+      operation.state = { type: 'calculationError', message: (e as Error).message }
+    }
   }
 }
 
-function cancel(name: string) {
-  results[name]?.controller?.abort()
+function cancelCalculation(operation: ExecutableOperation) {
+  if (operation.state.type !== 'calculating') return
+  operation.state.abortController.abort()
+}
+
+function cancelAllCalculations() {
+  for (const operation of operations.value) {
+    cancelCalculation(operation)
+  }
 }
 
 async function calculateAll() {
   calculatingAll.value = true
   try {
-    await Promise.all(calculable.value.map((operation) => calculateOne(operation.name)))
+    await Promise.all(calculable.value.map((operation) => calculateOne(operation)))
   } finally {
     calculatingAll.value = false
   }
 }
 
-function cancelAll() {
-  for (const result of Object.values(results)) result.controller?.abort()
+async function executeOne(calculation: Calculation, name: string) {
+  if (calculation.execution.type === 'executed' || calculation.execution.type === 'executing') return
+  calculation.execution = { type: 'executing' }
+  try {
+    calculation.execution = { type: 'executed', output: await api.execute(name, calculation.data) }
+  } catch (e) {
+    calculation.execution = { type: 'executionError', message: (e as Error).message }
+  }
+}
+
+async function executeGroup(operation: ExecutableOperation) {
+  if (operation.state.type !== 'calculated') return
+  await Promise.all(operation.state.calculations.map(calculation => executeOne(calculation, operation.data.name)))
 }
 
 onMounted(load)
-onUnmounted(cancelAll)
+onUnmounted(cancelAllCalculations)
 </script>
 
 <template>
@@ -88,7 +113,7 @@ onUnmounted(cancelAll)
       <h2 class="text-lg font-semibold">Calculations</h2>
       <div class="flex gap-2">
         <button class="btn-secondary" @click="load">↻</button>
-        <button v-if="calculatingAll" class="btn-danger" @click="cancelAll">Cancel all</button>
+        <button v-if="calculatingAll" class="btn-danger" @click="cancelAllCalculations">Cancel all</button>
         <button v-else class="btn-primary" :disabled="calculable.length === 0" @click="calculateAll">
           Calculate all
         </button>
@@ -104,37 +129,65 @@ onUnmounted(cancelAll)
       No operations with a calculate script.
     </div>
 
-    <div v-for="operation in calculable" :key="operation.name" class="space-y-1">
+    <div v-for="operation in calculable" :key="operation.data.name" class="space-y-1">
       <div class="flex items-center justify-between">
         <h3 class="font-medium">
-          {{ operation.name }}
-          <span v-if="resultFor(operation.name).hasCalculated && !resultFor(operation.name).error"
+          {{ operation.data.name }}
+          <span v-if="operation.state.type === 'calculated'"
             class="text-xs text-gray-500">
-            ({{ pluralize(resultFor(operation.name).data?.length ?? 0, 'operation', 'operations') }} calculated)
+            ({{ pluralize(operation.state.calculations.length, 'operation', 'operations') }} calculated)
           </span>
         </h3>
-        <button
-          v-if="resultFor(operation.name).calculating"
-          class="btn-danger"
-          @click="cancel(operation.name)">
-          Cancel
-        </button>
-        <button v-else class="btn-secondary" @click="calculateOne(operation.name)">Calculate</button>
+        <div class="flex gap-2">
+          <button v-if="operation.state.type === 'calculated' && operation.state.calculations.some(v => v.execution.type === 'notExecuted' || v.execution.type === 'executionError')"
+            class="btn-secondary"
+            @click="executeGroup(operation)">Execute all</button>
+          <button v-else-if="operation.state.type === 'calculated' && operation.state.calculations.some(v => v.execution.type === 'executing')"
+            class="btn-secondary"
+            disabled>Executing…</button>
+
+          <button v-if="operation.state.type === 'calculating'"
+            class="btn-danger"
+            @click="cancelCalculation(operation)">
+            Cancel
+          </button>
+          <button v-else class="btn-secondary" @click="calculateOne(operation)">Calculate</button>
+        </div>
       </div>
-      <ErrorMessage :message="resultFor(operation.name).error" />
-      <div v-if="resultFor(operation.name).hasCalculated && !resultFor(operation.name).error"
+      <ErrorMessage v-if="operation.state.type === 'calculationError'" :message="operation.state.message" />
+      <div v-if="operation.state.type === 'calculated'"
         class="flex flex-col gap-2">
-        <div v-for="entry in resultFor(operation.name).data"
-          :key="JSON.stringify(entry)"
-          class="flex gap-4 rounded bg-gray-100 px-3 py-2 text-sm">
-          <div v-for="(value, key) in entry" class="flex flex-col">
-            <span class="text-xs text-gray-500">{{ key }}</span>
-            <span>{{ value }}</span>
+        <div v-for="(calculation, index) in operation.state.calculations" :key="index" class="flex flex-col gap-1">
+          <div class="flex flex-col gap-2 rounded px-3 py-2 text-sm"
+            :class="{
+              'bg-gray-100': calculation.execution.type === 'notExecuted' || calculation.execution.type === 'executing',
+              'bg-green-100': calculation.execution.type === 'executed',
+              'bg-red-100': calculation.execution.type === 'executionError',
+              }">
+            <div class="flex items-center gap-4">
+              <div class="flex flex-1 flex-wrap gap-4">
+                <div v-for="(value, key) in calculation.data" :key="key" class="flex flex-col">
+                  <span class="text-xs text-gray-500">{{ key }}</span>
+                  <span>{{ value }}</span>
+                </div>
+              </div>
+              <button v-if="calculation.execution.type === 'executing'"
+                class="btn-secondary bg-white"
+                disabled>Executing…</button>
+              <button v-else-if="calculation.execution.type !== 'executed'"
+                class="btn-secondary bg-white"
+                @click="executeOne(calculation, operation.data.name)">Execute</button>
+            </div>
+            <pre v-if="calculation.execution.type === 'executed'"
+              class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
+              >{{ JSON.stringify(calculation.execution.output, null, 2) }}</pre>
+            <p v-else-if="calculation.execution.type === 'executionError'"
+              class="rounded bg-gray-900 p-3 text-xs text-red-300 whitespace-pre overflow-x-auto">{{ calculation.execution.message }}</p>
           </div>
         </div>
       </div>
       <p
-        v-else-if="!resultFor(operation.name).hasCalculated && !resultFor(operation.name).calculating"
+        v-else-if="operation.state.type === 'notCalculated'"
         class="text-sm text-gray-500">
         Not calculated yet.
       </p>
