@@ -14,11 +14,25 @@ type SokratesSession(api: SokratesApi, description: string) =
     member _.Description = description
     override _.ToString() = description
 
-/// Module-scoped default session set by Connect-Sokrates. Cmdlets fall back to it
-/// when no explicit -Session is given.
+/// The default session set by Connect-Sokrates, which cmdlets fall back to when no
+/// explicit -Session is given. Stored as a PowerShell variable in the cmdlet's own
+/// runspace session state rather than a CLR static, so it is isolated per runspace —
+/// a static would be shared across every runspace in the process and race under
+/// parallel execution.
 [<RequireQualifiedAccess>]
-module internal SessionState =
-    let mutable Current: SokratesSession option = None
+module internal DefaultSession =
+    [<Literal>]
+    let private VariableName = "SokratesDefaultSession"
+
+    let get (state: SessionState) : SokratesSession option =
+        match state.PSVariable.GetValue VariableName with
+        | :? SokratesSession as session -> Some session
+        | _ -> None
+
+    let set (state: SessionState) (session: SokratesSession) =
+        state.PSVariable.Set(VariableName, session)
+
+    let clear (state: SessionState) = state.PSVariable.Remove VariableName
 
 /// Base class for cmdlets that operate on a Sokrates session. Adds the optional
 /// -Session parameter and resolves the effective session (explicit -Session first,
@@ -33,7 +47,7 @@ type SokratesCmdlet() =
     member this.ResolveSession() : SokratesSession =
         match this.Session with
         | null ->
-            match SessionState.Current with
+            match DefaultSession.get this.SessionState with
             | Some session -> session
             | None ->
                 let ex =

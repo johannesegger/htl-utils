@@ -35,14 +35,14 @@ type ConnectSokratesCommand() =
         let session =
             SokratesSession(SokratesApi(config), $"Sokrates %s{this.Credential.UserName}@%s{this.Url}")
 
-        SessionState.Current <- Some session
+        DefaultSession.set this.SessionState session
         this.WriteObject session
 
-/// Disconnect-Sokrates: clears the module-scoped default session.
+/// Disconnect-Sokrates: clears the default session for this runspace.
 [<Cmdlet(VerbsCommunications.Disconnect, "Sokrates")>]
 type DisconnectSokratesCommand() =
     inherit PSCmdlet()
-    override _.EndProcessing() = SessionState.Current <- None
+    override this.EndProcessing() = DefaultSession.clear this.SessionState
 
 /// Get-SokratesSession: returns the current default session, if any.
 [<Cmdlet(VerbsCommon.Get, "SokratesSession")>]
@@ -51,7 +51,7 @@ type GetSokratesSessionCommand() =
     inherit PSCmdlet()
 
     override this.EndProcessing() =
-        match SessionState.Current with
+        match DefaultSession.get this.SessionState with
         | Some session -> this.WriteObject session
         | None -> ()
 

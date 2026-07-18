@@ -2,13 +2,15 @@
 import { ref } from 'vue'
 import ConfigManager from '@/components/ConfigManager.vue'
 import OperationsManager from '@/components/OperationsManager.vue'
+import CalculationsManager from '@/components/CalculationsManager.vue'
 
 const tabs = [
+  { id: 'calculations', label: 'Calculations' },
   { id: 'operations', label: 'Custom operations' },
   { id: 'config', label: 'Configuration' },
 ] as const
 
-const active = ref<(typeof tabs)[number]['id']>('operations')
+const active = ref<(typeof tabs)[number]['id']>(tabs[0].id)
 </script>
 
 <template>
@@ -30,6 +32,7 @@ const active = ref<(typeof tabs)[number]['id']>('operations')
       </button>
     </nav>
 
+    <CalculationsManager v-show="active === 'calculations'" />
     <OperationsManager v-show="active === 'operations'" />
     <ConfigManager v-show="active === 'config'" />
   </div>

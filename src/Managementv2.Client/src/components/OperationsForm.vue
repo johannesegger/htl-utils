@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted } from 'vue'
 import { api, EditableCustomOperation, type CustomOperation } from '@/api.ts'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
@@ -55,23 +55,34 @@ async function remove() {
   }
 }
 
+function isAbort(e: unknown): boolean {
+  return e instanceof DOMException && e.name === 'AbortError'
+}
+
 async function runCalculate() {
   if (!operation.value.name) return
 
   await save()
   if (operation.value.saveError) return
 
+  const controller = new AbortController()
+  operation.value.calculateController = controller
   operation.value.runningCalculate = true
   operation.value.calculateError = null
   operation.value.calculateResult = null
   try {
-    const result = await api.calculateOperation(operation.value.name)
+    const result = await api.calculateOperation(operation.value.name, controller.signal)
     operation.value.calculateResult = result === undefined ? '(no calculate script)' : JSON.stringify(result, null, 2)
   } catch (e) {
-    operation.value.calculateError = (e as Error).message
+    if (!isAbort(e)) operation.value.calculateError = (e as Error).message
   } finally {
     operation.value.runningCalculate = false
+    operation.value.calculateController = null
   }
+}
+
+function cancelCalculate() {
+  operation.value.calculateController?.abort()
 }
 
 async function runExecute() {
@@ -80,19 +91,31 @@ async function runExecute() {
   await save()
   if (operation.value.saveError) return
 
+  const controller = new AbortController()
+  operation.value.executeController = controller
   operation.value.runningExecute = true
   operation.value.executeError = null
   operation.value.executeResult = null
   try {
     const data = parseJson(operation.value.inputText, 'The input data')
-    const result = await api.execute(operation.value.name, data)
+    const result = await api.execute(operation.value.name, data, controller.signal)
     operation.value.executeResult = JSON.stringify(result, null, 2)
   } catch (e) {
-    operation.value.executeError = (e as Error).message
+    if (!isAbort(e)) operation.value.executeError = (e as Error).message
   } finally {
     operation.value.runningExecute = false
+    operation.value.executeController = null
   }
 }
+
+function cancelExecute() {
+  operation.value.executeController?.abort()
+}
+
+onUnmounted(() => {
+  cancelCalculate()
+  cancelExecute()
+})
 </script>
 
 <template>
@@ -126,9 +149,8 @@ async function runExecute() {
   <div v-if="!operation.isNew" class="space-y-3 rounded border border-gray-200 p-4">
     <h3 class="text-sm font-semibold">Test scripts</h3>
 
-    <button class="btn-secondary" :disabled="running" @click="runCalculate">
-      {{ operation.runningCalculate ? 'Running…' : 'Run calculate' }}
-    </button>
+    <button v-if="operation.runningCalculate" class="btn-danger" @click="cancelCalculate">Cancel</button>
+    <button v-else class="btn-secondary" :disabled="running" @click="runCalculate">Run calculate</button>
     <pre
       v-if="operation.calculateResult"
       class="mt-2 max-h-80 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100"
@@ -140,9 +162,8 @@ async function runExecute() {
     <LabeledInput label="Input data (JSON)">
       <textarea v-model="operation.inputText" rows="5" class="textarea" placeholder='{ "userName": "eina" }'></textarea>
     </LabeledInput>
-    <button class="btn-secondary" :disabled="running" @click="runExecute">
-      {{ operation.runningExecute ? 'Running…' : 'Run execute' }}
-    </button>
+    <button v-if="operation.runningExecute" class="btn-danger" @click="cancelExecute">Cancel</button>
+    <button v-else class="btn-secondary" :disabled="running" @click="runExecute">Run execute</button>
     <pre v-if="operation.executeResult" class="max-h-80 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100">{{ operation.executeResult }}</pre>
     <ErrorMessage :message="operation.executeError" />
   </div>

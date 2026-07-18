@@ -21,6 +21,11 @@ export interface CustomOperation {
   execute: string
 }
 
+export interface OperationOverview {
+  name: string
+  canCalculate: boolean
+}
+
 export interface EditableCustomOperation {
   isNew: boolean
   name: string
@@ -33,6 +38,8 @@ export interface EditableCustomOperation {
   calculateResult: string | null
   runningCalculate: boolean
   runningExecute: boolean
+  calculateController: AbortController | null
+  executeController: AbortController | null
 
   saveError: string | null
   calculateError: string | null
@@ -53,6 +60,8 @@ export namespace EditableCustomOperation {
       calculateResult: null,
       runningCalculate: false,
       runningExecute: false,
+      calculateController: null,
+      executeController: null,
 
       saveError: null,
       calculateError: null,
@@ -72,7 +81,7 @@ export namespace EditableCustomOperation {
 
 export interface CalculatedOperations {
   operations: { name: string; data: unknown }[]
-  errors: string[]
+  errors: { operation: string; message: string }[]
 }
 
 const base = '/api/custom-operations'
@@ -96,6 +105,7 @@ export const api = {
     ),
 
   getOperations: () => fetch(base).then((r) => handle<CustomOperation[]>(r)),
+  getOperationOverviews: () => fetch(base).then((r) => handle<OperationOverview[]>(r)),
   addOperation: (operation: CustomOperation) =>
     fetch(base, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(operation) }).then((r) =>
       handle<CustomOperation>(r),
@@ -109,11 +119,15 @@ export const api = {
   removeOperation: (name: string) =>
     fetch(`${base}/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) => handle<void>(r)),
 
-  calculate: () => fetch(`${base}/calculated`).then((r) => handle<CalculatedOperations>(r)),
-  calculateOperation: (name: string) =>
-    fetch(`${base}/${encodeURIComponent(name)}/calculated`).then((r) => handle<unknown>(r)),
-  execute: (name: string, data: unknown) =>
-    fetch(`${base}/execution`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name, data }) }).then(
-      (r) => handle<unknown>(r),
-    ),
+  calculate: (signal?: AbortSignal) =>
+    fetch(`${base}/calculated`, { signal }).then((r) => handle<CalculatedOperations>(r)),
+  calculateOperation: (name: string, signal?: AbortSignal) =>
+    fetch(`${base}/${encodeURIComponent(name)}/calculated`, { signal }).then((r) => handle<unknown>(r)),
+  execute: (name: string, data: unknown, signal?: AbortSignal) =>
+    fetch(`${base}/execution`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ name, data }),
+      signal,
+    }).then((r) => handle<unknown>(r)),
 }

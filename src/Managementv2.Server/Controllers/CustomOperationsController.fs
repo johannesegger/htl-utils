@@ -3,6 +3,8 @@
 open Managementv2.Server
 open Microsoft.AspNetCore.Mvc
 open System.Text.Json.Nodes
+open System.Threading
+open System.Threading.Tasks
 
 [<ApiController>]
 [<Route("api/custom-operations")>]
@@ -13,6 +15,10 @@ type CustomOperationsController
         customOperationsStore: ICustomOperationsStore
     ) =
     inherit ControllerBase()
+
+    let toOverviewDto (operation: CustomOperation) =
+        {| Name = operation.Name
+           CanCalculate = Option.isSome operation.Calculate |}
 
     let toDto (operation: CustomOperation) =
         {| Name = operation.Name
@@ -28,45 +34,24 @@ type CustomOperationsController
     
     [<HttpGet>]
     member _.Get() =
-        customOperationsStore.GetAll() |> List.map toDto
-
-    [<HttpGet("calculated")>]
-    member _.GetCalculatedOperations() =
-        let config = customOperationsConfig.Read()
-
-        let results =
-            customOperationsStore.GetAll()
-            |> Seq.choose (fun operation ->
-                match operation.Calculate with
-                | None -> None
-                | Some calculate ->
-                    match codeExecution.Execute config calculate with
-                    | Ok data -> Some(Ok {| Name = operation.Name; Data = data |})
-                    | Error e -> Some(Error e))
-
-        ({| Operations = []; Errors = [] |}, results)
-        ||> Seq.fold (fun state item ->
-            match item with
-            | Ok v ->
-                {| state with
-                    Operations = state.Operations @ [ v ] |}
-            | Error error ->
-                {| state with
-                    Errors = state.Errors @ [ error ] |})
+        customOperationsStore.GetAll() |> List.map toOverviewDto
 
     [<HttpGet("{name}/calculated")>]
-    member this.GetCalculatedOperation(name: string) =
-        match customOperationsStore.TryGet name with
-        | None -> this.NotFound() :> IActionResult
-        | Some operation ->
-            match operation.Calculate with
-            | None -> this.NoContent() :> IActionResult
-            | Some calculate ->
-                let config = customOperationsConfig.Read()
+    member this.GetCalculatedOperation(name: string, cancellationToken: CancellationToken) : Task<IActionResult> =
+        task {
+            match customOperationsStore.TryGet name with
+            | None -> return this.NotFound() :> IActionResult
+            | Some operation ->
+                match operation.Calculate with
+                | None -> return this.NoContent() :> IActionResult
+                | Some calculate ->
+                    let config = customOperationsConfig.Read()
+                    let! result = codeExecution.Execute config calculate cancellationToken
 
-                match codeExecution.Execute config calculate with
-                | Ok data -> this.Ok data :> IActionResult
-                | Error error -> this.StatusCode(500, error) :> IActionResult
+                    match result with
+                    | Ok data -> return this.Ok data :> IActionResult
+                    | Error error -> return this.StatusCode(500, error) :> IActionResult
+        }
 
     [<HttpGet("config")>]
     member _.GetConfig() : JsonNode =
@@ -78,15 +63,20 @@ type CustomOperationsController
         this.NoContent() :> IActionResult
 
     [<HttpPost("execution")>]
-    member this.Execute([<FromBody>] operation: {| Name: string; Data: JsonNode |}) =
-        match customOperationsStore.TryGet operation.Name with
-        | Some stored ->
-            let config = customOperationsConfig.Read()
+    member this.Execute
+        ([<FromBody>] operation: {| Name: string; Data: JsonNode |}, cancellationToken: CancellationToken)
+        : Task<IActionResult> =
+        task {
+            match customOperationsStore.TryGet operation.Name with
+            | Some stored ->
+                let config = customOperationsConfig.Read()
+                let! result = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
 
-            match codeExecution.ExecuteWithInput config stored.Execute operation.Data with
-            | Ok result -> this.Ok result :> IActionResult
-            | Error error -> this.StatusCode(500, error) :> IActionResult
-        | None -> this.NotFound()
+                match result with
+                | Ok data -> return this.Ok data :> IActionResult
+                | Error error -> return this.StatusCode(500, error) :> IActionResult
+            | None -> return this.NotFound() :> IActionResult
+        }
 
     [<HttpPost>]
     member this.Add

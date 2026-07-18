@@ -57,6 +57,7 @@ type FileSystemCustomOperationsStore(baseDirectory: string, logger: ILogger<File
                 Directory.GetDirectories baseDirectory
                 |> Seq.map Path.GetFileName
                 |> Seq.choose tryRead
+                |> Seq.sortBy _.Name
                 |> List.ofSeq
             else
                 []
