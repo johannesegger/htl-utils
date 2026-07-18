@@ -35,6 +35,10 @@ let config = {
         TeacherExercisePath = $@"\\%s{server}\data\angabe_abgabe"
         StudentHomePath = $@"\\%s{server}\data\schuelerhome"
         HomeDrive = "Z:"
+        GuestContainer = DistinguishedName "OU=Gaeste,OU=HTLVB-Benutzer,DC=htlvb,DC=intern"
+        GuestGroup = DistinguishedName "CN=Gaeste,OU=User,OU=HTLVB-Gruppen,DC=htlvb,DC=intern"
+        GuestMailDomain = "htlvb.at"
+        WLANOnlyGroup = DistinguishedName "CN=WLANOnly,OU=User,OU=HTLVB-Gruppen,DC=htlvb,DC=intern"
     }
 }
 

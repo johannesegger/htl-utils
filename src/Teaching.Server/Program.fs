@@ -62,7 +62,7 @@ let handleAddTeachersAsContacts photoLibraryConfig (sokratesApi: Sokrates.Sokrat
                 |> Map.ofList
             let photoLibraryTeacherMap =
                 teacherPhotos
-                |> List.map (fun photo -> CIString photo.ShortName, photo.Data)
+                |> List.map (fun photo -> CIString photo.PersonId, photo.Data)
                 |> Map.ofList
             sokratesTeachers
             |> List.choose (fun sokratesTeacher ->
@@ -213,7 +213,7 @@ let handleGetKnowNameStudentsFromClass photoLibraryConfig (sokratesApi: Sokrates
         let studentsWithPhoto =
             let studentsWithPhotos =
                 studentsWithPhotos
-                |> List.map (fun (PhotoLibrary.Domain.SokratesId studentId) -> Sokrates.SokratesId studentId)
+                |> List.map Sokrates.SokratesId
                 |> Set.ofList
             students
             |> List.map (fun student ->
