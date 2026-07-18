@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <DefaultItemExcludes>$(DefaultItemExcludes);operations/**/*</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="CustomOperationsConfig.fs" />
+    <Compile Include="CustomOperationsStore.fs" />
+    <Compile Include="CodeExecution.fs" />
+    <Compile Include="WeatherForecast.fs" />
+    <Compile Include="Controllers/WeatherForecastController.fs" />
+    <Compile Include="Controllers/CustomOperationsController.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ADv2\ADv2.fsproj" />
+    <ProjectReference Include="..\Sokrates\Sokrates.fsproj" />
+    <ProjectReference Include="..\Sokrates.PowerShell\Sokrates.PowerShell.fsproj" />
+  </ItemGroup>
+
+</Project>

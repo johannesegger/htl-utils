@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="CustomOperationsConfig.fs" />
+    <Compile Include="CustomOperationsStore.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="10.1.204" />
+    <PackageReference Include="Expecto" Version="10.1.0" />
+    <PackageReference Include="YoloDev.Expecto.TestSdk" Version="0.14.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Managementv2.Server\Managementv2.Server.fsproj" />
+  </ItemGroup>
+
+</Project>
