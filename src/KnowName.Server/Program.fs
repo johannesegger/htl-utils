@@ -1,11 +1,13 @@
 module KnowName.Server.Program
 
+open Microsoft.AspNetCore.Authentication
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open System
-open Microsoft.AspNetCore.Authentication
+open System.IO
+open System.Security.Cryptography.X509Certificates
 
 [<EntryPoint>]
 let main args =
@@ -44,8 +46,7 @@ let main args =
                 UserName = config.Sokrates.UserName
                 Password = config.Sokrates.Password
                 SchoolId = config.Sokrates.SchoolId
-                ClientCertificate = config.Sokrates.ClientCertificate
-                ClientCertificatePassphrase = ""
+                ClientCertificate = new X509Certificate2(config.Sokrates.ClientCertificate)
             }
             sokratesConfig
         | None ->
@@ -54,8 +55,7 @@ let main args =
                 UserName = ""
                 Password = ""
                 SchoolId = ""
-                ClientCertificate = [||]
-                ClientCertificatePassphrase = ""
+                ClientCertificate = null
             }
             sokratesConfig
     ) |> ignore

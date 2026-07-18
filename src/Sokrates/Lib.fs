@@ -21,8 +21,7 @@ type Config = {
     UserName: string
     Password: string
     SchoolId: string
-    ClientCertificate: byte[]
-    ClientCertificatePassphrase: string
+    ClientCertificate: X509Certificate2
 }
 module Config =
     open Microsoft.Extensions.Configuration
@@ -39,8 +38,10 @@ module Config =
             UserName = x.UserName
             Password = x.Password
             SchoolId = x.SchoolId
-            ClientCertificate = File.ReadAllBytes(x.ClientCertificatePath)
-            ClientCertificatePassphrase = x.ClientCertificatePassphrase
+            ClientCertificate = new X509Certificate2(
+                File.ReadAllBytes(x.ClientCertificatePath),
+                x.ClientCertificatePassphrase
+            )
         }
 
     let fromEnvironment () =
@@ -167,8 +168,8 @@ type SokratesApi(config: Config) =
 
     let createHttpClient () =
         let httpClientHandler = new HttpClientHandler()
-        let cert = new X509Certificate2(config.ClientCertificate, config.ClientCertificatePassphrase)
-        httpClientHandler.ClientCertificates.Add(cert) |> ignore
+        if not <| isNull config.ClientCertificate then
+            httpClientHandler.ClientCertificates.Add config.ClientCertificate |> ignore
         new HttpClient(httpClientHandler)
 
     let fetch requestContent = async {
