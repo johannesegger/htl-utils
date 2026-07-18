@@ -5,6 +5,7 @@ open Microsoft.AspNetCore.Mvc
 open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
+open System.Text.Json
 
 [<ApiController>]
 [<Route("api/custom-operations")>]
@@ -53,7 +54,9 @@ type CustomOperationsController
                     let! result = codeExecution.Execute config calculate cancellationToken
 
                     match result with
-                    | Ok data -> return this.Ok data :> IActionResult
+                    | Ok (Some data) when data.GetValueKind() = JsonValueKind.Array -> return this.Ok data :> IActionResult
+                    | Ok (Some data) -> return this.Ok [data] :> IActionResult
+                    | Ok None -> return this.Ok [] :> IActionResult
                     | Error error -> return this.StatusCode(500, error) :> IActionResult
         }
 
@@ -68,8 +71,7 @@ type CustomOperationsController
 
     [<HttpPost("execution")>]
     member this.Execute
-        ([<FromBody>] operation: {| Name: string; Data: JsonNode |}, cancellationToken: CancellationToken)
-        : Task<IActionResult> =
+        ([<FromBody>] operation: {| Name: string; Data: JsonNode |}, cancellationToken: CancellationToken) =
         task {
             match customOperationsStore.TryGet operation.Name with
             | Some stored ->
@@ -78,8 +80,8 @@ type CustomOperationsController
 
                 match result with
                 | Ok data -> return this.Ok data :> IActionResult
-                | Error error -> return this.StatusCode(500, error) :> IActionResult
-            | None -> return this.NotFound() :> IActionResult
+                | Error error -> return this.StatusCode(500, error)
+            | None -> return this.NotFound()
         }
 
     [<HttpPost>]
