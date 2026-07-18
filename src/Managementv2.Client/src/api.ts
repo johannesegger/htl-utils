@@ -104,7 +104,7 @@ export const api = {
       handle<void>(r),
     ),
 
-  getOperations: () => fetch(base).then((r) => handle<CustomOperation[]>(r)),
+  getOperations: () => fetch(`${base}/full`).then((r) => handle<CustomOperation[]>(r)),
   getOperationOverviews: () => fetch(base).then((r) => handle<OperationOverview[]>(r)),
   addOperation: (operation: CustomOperation) =>
     fetch(base, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(operation) }).then((r) =>

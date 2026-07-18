@@ -33,8 +33,12 @@ type CustomOperationsController
           Execute = execute }
     
     [<HttpGet>]
-    member _.Get() =
+    member _.GetOverview() =
         customOperationsStore.GetAll() |> List.map toOverviewDto
+
+    [<HttpGet("full")>]
+    member _.GetFull() =
+        customOperationsStore.GetAll() |> List.map toDto
 
     [<HttpGet("{name}/calculated")>]
     member this.GetCalculatedOperation(name: string, cancellationToken: CancellationToken) : Task<IActionResult> =
