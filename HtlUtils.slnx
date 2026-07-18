@@ -1,0 +1,48 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AAD.Test/AAD.Test.fsproj" />
+    <Project Path="src/AAD/AAD.fsproj" />
+    <Project Path="src/AD.Test/AD.Test.fsproj" />
+    <Project Path="src/AD/AD.fsproj" />
+    <Project Path="src/ADv2.Test/ADv2.Test.fsproj" />
+    <Project Path="src/ADv2/ADv2.fsproj" />
+    <Project Path="src/CIM/CIM.fsproj" />
+    <Project Path="src/Common.Server/Common.Server.fsproj" />
+    <Project Path="src/Common/Common.fsproj" />
+    <Project Path="src/DataStore/DataStore.fsproj" />
+    <Project Path="src/FileStorage/FileStorage.fsproj" />
+    <Project Path="src/FinalTheses/FinalTheses.fsproj" />
+    <Project Path="src/IndividualTests.Server/IndividualTests.Server.fsproj" />
+    <Project Path="src/KnowName.Server/KnowName.Server.fsproj" />
+    <Project Path="src/ManageGuestAccounts.Server/ManageGuestAccounts.Server.fsproj" />
+    <Project Path="src/Management.Client/src/Management.Client.fsproj" />
+    <Project Path="src/Management.Server.Test/Management.Server.Test.fsproj" />
+    <Project Path="src/Management.Server/Management.Server.fsproj" />
+    <Project Path="src/Managementv2.Server.Test/Managementv2.Server.Test.fsproj" />
+    <Project Path="src/Managementv2.Server/Managementv2.Server.fsproj" />
+    <Project Path="src/PhotoLibrary/PhotoLibrary.fsproj" />
+    <Project Path="src/QueryComputerInfo.Service/QueryComputerInfo.Service.fsproj" />
+    <Project Path="src/Sokrates.PowerShell/Sokrates.PowerShell.fsproj" />
+    <Project Path="src/Sokrates.Test/Sokrates.Test.fsproj" />
+    <Project Path="src/Sokrates/Sokrates.fsproj" />
+    <Project Path="src/Teaching.Client/src/Teaching.Client.fsproj" />
+    <Project Path="src/Teaching.Server/Teaching.Server.fsproj" />
+    <Project Path="src/Untis/Untis.fsproj" />
+    <Project Path="src/WakeUpComputer/WakeUpComputer.fsproj" />
+  </Folder>
+  <Folder Name="/utils/">
+    <Project Path="utils/ClassList/ClassList.fsproj" />
+    <Project Path="utils/CreateADUsers/CreateADUsers.fsproj" />
+    <Project Path="utils/FilterStudentImages/FilterStudentImages.fsproj" />
+    <Project Path="utils/GenerateNamePlates/GenerateNamePlates.fsproj" />
+    <Project Path="utils/IndividualTests/IndividualTests.fsproj" />
+    <Project Path="utils/InspectPersons/InspectPersons.fsproj" />
+    <Project Path="utils/PersonMap/PersonMap.fsproj" />
+    <Project Path="utils/SISImport/SISImport.fsproj" />
+    <Project Path="utils/StudentExcelSheetGenerator/StudentExcelSheetGenerator.fsproj" />
+    <Project Path="utils/StudentsPerClass/StudentsPerClass.fsproj" />
+    <Project Path="utils/UpdateAADContacts/UpdateAADContacts.fsproj" />
+    <Project Path="utils/UpdateGrpEltern/UpdateGrpEltern.fsproj" />
+    <Project Path="utils/UpdatePhotos/UpdatePhotos.fsproj" />
+  </Folder>
+</Solution>
