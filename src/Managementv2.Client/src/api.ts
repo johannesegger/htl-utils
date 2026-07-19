@@ -42,6 +42,17 @@ export interface CustomOperationDefinition {
   execute: string
 }
 
+export interface CustomOperationDefinitionTemplates {
+  formDefinition: FormDefinition
+  calculateScript: string
+  executeScript: string
+}
+
+export interface CustomOperationDefinitions {
+  operationDefinitions: CustomOperationDefinition[]
+  templates: CustomOperationDefinitionTemplates
+}
+
 export interface EditableCustomOperationDefinition {
   isNew: boolean
   name: string
@@ -127,7 +138,7 @@ export const api = {
     ),
 
   getOperations: () => fetchAuthenticated(base).then((r) => handle<CustomOperation[]>(r)),
-  getOperationDefinitions: () => fetchAuthenticated(`${base}/definitions`).then((r) => handle<CustomOperationDefinition[]>(r)),
+  getOperationDefinitions: () => fetchAuthenticated(`${base}/definitions`).then((r) => handle<CustomOperationDefinitions>(r)),
   addOperation: (operation: CustomOperationDefinition) =>
     fetchAuthenticated(base, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(operation) }).then((r) =>
       handle<CustomOperationDefinition>(r),

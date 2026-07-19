@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api, EditableCustomOperationDefinition, type CustomOperationDefinition } from '@/api'
+import { api, EditableCustomOperationDefinition, type CustomOperationDefinitionTemplates } from '@/api'
 import ErrorMessage from './ErrorMessage.vue'
 import EditOperationForm from './EditOperationForm.vue'
 
@@ -11,6 +11,7 @@ type LoadState =
   {
     type: 'loaded',
     operations: EditableCustomOperationDefinition[],
+    templates: CustomOperationDefinitionTemplates,
     newOperation: EditableCustomOperationDefinition,
     selectedOperation: EditableCustomOperationDefinition | null,
   }
@@ -21,14 +22,14 @@ async function load() {
   loadState.value = { type: 'loading' }
   try {
     const loadedOperations = await api.getOperationDefinitions()
-    const operations = loadedOperations.map(v => EditableCustomOperationDefinition.create(v, false))
+    const operations = loadedOperations.operationDefinitions.map(v => EditableCustomOperationDefinition.create(v, false))
     const newOperation = EditableCustomOperationDefinition.create({
       name: '',
-      form: { 'title': '', 'fields': [] },
-      calculate: '',
-      execute: ''
+      form: structuredClone(loadedOperations.templates.formDefinition),
+      calculate: loadedOperations.templates.calculateScript,
+      execute: loadedOperations.templates.executeScript,
     }, true)
-    loadState.value = { type: 'loaded', operations: operations, newOperation: newOperation, selectedOperation: null }
+    loadState.value = { type: 'loaded', operations: operations, templates: loadedOperations.templates, newOperation: newOperation, selectedOperation: null }
   } catch (e) {
     loadState.value = { type: 'loadError', message: (e as Error).message }
   }

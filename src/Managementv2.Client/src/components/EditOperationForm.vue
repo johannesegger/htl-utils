@@ -136,7 +136,7 @@ onUnmounted(() => {
       <textarea v-model="operation.form" rows="12" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     </LabeledInput>
     <LabeledInput label="Calculate script (optional, PowerShell)">
-      <textarea v-model="operation.calculate" rows="12" class="textarea" placeholder="# optional" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <textarea v-model="operation.calculate" rows="12" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     </LabeledInput>
     <LabeledInput label="Execute script (PowerShell)">
       <textarea v-model="operation.execute" rows="16" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>

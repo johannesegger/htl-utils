@@ -43,7 +43,27 @@ type CustomOperationsController
     [<HttpGet("definitions")>]
     [<Authorize("ManageCustomOperations")>]
     member _.GetDefinitions() =
-        customOperationsStore.GetAll() |> List.map toDefinitionDto
+        {|
+            OperationDefinitions = customOperationsStore.GetAll() |> List.map toDefinitionDto
+            Templates = {|
+                FormDefinition = JsonNode.Parse("""{"title":"","fields":[]}""")
+                CalculateScript =
+                    String.concat "\n" [
+                        "param("
+                        "    [Parameter(Mandatory = $true)] $Config"
+                        ")"
+                        ""
+                    ]
+                ExecuteScript =
+                    String.concat "\n" [
+                        "param("
+                        "    [Parameter(Mandatory = $true)] $Config,"
+                        "    [Parameter(Mandatory = $true)] $InputData"
+                        ")"
+                        ""
+                    ]
+            |}
+        |}
 
     [<HttpGet("{name}/calculated")>]
     member this.GetCalculatedOperation(name: string, cancellationToken: CancellationToken) : Task<IActionResult> =
