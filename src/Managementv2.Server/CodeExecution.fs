@@ -5,6 +5,7 @@ open System.Management.Automation
 open System.Management.Automation.Runspaces
 open System.Security
 open System.Security.Cryptography.X509Certificates
+open System.Text.Json
 open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
@@ -76,7 +77,7 @@ type CodeExecution() =
                 converter.Runspace <- runspace
 
                 let inputObject =
-                    converter.AddCommand("ConvertFrom-Json").AddParameter("InputObject", node.ToJsonString()).Invoke()
+                    converter.AddCommand("ConvertFrom-Json").AddParameter("InputObject", JsonSerializer.Serialize node).Invoke()
 
                 ps.AddParameter("InputData", inputObject) |> ignore
             | None -> ()
