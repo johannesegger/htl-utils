@@ -14,16 +14,24 @@ export type WireConfigValue =
 
 export type WireConfig = Record<string, WireConfigValue>
 
-export interface CustomOperation {
+export interface FormFieldDefinition {
   name: string
-  form: unknown
-  calculate: string | null
-  execute: string
+  title: string
+  type: string
+  inputValidations: ('notEmpty')[]
+  inputHint?: string
 }
 
-export interface OperationOverview {
+export interface FormDefinition {
+  title: string
+  fields: FormFieldDefinition[]
+}
+
+export interface CustomOperation {
   name: string
-  canCalculate: boolean
+  form: FormDefinition
+  calculate: string | null
+  execute: string
 }
 
 export interface EditableCustomOperation {
@@ -104,8 +112,7 @@ export const api = {
       handle<void>(r),
     ),
 
-  getOperations: () => fetch(`${base}/full`).then((r) => handle<CustomOperation[]>(r)),
-  getOperationOverviews: () => fetch(base).then((r) => handle<OperationOverview[]>(r)),
+  getOperations: () => fetch(base).then((r) => handle<CustomOperation[]>(r)),
   addOperation: (operation: CustomOperation) =>
     fetch(base, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(operation) }).then((r) =>
       handle<CustomOperation>(r),

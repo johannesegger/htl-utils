@@ -17,10 +17,6 @@ type CustomOperationsController
     ) =
     inherit ControllerBase()
 
-    let toOverviewDto (operation: CustomOperation) =
-        {| Name = operation.Name
-           CanCalculate = Option.isSome operation.Calculate |}
-
     let toDto (operation: CustomOperation) =
         {| Name = operation.Name
            Form = operation.Form
@@ -33,12 +29,8 @@ type CustomOperationsController
           Calculate = Option.ofObj calculate
           Execute = execute }
     
-    [<HttpGet>]
-    member _.GetOverview() =
-        customOperationsStore.GetAll() |> List.map toOverviewDto
-
-    [<HttpGet("full")>]
-    member _.GetFull() =
+    [<HttpGet()>]
+    member _.Get() =
         customOperationsStore.GetAll() |> List.map toDto
 
     [<HttpGet("{name}/calculated")>]
