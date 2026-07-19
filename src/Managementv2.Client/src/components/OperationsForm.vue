@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted } from 'vue'
-import { api, EditableCustomOperation, type CustomOperation } from '@/api.ts'
+import { api, EditableCustomOperation, type CustomOperation, type FormDefinition } from '@/api.ts'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
 
@@ -12,6 +12,8 @@ const emit = defineEmits<{
 }>()
 
 const running = computed(() => operation.value.runningCalculate || operation.value.runningExecute)
+
+const calculateScript = computed(() => operation.value.calculate.trim() === '' ? null : operation.value.calculate)
 
 function parseJson(text: string, what: string): unknown {
   try {
@@ -25,17 +27,16 @@ async function save() {
   operation.value.saveError = null
   operation.value.message = null
   try {
-    const form = parseJson(operation.value.form, 'The form definition')
+    const form = parseJson(operation.value.form, 'The form definition') as FormDefinition
     if (operation.value.execute.trim() === '') throw new Error('An execute script is required.')
-    const calculateScript = operation.value.calculate.trim() === '' ? null : operation.value.calculate
     let saved
     if (operation.value.isNew) {
       if (operation.value.name.trim() === '') throw new Error('A name is required.')
-      saved = await api.addOperation({ name: operation.value.name.trim(), form: form, calculate: calculateScript, execute: operation.value.execute })
+      saved = await api.addOperation({ name: operation.value.name.trim(), form: form, calculate: calculateScript.value, execute: operation.value.execute })
       EditableCustomOperation.sync(operation.value, saved)
       emit('add', operation.value)
     } else {
-      saved = await api.updateOperation(operation.value.name, { form: form, calculate: calculateScript, execute: operation.value.execute })
+      saved = await api.updateOperation(operation.value.name, { form: form, calculate: calculateScript.value, execute: operation.value.execute })
     }
     operation.value.message = 'Operation saved.'
   } catch (e) {
@@ -61,6 +62,7 @@ function isAbort(e: unknown): boolean {
 
 async function runCalculate() {
   if (!operation.value.name) return
+  if (!calculateScript.value) return
 
   await save()
   if (operation.value.saveError) return
@@ -99,7 +101,7 @@ async function runExecute() {
   try {
     const data = parseJson(operation.value.inputText, 'The input data')
     const result = await api.execute(operation.value.name, data, controller.signal)
-    operation.value.executeResult = JSON.stringify(result, null, 2)
+    operation.value.executeResult = result ? JSON.stringify(result, null, 2) : '<No output>'
   } catch (e) {
     if (!isAbort(e)) operation.value.executeError = (e as Error).message
   } finally {
@@ -150,7 +152,7 @@ onUnmounted(() => {
     <h3 class="text-sm font-semibold">Test scripts</h3>
 
     <button v-if="operation.runningCalculate" class="btn-danger" @click="cancelCalculate">Cancel</button>
-    <button v-else class="btn-secondary" :disabled="running" @click="runCalculate">Run calculate</button>
+    <button v-else class="btn-secondary" :disabled="running || !calculateScript" @click="runCalculate">Run calculate</button>
     <pre
       v-if="operation.calculateResult"
       class="mt-2 max-h-80 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100"

@@ -89,6 +89,6 @@ async function execute() {
     <pre
       v-if="execution.type === 'executed'"
       class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
-      >{{ JSON.stringify(execution.output, null, 2) }}</pre>
+      >{{ execution.output ? JSON.stringify(execution.output, null, 2) : 'Execution succeeded' }}</pre>
   </form>
 </template>

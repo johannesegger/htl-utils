@@ -179,7 +179,7 @@ onUnmounted(cancelAllCalculations)
             </div>
             <pre v-if="calculation.execution.type === 'executed'"
               class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
-              >{{ JSON.stringify(calculation.execution.output, null, 2) }}</pre>
+              >{{ calculation.execution.output ? JSON.stringify(calculation.execution.output, null, 2) : 'Execution succeeded' }}</pre>
             <p v-else-if="calculation.execution.type === 'executionError'"
               class="rounded bg-gray-900 p-3 text-xs text-red-300 whitespace-pre overflow-x-auto">{{ calculation.execution.message }}</p>
           </div>
