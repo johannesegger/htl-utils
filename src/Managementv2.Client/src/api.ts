@@ -141,8 +141,6 @@ export const api = {
   removeOperation: (name: string) =>
     fetchAuthenticated(`${base}/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) => handle<void>(r)),
 
-  calculate: (signal?: AbortSignal) =>
-    fetchAuthenticated(`${base}/calculated`, { signal }).then((r) => handle<CalculatedOperations>(r)),
   calculateOperation: (name: string, signal?: AbortSignal) =>
     fetchAuthenticated(`${base}/${encodeURIComponent(name)}/calculated`, { signal }).then((r) => handle<unknown>(r)),
   execute: (name: string, data: unknown, signal?: AbortSignal) =>
