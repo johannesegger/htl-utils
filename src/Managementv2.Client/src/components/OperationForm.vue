@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { runExecution, type ExecutionState } from '@/execution'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue'
@@ -8,6 +8,12 @@ import type { FormDefinition, FormFieldDefinition } from '@/api.ts'
 const props = defineProps<{
   name: string
   form: FormDefinition
+  showResult: boolean
+}>()
+
+const emit = defineEmits<{
+  executed: [output: unknown]
+  executionError: [message: string]
 }>()
 
 type FormField = FormFieldDefinition & { value: string }
@@ -31,14 +37,14 @@ namespace Form {
   }
 }
 
-const execution = ref<ExecutionState>({ type: 'notExecuted' })
+const executionState = defineModel<ExecutionState>('executionState', { required: true })
 
 const form = ref<Form>(Form.empty())
 watch(
   props.form,
   def => {
     form.value = Form.fromDefinition(def)
-    execution.value = { type: 'notExecuted' }
+    executionState.value = { type: 'notExecuted' }
   },
   { immediate: true },
 )
@@ -59,8 +65,8 @@ const formIsValid = computed(() => {
 async function execute() {
   if (!form.value || !formIsValid.value) return
   const data = Object.fromEntries(form.value.fields.map(v => [v.name, v.value]))
-  await runExecution(props.name, data, execution)
-  if (execution.value.type === 'executed') {
+  await runExecution(props.name, data, executionState)
+  if (executionState.value.type === 'executed') {
     form.value.fields.forEach(v => v.value = '')
   }
 }
@@ -81,14 +87,16 @@ async function execute() {
       <p v-if="field.inputHint" class="mt-1 text-xs text-gray-500">{{ field.inputHint }}</p>
     </LabeledInput>
 
-    <button type="submit" class="btn-primary" :disabled="!formIsValid || execution.type === 'executing'">
-      {{ execution.type === 'executing' ? 'Executing…' : 'Execute' }}
+    <button type="submit" class="btn-primary" :disabled="!formIsValid || executionState.type === 'executing'">
+      {{ executionState.type === 'executing' ? 'Executing…' : 'Execute' }}
     </button>
 
-    <ErrorMessage v-if="execution.type === 'executionError'" :message="execution.message" />
-    <pre
-      v-if="execution.type === 'executed'"
-      class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
-      >{{ execution.output ? JSON.stringify(execution.output, null, 2) : 'Execution succeeded' }}</pre>
+    <template v-if="showResult">
+      <ErrorMessage v-if="executionState.type === 'executionError'" :message="executionState.message" />
+      <pre
+        v-if="executionState.type === 'executed'"
+        class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
+        >{{ executionState.output ? JSON.stringify(executionState.output, null, 2) : 'Execution succeeded' }}</pre>
+    </template>
   </form>
 </template>

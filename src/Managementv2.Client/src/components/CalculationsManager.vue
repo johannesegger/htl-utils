@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, toRef } from 'vue'
+import { onMounted, onUnmounted, ref, toRef } from 'vue'
 import { api, type CustomOperation } from '@/api'
 import { runExecution, type ExecutionState } from '@/execution'
 import ErrorMessage from './ErrorMessage.vue'
@@ -11,7 +11,7 @@ interface Calculation {
   execution: ExecutionState
 }
 
-type OperationState =
+type CalculationState =
   { type: 'notCalculated' } |
   { type: 'calculating', abortController: AbortController } |
   { type: 'calculated', calculations: Calculation[] } |
@@ -19,16 +19,15 @@ type OperationState =
 
 type ExecutableOperation = {
   data: CustomOperation
-  state: OperationState
+  calculationState: CalculationState
   showForm: boolean
+  formExecutionState: ExecutionState
 }
 
 const operations = ref<ExecutableOperation[]>([])
 const loading = ref(false)
 const loadError = ref<string | null>(null)
 const calculatingAll = ref(false)
-
-const calculable = computed(() => operations.value.filter((o) => o.data.calculate !== null))
 
 function isAbort(e: unknown): boolean {
   return e instanceof DOMException && e.name === 'AbortError'
@@ -39,7 +38,12 @@ async function load() {
   loadError.value = null
   try {
     const data = await api.getOperations()
-    operations.value = data.map((v): ExecutableOperation => ({ data: v, state: { type: 'notCalculated' }, showForm: false }))
+    operations.value = data.map((v): ExecutableOperation => ({
+      data: v,
+      calculationState: { type: 'notCalculated' },
+      showForm: false,
+      formExecutionState: { type: 'notExecuted' },
+    }))
   } catch (e) {
     loadError.value = (e as Error).message
   } finally {
@@ -48,26 +52,28 @@ async function load() {
 }
 
 async function calculateOne(operation: ExecutableOperation) {
-  operation.state = { type: 'calculating', abortController: new AbortController() }
+  if (!operation.data.calculate) return
+
+  operation.calculationState = { type: 'calculating', abortController: new AbortController() }
   try {
-    const data = (await api.calculateOperation(operation.data.name, operation.state.abortController.signal)) as unknown[]
-    operation.state = {
+    const data = (await api.calculateOperation(operation.data.name, operation.calculationState.abortController.signal)) as unknown[]
+    operation.calculationState = {
       type: 'calculated',
       calculations: data.map((entry) => ({ data: entry, execution: { type: 'notExecuted' } }))
     }
   } catch (e) {
     if (isAbort(e)) {
-      operation.state = { type: 'notCalculated' }
+      operation.calculationState = { type: 'notCalculated' }
     }
     else {
-      operation.state = { type: 'calculationError', message: (e as Error).message }
+      operation.calculationState = { type: 'calculationError', message: (e as Error).message }
     }
   }
 }
 
 function cancelCalculation(operation: ExecutableOperation) {
-  if (operation.state.type !== 'calculating') return
-  operation.state.abortController.abort()
+  if (operation.calculationState.type !== 'calculating') return
+  operation.calculationState.abortController.abort()
 }
 
 function cancelAllCalculations() {
@@ -79,7 +85,7 @@ function cancelAllCalculations() {
 async function calculateAll() {
   calculatingAll.value = true
   try {
-    await Promise.all(calculable.value.map((operation) => calculateOne(operation)))
+    await Promise.all(operations.value.map((operation) => calculateOne(operation)))
   } finally {
     calculatingAll.value = false
   }
@@ -91,8 +97,8 @@ async function executeOne(calculation: Calculation, name: string) {
 }
 
 async function executeGroup(operation: ExecutableOperation) {
-  if (operation.state.type !== 'calculated') return
-  await Promise.all(operation.state.calculations.map(calculation => executeOne(calculation, operation.data.name)))
+  if (operation.calculationState.type !== 'calculated') return
+  await Promise.all(operation.calculationState.calculations.map(calculation => executeOne(calculation, operation.data.name)))
 }
 
 onMounted(load)
@@ -106,7 +112,7 @@ onUnmounted(cancelAllCalculations)
       <div class="flex gap-2">
         <button class="btn-secondary" @click="load">↻</button>
         <button v-if="calculatingAll" class="btn-danger" @click="cancelAllCalculations">Cancel all</button>
-        <button v-else class="btn-primary" :disabled="calculable.length === 0" @click="calculateAll">
+        <button v-else class="btn-primary" :disabled="!operations.some(v => v.data.calculate)" @click="calculateAll">
           Calculate all
         </button>
       </div>
@@ -116,47 +122,62 @@ onUnmounted(cancelAllCalculations)
     <ErrorMessage :message="loadError" />
 
     <div
-      v-if="!loading && calculable.length === 0"
+      v-if="!loading && operations.length === 0"
       class="rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-      No operations with a calculate script.
+      No operations.
     </div>
 
-    <div v-for="operation in calculable" :key="operation.data.name" class="space-y-1">
+    <div v-for="operation in operations" :key="operation.data.name" class="space-y-1">
       <div class="flex items-center justify-between">
         <h3 class="font-medium">
           {{ operation.data.form.title }}
-          <span v-if="operation.state.type === 'calculated'"
+          <span v-if="operation.calculationState.type === 'calculated'"
             class="text-xs text-gray-500">
-            ({{ pluralize(operation.state.calculations.length, 'operation', 'operations') }} calculated)
+            ({{ pluralize(operation.calculationState.calculations.length, 'operation', 'operations') }} calculated)
           </span>
         </h3>
         <div class="flex gap-2">
-          <button v-if="operation.state.type === 'calculated' && operation.state.calculations.some(v => v.execution.type === 'notExecuted' || v.execution.type === 'executionError')"
+          <button v-if="operation.calculationState.type === 'calculated' && operation.calculationState.calculations.some(v => v.execution.type === 'notExecuted' || v.execution.type === 'executionError')"
             class="btn-secondary"
             @click="executeGroup(operation)">Execute all</button>
-          <button v-else-if="operation.state.type === 'calculated' && operation.state.calculations.some(v => v.execution.type === 'executing')"
+          <button v-else-if="operation.calculationState.type === 'calculated' && operation.calculationState.calculations.some(v => v.execution.type === 'executing')"
             class="btn-secondary"
             disabled>Executing…</button>
 
-          <button v-if="operation.state.type === 'calculating'"
+          <button v-if="operation.calculationState.type === 'calculating'"
             class="btn-danger"
             @click="cancelCalculation(operation)">
             Cancel
           </button>
-          <button v-else class="btn-secondary" @click="calculateOne(operation)">Calculate</button>
-          <OperationForm v-if="operation.data.form.fields.length === 0" :name="operation.data.name" :form="operation.data.form" />
+          <button v-else-if="operation.data.calculate" class="btn-secondary" @click="calculateOne(operation)">Calculate</button>
+
+          <OperationForm v-if="operation.data.form.fields.length === 0"
+            v-model:executionState="operation.formExecutionState"
+            :name="operation.data.name"
+            :form="operation.data.form"
+            :show-result="false" />
           <button v-else class="btn-secondary" @click="operation.showForm = !operation.showForm">{{ operation.showForm ? 'Hide form' : 'Show form' }}</button>
         </div>
       </div>
       <OperationForm v-if="operation.data.form.fields.length > 0"
+        v-model:executionState="operation.formExecutionState"
         v-show="operation.showForm"
         :name="operation.data.name"
         :form="operation.data.form"
+        show-result
         class="border rounded border-gray-300 p-4" />
-      <ErrorMessage v-if="operation.state.type === 'calculationError'" :message="operation.state.message" />
-      <div v-if="operation.state.type === 'calculated'"
+      <ErrorMessage v-if="operation.calculationState.type === 'calculationError'" :message="operation.calculationState.message" />
+      
+      <template v-if="operation.data.form.fields.length === 0">
+        <ErrorMessage v-if="operation.formExecutionState.type === 'executionError'" :message="operation.formExecutionState.message" />
+        <pre v-if="operation.formExecutionState.type === 'executed'"
+          class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
+          >{{ operation.formExecutionState.output ? JSON.stringify(operation.formExecutionState.output, null, 2) : 'Execution succeeded' }}</pre>
+      </template>
+
+      <div v-if="operation.calculationState.type === 'calculated'"
         class="flex flex-col gap-2">
-        <div v-for="(calculation, index) in operation.state.calculations" :key="index" class="flex flex-col gap-1">
+        <div v-for="(calculation, index) in operation.calculationState.calculations" :key="index" class="flex flex-col gap-1">
           <div class="flex flex-col gap-2 rounded px-3 py-2 text-sm"
             :class="{
               'bg-gray-100': calculation.execution.type === 'notExecuted' || calculation.execution.type === 'executing',
@@ -186,7 +207,7 @@ onUnmounted(cancelAllCalculations)
         </div>
       </div>
       <p
-        v-else-if="operation.state.type === 'notCalculated'"
+        v-else-if="operation.data.calculate && operation.calculationState.type === 'notCalculated'"
         class="text-sm text-gray-500">
         Not calculated yet.
       </p>
