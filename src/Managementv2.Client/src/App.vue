@@ -14,8 +14,12 @@ const active = ref<(typeof tabs)[number]['id']>(tabs[0].id)
 </script>
 
 <template>
+  <div class="bg-pink-700 text-white">
+    <div class="mx-auto max-w-5xl p-6">
+      <h1 class="text-3xl font-bold small-caps">HTL IT Management</h1>
+    </div>
+  </div>
   <div class="mx-auto max-w-5xl p-6">
-    <h1 class="mb-4 text-xl font-bold">Custom operations</h1>
     <nav class="mb-6 flex gap-2 border-b border-gray-200">
       <button
         v-for="tab in tabs"
@@ -26,9 +30,7 @@ const active = ref<(typeof tabs)[number]['id']>(tabs[0].id)
             ? 'border-blue-600 text-blue-700'
             : 'border-transparent text-gray-500 hover:text-gray-800'
         "
-        @click="active = tab.id"
-      >
-        {{ tab.label }}
+        @click="active = tab.id">{{ tab.label }}
       </button>
     </nav>
 
