@@ -5,40 +5,58 @@ import {
   configKindLabels,
   emptyEntry,
   fileToBase64,
-  fromWire,
-  toWire,
+  fromDto,
+  toDto,
   type ConfigEntry,
   type ConfigKind,
 } from '@/config'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue'
 
-const entries = ref<ConfigEntry[]>([])
-const loading = ref(false)
-const saving = ref(false)
-const error = ref<string | null>(null)
-const message = ref<string | null>(null)
+type LoadState =
+  { type: 'notLoaded' } |
+  { type: 'loading' } |
+  { type: 'loadError', message: string } |
+  {
+    type: 'loaded',
+    entries: ConfigEntry[],
+    saveState:
+      { type: 'notSaved' } |
+      { type: 'saving' } |
+      { type: 'saveError', message: string } |
+      { type: 'saved' }
+  }
+
+const loadState = ref<LoadState>({ type: 'notLoaded' })
+
+// const entries = ref<ConfigEntry[]>([])
+// const loading = ref(false)
+// const saving = ref(false)
+// const error = ref<string | null>(null)
+// const message = ref<string | null>(null)
 
 const kinds = Object.keys(configKindLabels) as ConfigKind[]
 
 async function load() {
-  loading.value = true
-  error.value = null
+  loadState.value = { type: 'loading' }
   try {
-    entries.value = fromWire(await api.getConfig())
+    const entries = fromDto(await api.getConfig())
+    loadState.value = { type: 'loaded', entries: entries, saveState: { type: 'notSaved' } }
   } catch (e) {
-    error.value = (e as Error).message
-  } finally {
-    loading.value = false
+    loadState.value = { type: 'loadError', message: (e as Error).message }
   }
 }
 
 function addEntry() {
-  entries.value.push(emptyEntry())
+  if (loadState.value.type !== 'loaded') return
+
+  loadState.value.entries.push(emptyEntry())
 }
 
 function removeEntry(index: number) {
-  entries.value.splice(index, 1)
+  if (loadState.value.type !== 'loaded') return
+  
+  loadState.value.entries.splice(index, 1)
 }
 
 async function onFile(entry: ConfigEntry, event: Event) {
@@ -49,19 +67,17 @@ async function onFile(entry: ConfigEntry, event: Event) {
 }
 
 async function save() {
-  saving.value = true
-  error.value = null
-  message.value = null
+  if (loadState.value.type !== 'loaded') return
+
+  loadState.value.saveState = { type: 'saving' }
   try {
-    const keys = entries.value.map((e) => e.key.trim())
-    if (keys.some((k) => k === '')) throw new Error('Every entry needs a key.')
+    const keys = loadState.value.entries.map(e => e.key.trim())
+    if (keys.some(k => k === '')) throw new Error('Entry key must not be empty.')
     if (new Set(keys).size !== keys.length) throw new Error('Entry keys must be unique.')
-    await api.setConfig(toWire(entries.value))
-    message.value = 'Configuration saved.'
+    await api.setConfig(toDto(loadState.value.entries))
+    loadState.value.saveState = { type: 'saved' }
   } catch (e) {
-    error.value = (e as Error).message
-  } finally {
-    saving.value = false
+    loadState.value.saveState = { type: 'saveError', message: (e as Error).message }
   }
 }
 
@@ -73,23 +89,27 @@ onMounted(load)
     <header class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Configuration</h2>
       <div class="flex gap-2">
-        <button class="btn-secondary" :disabled="loading" @click="load">Reload</button>
-        <button class="btn-primary" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save' }}</button>
+        <button class="btn-secondary" :disabled="loadState.type === 'loading'" @click="load">Reload</button>
+        <button v-if="loadState.type === 'loaded'" class="btn-primary"
+          :disabled="loadState.saveState.type === 'saving'"
+          @click="save">{{ loadState.saveState.type === 'saving' ? 'Saving…' : 'Save' }}
+        </button>
       </div>
     </header>
 
-    <ErrorMessage :message="error" />
-    <p v-if="message" class="rounded bg-green-100 px-3 py-2 text-sm text-green-800">{{ message }}</p>
-    <p v-if="loading" class="text-sm text-gray-500">Loading…</p>
+    <ErrorMessage v-if="loadState.type === 'loadError'" :message="loadState.message" />
+    <ErrorMessage v-if="loadState.type === 'loaded' && loadState.saveState.type === 'saveError'" :message="loadState.saveState.message" />
+    <p v-if="loadState.type === 'loaded' && loadState.saveState.type === 'saved'" class="rounded bg-green-100 px-3 py-2 text-sm text-green-800">Configuration saved.</p>
+    <p v-if="loadState.type === 'loading'" class="text-sm text-gray-500">Loading…</p>
 
-    <ul class="space-y-3">
-      <li v-for="(entry, index) in entries" :key="index" class="rounded border border-gray-500 p-3">
+    <ul v-if="loadState.type === 'loaded'" class="space-y-3">
+      <li v-for="(entry, index) in loadState.entries" :key="index" class="rounded border border-gray-500 p-3">
         <div class="flex flex-wrap items-center gap-2">
           <input v-model="entry.key" placeholder="Key" class="input flex-1 text-orange-500" />
           <select v-model="entry.kind" class="input w-56">
             <option v-for="kind in kinds" :key="kind" :value="kind">{{ configKindLabels[kind] }}</option>
           </select>
-          <button class="btn-danger" title="Remove" @click="removeEntry(index)">✕</button>
+          <button class="btn-danger" title="Remove" @click="removeEntry(index)">Delete</button>
         </div>
 
         <div class="mt-2 space-y-2">
@@ -124,6 +144,6 @@ onMounted(load)
       </li>
     </ul>
 
-    <button class="btn-secondary" @click="addEntry">+ Add entry</button>
+    <button v-if="loadState.type === 'loaded'" class="btn-secondary" @click="addEntry">+ Add entry</button>
   </section>
 </template>

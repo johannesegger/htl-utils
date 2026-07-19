@@ -6,6 +6,8 @@
 //   credential            -> { userName, password }
 //   protected certificate -> { file: "<base64>", password }
 
+import { getFetchHeaderWithAccessToken } from "./auth";
+
 export type WireConfigValue =
   | string
   | { file: string }
@@ -30,11 +32,17 @@ export interface FormDefinition {
 export interface CustomOperation {
   name: string
   form: FormDefinition
+  canCalculate: boolean
+}
+
+export interface CustomOperationDefinition {
+  name: string
+  form: FormDefinition
   calculate: string | null
   execute: string
 }
 
-export interface EditableCustomOperation {
+export interface EditableCustomOperationDefinition {
   isNew: boolean
   name: string
   form: string
@@ -54,8 +62,8 @@ export interface EditableCustomOperation {
   executeError: string | null
   message: string | null
 }
-export namespace EditableCustomOperation {
-  export function create(v: CustomOperation, isNew: boolean) : EditableCustomOperation {
+export namespace EditableCustomOperationDefinition {
+  export function create(v: CustomOperationDefinition, isNew: boolean) : EditableCustomOperationDefinition {
     return {
       isNew: isNew,
       name: v.name,
@@ -78,7 +86,7 @@ export namespace EditableCustomOperation {
     }
   }
 
-  export function sync(v: EditableCustomOperation, data: CustomOperation) {
+  export function sync(v: EditableCustomOperationDefinition, data: CustomOperationDefinition) {
     v.isNew = false
     v.name = data.name
     v.form = JSON.stringify(data.form, null, 2)
@@ -95,6 +103,12 @@ export interface CalculatedOperations {
 const base = '/api/custom-operations'
 const jsonHeaders = { 'Content-Type': 'application/json' }
 
+async function fetchAuthenticated(fetchUrl: string, fetchParams?: RequestInit) {
+  const authHeader = await getFetchHeaderWithAccessToken()
+  const { headers, ...rest } = fetchParams ?? { headers: {} }
+  return await fetch(fetchUrl, { headers: { ...authHeader, ...headers }, ...rest})
+}
+
 async function handle<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const message = await response.text()
@@ -106,32 +120,33 @@ async function handle<T>(response: Response): Promise<T> {
 }
 
 export const api = {
-  getConfig: () => fetch(`${base}/config`).then((r) => handle<WireConfig>(r)),
+  getConfig: () => fetchAuthenticated(`${base}/config`).then((r) => handle<WireConfig>(r)),
   setConfig: (config: WireConfig) =>
-    fetch(`${base}/config`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(config) }).then((r) =>
+    fetchAuthenticated(`${base}/config`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(config) }).then((r) =>
       handle<void>(r),
     ),
 
-  getOperations: () => fetch(base).then((r) => handle<CustomOperation[]>(r)),
-  addOperation: (operation: CustomOperation) =>
-    fetch(base, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(operation) }).then((r) =>
-      handle<CustomOperation>(r),
+  getOperations: () => fetchAuthenticated(base).then((r) => handle<CustomOperation[]>(r)),
+  getOperationDefinitions: () => fetchAuthenticated(`${base}/definitions`).then((r) => handle<CustomOperationDefinition[]>(r)),
+  addOperation: (operation: CustomOperationDefinition) =>
+    fetchAuthenticated(base, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(operation) }).then((r) =>
+      handle<CustomOperationDefinition>(r),
     ),
-  updateOperation: (name: string, operation: Omit<CustomOperation, 'name'>) =>
-    fetch(`${base}/${encodeURIComponent(name)}`, {
+  updateOperation: (name: string, operation: Omit<CustomOperationDefinition, 'name'>) =>
+    fetchAuthenticated(`${base}/${encodeURIComponent(name)}`, {
       method: 'PUT',
       headers: jsonHeaders,
       body: JSON.stringify(operation),
-    }).then((r) => handle<CustomOperation>(r)),
+    }).then((r) => handle<CustomOperationDefinition>(r)),
   removeOperation: (name: string) =>
-    fetch(`${base}/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) => handle<void>(r)),
+    fetchAuthenticated(`${base}/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) => handle<void>(r)),
 
   calculate: (signal?: AbortSignal) =>
-    fetch(`${base}/calculated`, { signal }).then((r) => handle<CalculatedOperations>(r)),
+    fetchAuthenticated(`${base}/calculated`, { signal }).then((r) => handle<CalculatedOperations>(r)),
   calculateOperation: (name: string, signal?: AbortSignal) =>
-    fetch(`${base}/${encodeURIComponent(name)}/calculated`, { signal }).then((r) => handle<unknown>(r)),
+    fetchAuthenticated(`${base}/${encodeURIComponent(name)}/calculated`, { signal }).then((r) => handle<unknown>(r)),
   execute: (name: string, data: unknown, signal?: AbortSignal) =>
-    fetch(`${base}/execution`, {
+    fetchAuthenticated(`${base}/execution`, {
       method: 'POST',
       headers: jsonHeaders,
       body: JSON.stringify({ name, data }),

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onUnmounted } from 'vue'
-import { api, EditableCustomOperation, type CustomOperation, type FormDefinition } from '@/api.ts'
+import { api, EditableCustomOperationDefinition, type FormDefinition } from '@/api.ts'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
 
-const operation = defineModel<EditableCustomOperation>({ required: true })
+const operation = defineModel<EditableCustomOperationDefinition>({ required: true })
 
 const emit = defineEmits<{
-  (e: 'add', v: EditableCustomOperation): void
-  (e: 'remove', v: EditableCustomOperation): void
+  (e: 'add', v: EditableCustomOperationDefinition): void
+  (e: 'remove', v: EditableCustomOperationDefinition): void
 }>()
 
 const running = computed(() => operation.value.runningCalculate || operation.value.runningExecute)
@@ -33,7 +33,7 @@ async function save() {
     if (operation.value.isNew) {
       if (operation.value.name.trim() === '') throw new Error('A name is required.')
       saved = await api.addOperation({ name: operation.value.name.trim(), form: form, calculate: calculateScript.value, execute: operation.value.execute })
-      EditableCustomOperation.sync(operation.value, saved)
+      EditableCustomOperationDefinition.sync(operation.value, saved)
       emit('add', operation.value)
     } else {
       saved = await api.updateOperation(operation.value.name, { form: form, calculate: calculateScript.value, execute: operation.value.execute })

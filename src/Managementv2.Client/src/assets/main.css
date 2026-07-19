@@ -1,20 +1,22 @@
 @import 'tailwindcss';
 
-.input {
-  @apply rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none;
-}
-.textarea {
-  @apply w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs focus:border-blue-500 focus:outline-none;
-}
-.btn-primary {
-  @apply cursor-pointer disabled:cursor-not-allowed rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white not-disabled:hover:bg-blue-700 disabled:opacity-50;
-}
-.btn-secondary {
-  @apply cursor-pointer disabled:cursor-not-allowed rounded border border-gray-300 px-3 py-1.5 text-sm font-medium not-disabled:hover:bg-gray-100 disabled:opacity-50;
-}
-.btn-danger {
-  @apply cursor-pointer disabled:cursor-not-allowed rounded border px-3 py-1.5 text-sm text-red-600 not-disabled:hover:bg-red-50;
-}
-.small-caps {
-  font-variant: small-caps;
+@layer components {
+  .input {
+    @apply rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none;
+  }
+  .textarea {
+    @apply w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs focus:border-blue-500 focus:outline-none;
+  }
+  .btn-primary {
+    @apply cursor-pointer disabled:cursor-not-allowed rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white not-disabled:hover:bg-blue-700 disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply cursor-pointer disabled:cursor-not-allowed rounded bg-white text-black border border-gray-300 px-3 py-1.5 text-sm font-medium not-disabled:hover:bg-gray-100 disabled:opacity-50;
+  }
+  .btn-danger {
+    @apply cursor-pointer disabled:cursor-not-allowed rounded border px-3 py-1.5 text-sm text-red-600 not-disabled:hover:bg-red-50;
+  }
+  .small-caps {
+    font-variant: small-caps;
+  }
 }

@@ -1,14 +1,16 @@
 ﻿namespace Managementv2.Server.Controllers
 
 open Managementv2.Server
+open Microsoft.AspNetCore.Authorization
 open Microsoft.AspNetCore.Mvc
+open System.Text.Json
 open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
-open System.Text.Json
 
 [<ApiController>]
 [<Route("api/custom-operations")>]
+[<Authorize("ExecuteCustomOperations")>]
 type CustomOperationsController
     (
         codeExecution: CodeExecution,
@@ -20,6 +22,11 @@ type CustomOperationsController
     let toDto (operation: CustomOperation) =
         {| Name = operation.Name
            Form = operation.Form
+           CanCalculate = Option.isSome operation.Calculate |}
+
+    let toDefinitionDto (operation: CustomOperation) =
+        {| Name = operation.Name
+           Form = operation.Form
            Calculate = Option.toObj operation.Calculate
            Execute = operation.Execute |}
 
@@ -28,10 +35,15 @@ type CustomOperationsController
           Form = form
           Calculate = Option.ofObj calculate
           Execute = execute }
-    
-    [<HttpGet()>]
+
+    [<HttpGet>]
     member _.Get() =
         customOperationsStore.GetAll() |> List.map toDto
+
+    [<HttpGet("definitions")>]
+    [<Authorize("ManageCustomOperations")>]
+    member _.GetDefinitions() =
+        customOperationsStore.GetAll() |> List.map toDefinitionDto
 
     [<HttpGet("{name}/calculated")>]
     member this.GetCalculatedOperation(name: string, cancellationToken: CancellationToken) : Task<IActionResult> =
@@ -53,10 +65,12 @@ type CustomOperationsController
         }
 
     [<HttpGet("config")>]
+    [<Authorize("ManageCustomOperations")>]
     member _.GetConfig() : JsonNode =
         customOperationsConfig.Read() |> CustomOperationsConfig.toJson :> JsonNode
 
     [<HttpPut("config")>]
+    [<Authorize("ManageCustomOperations")>]
     member this.SetConfig([<FromBody>] config: JsonNode) =
         config |> CustomOperationsConfig.ofJson |> customOperationsConfig.Write
         this.NoContent() :> IActionResult
@@ -77,6 +91,7 @@ type CustomOperationsController
         }
 
     [<HttpPost>]
+    [<Authorize("ManageCustomOperations")>]
     member this.Add
         ([<FromBody>] operation:
             {| Name: string
@@ -91,11 +106,12 @@ type CustomOperationsController
                 let created =
                     toOperation operation.Name operation.Form operation.Calculate operation.Execute
                     |> customOperationsStore.Save
-                this.Created($"custom-operations/%s{created.Name}", toDto created) :> IActionResult
+                this.Created($"custom-operations/%s{created.Name}", toDefinitionDto created) :> IActionResult
             with :? System.ArgumentException as e ->
                 this.BadRequest(e.Message) :> IActionResult
 
     [<HttpPut("{name}")>]
+    [<Authorize("ManageCustomOperations")>]
     member this.Edit
         (
             name: string,
@@ -110,9 +126,10 @@ type CustomOperationsController
             let updated =
                 toOperation name operation.Form operation.Calculate operation.Execute
                 |> customOperationsStore.Save
-            this.Ok(toDto updated) :> IActionResult
+            this.Ok(toDefinitionDto updated) :> IActionResult
 
     [<HttpDelete("{name}")>]
+    [<Authorize("ManageCustomOperations")>]
     member this.Remove(name: string) =
         match customOperationsStore.TryGet name with
         | None -> this.NotFound() :> IActionResult

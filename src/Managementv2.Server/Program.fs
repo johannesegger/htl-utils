@@ -2,15 +2,9 @@ namespace Managementv2.Server
 
 #nowarn "20"
 
-open System
-open System.Collections.Generic
 open System.IO
-open System.Linq
-open System.Threading.Tasks
-open Microsoft.AspNetCore
+open Microsoft.AspNetCore.Authentication
 open Microsoft.AspNetCore.Builder
-open Microsoft.AspNetCore.Hosting
-open Microsoft.AspNetCore.HttpsPolicy
 open Microsoft.AspNetCore.Mvc.Formatters
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
@@ -28,6 +22,23 @@ module Program =
         builder.Services.AddControllers(fun opt ->
             opt.OutputFormatters.RemoveType<HttpNoContentOutputFormatter>()
         )
+
+        builder.Services.AddAuthentication()
+            .AddJwtBearer(fun options ->
+                builder.Configuration.GetSection("Oidc").Bind(options)
+            ) |> ignore
+        builder.Services.AddTransient<IClaimsTransformation>(fun provider ->
+            new KeycloakRolesClaimsTransformation("htl-utils")
+        ) |> ignore
+
+        builder.Services.AddAuthorization(fun v ->
+            v.AddPolicy("ExecuteCustomOperations", fun policy ->
+                policy.RequireRole("itmgmt-custom-operation-executor") |> ignore
+            )
+            v.AddPolicy("ManageCustomOperations", fun policy ->
+                policy.RequireRole("itmgmt-custom-operation-manager") |> ignore
+            )
+        ) |> ignore
 
         let customOperationsDirectory =
             builder.Configuration.GetValue<string> "CustomOperationsDirectory"
@@ -50,6 +61,7 @@ module Program =
 
         app.UseHttpsRedirection()
 
+        app.UseAuthentication()
         app.UseAuthorization()
         app.MapControllers()
 

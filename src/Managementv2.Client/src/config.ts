@@ -25,7 +25,7 @@ export function emptyEntry(): ConfigEntry {
   return { key: '', kind: 'text', text: '', userName: '', password: '', fileBase64: '', fileName: '' }
 }
 
-export function fromWire(config: WireConfig): ConfigEntry[] {
+export function fromDto(config: WireConfig): ConfigEntry[] {
   return Object.entries(config).map(([key, value]) => {
     const entry = { ...emptyEntry(), key }
     if (typeof value === 'string') {
@@ -47,7 +47,7 @@ export function fromWire(config: WireConfig): ConfigEntry[] {
   })
 }
 
-export function toWire(entries: ConfigEntry[]): WireConfig {
+export function toDto(entries: ConfigEntry[]): WireConfig {
   const config: WireConfig = {}
   for (const entry of entries) {
     switch (entry.kind) {

@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import ConfigManager from '@/components/ConfigManager.vue'
 import OperationsManager from '@/components/OperationsManager.vue'
 import CalculationsManager from '@/components/CalculationsManager.vue'
+import { logout, tryGetLoggedInUser } from './auth'
+
+const loggedInUserName = ref<string>()
+onMounted(async () => loggedInUserName.value = await tryGetLoggedInUser())
 
 const tabs = [
   { id: 'calculations', label: 'Calculations' },
-  { id: 'operations', label: 'Custom operations' },
+  { id: 'operations', label: 'Operations' },
   { id: 'config', label: 'Configuration' },
 ] as const
 
@@ -15,8 +19,12 @@ const active = ref<(typeof tabs)[number]['id']>(tabs[0].id)
 
 <template>
   <div class="bg-pink-700 text-white">
-    <div class="mx-auto max-w-5xl p-6">
-      <h1 class="text-3xl font-bold small-caps">HTL IT Management</h1>
+    <div class="flex items-center gap-2 mx-auto max-w-5xl p-6">
+      <h1 class="text-3xl flex-1 font-bold small-caps">HTL IT Management</h1>
+      <template v-if="loggedInUserName">
+        <span>Eingeloggt als {{ loggedInUserName }}</span>
+        <button class="btn-secondary" @click="logout()">Logout</button>
+      </template>
     </div>
   </div>
   <div class="mx-auto max-w-5xl p-6">
