@@ -29,12 +29,6 @@ type LoadState =
 
 const loadState = ref<LoadState>({ type: 'notLoaded' })
 
-// const entries = ref<ConfigEntry[]>([])
-// const loading = ref(false)
-// const saving = ref(false)
-// const error = ref<string | null>(null)
-// const message = ref<string | null>(null)
-
 const kinds = Object.keys(configKindLabels) as ConfigKind[]
 
 async function load() {

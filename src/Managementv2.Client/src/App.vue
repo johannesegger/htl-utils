@@ -2,14 +2,16 @@
 import { onMounted, ref } from 'vue'
 import ConfigManager from '@/components/ConfigManager.vue'
 import OperationsManager from '@/components/OperationsManager.vue'
-import CalculationsManager from '@/components/CalculationsManager.vue'
+import CalculatedOperationsManager from '@/components/CalculatedOperationsManager.vue'
+import ManualOperationsManager from '@/components/ManualOperationsManager.vue'
 import { logout, tryGetLoggedInUser } from './auth'
 
 const loggedInUserName = ref<string>()
 onMounted(async () => loggedInUserName.value = await tryGetLoggedInUser())
 
 const tabs = [
-  { id: 'calculations', label: 'Calculations' },
+  { id: 'calculated', label: 'Calculated operations' },
+  { id: 'manual', label: 'Manual operations' },
   { id: 'operations', label: 'Operations' },
   { id: 'config', label: 'Configuration' },
 ] as const
@@ -42,7 +44,8 @@ const active = ref<(typeof tabs)[number]['id']>(tabs[0].id)
       </button>
     </nav>
 
-    <CalculationsManager v-show="active === 'calculations'" />
+    <CalculatedOperationsManager v-show="active === 'calculated'" />
+    <ManualOperationsManager v-show="active === 'manual'" />
     <OperationsManager v-show="active === 'operations'" />
     <ConfigManager v-show="active === 'config'" />
   </div>
