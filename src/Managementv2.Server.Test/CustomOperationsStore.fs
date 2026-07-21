@@ -97,17 +97,18 @@ let tests =
                   store.Remove "op"
                   Expect.isNone (store.TryGet "op") "Should be gone")
 
-          testCase "Save rejects an unsafe name"
+          testCase "Save cleans an unsafe name"
           <| fun () ->
               withStore (fun store ->
-                  Expect.throwsT<System.ArgumentException>
-                      (fun () ->
-                          store.Save
-                              { Name = "../evil"
-                                Form = form "{}"
-                                Calculate = None
-                                Execute = "e" } |> ignore)
-                      "Should reject path traversal")
+                  let saved =
+                      store.Save
+                          { Name = "../evil"
+                            Form = form "{}"
+                            Calculate = None
+                            Execute = "e" }
+
+                  Expect.equal saved.Name "evil" "Unsafe characters are stripped from the name"
+                  Expect.isSome (store.TryGet "evil") "Operation is saved under the cleaned name")
 
           testCase "TryGet with an unsafe name returns None"
           <| fun () -> withStore (fun store -> Expect.isNone (store.TryGet "../evil") "Unsafe name -> None") ]
