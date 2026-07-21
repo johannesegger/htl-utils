@@ -45,6 +45,15 @@ module Program =
             |> Option.ofObj
             |> Option.defaultValue "."
 
+        // Modules placed in this directory are discoverable by every operation runspace,
+        // so register the path before any runspace is created.
+        let powerShellModulesDirectory =
+            builder.Configuration.GetValue<string> "PowerShellModulesDirectory"
+            |> Option.ofObj
+            |> Option.defaultValue (Path.Combine(customOperationsDirectory, "_powershell-modules"))
+
+        PowerShellModulePath.register powerShellModulesDirectory
+
         builder.Services.AddSingleton<CodeExecution>()
 
         builder.Services.AddSingleton<ICustomOperationsConfig>(
@@ -60,6 +69,10 @@ module Program =
         let app = builder.Build()
 
         app.UseHttpsRedirection()
+
+        if app.Environment.IsProduction() then
+            app.UseDefaultFiles()
+            app.UseStaticFiles() |> ignore
 
         app.UseAuthentication()
         app.UseAuthorization()

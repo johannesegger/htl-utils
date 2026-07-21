@@ -9,6 +9,7 @@
     <Compile Include="KeycloakRolesClaimsTransformation.fs" />
     <Compile Include="CustomOperationsConfig.fs" />
     <Compile Include="CustomOperationsStore.fs" />
+    <Compile Include="PowerShellModulePath.fs" />
     <Compile Include="CodeExecution.fs" />
     <Compile Include="WeatherForecast.fs" />
     <Compile Include="Controllers/WeatherForecastController.fs" />
@@ -22,8 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ADv2\ADv2.fsproj" />
-    <ProjectReference Include="..\Sokrates\Sokrates.fsproj" />
     <ProjectReference Include="..\Sokrates.PowerShell\Sokrates.PowerShell.fsproj" />
   </ItemGroup>
 
