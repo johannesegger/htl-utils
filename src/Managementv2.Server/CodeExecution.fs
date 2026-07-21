@@ -53,7 +53,7 @@ type CodeExecution() =
                 | File bytes -> writeSecretFile bytes
                 | Credential(userName, password) -> PSCredential(userName, toSecureString password)
                 | ProtectedCertificate(certificate, password) ->
-                    X509CertificateLoader.LoadPkcs12(certificate, password, X509KeyStorageFlags.Exportable)
+                    X509CertificateLoader.LoadPkcs12(certificate, password)
                 | SshKey(userName, keyFile) ->
                     let sshKey = PSObject()
                     sshKey.Properties.Add(PSNoteProperty("UserName", userName))
