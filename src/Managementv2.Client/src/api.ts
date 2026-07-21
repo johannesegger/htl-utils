@@ -5,6 +5,7 @@
 //   file                  -> { file: "<base64>" }
 //   credential            -> { userName, password }
 //   protected certificate -> { file: "<base64>", password }
+//   ssh key               -> { userName, keyFile: "<base64>" }
 
 import { getFetchHeaderWithAccessToken } from "./auth";
 
@@ -13,6 +14,7 @@ export type WireConfigValue =
   | { file: string }
   | { userName: string; password: string }
   | { file: string; password: string }
+  | { userName: string; keyFile: string }
 
 export type WireConfig = Record<string, WireConfigValue>
 

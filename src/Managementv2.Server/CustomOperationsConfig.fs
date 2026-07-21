@@ -14,6 +14,8 @@ type ConfigValue =
     | Credential of userName: string * password: string
     /// A password-protected certificate: its file contents and the password.
     | ProtectedCertificate of certificate: byte[] * password: string
+    /// An SSH login: a username and the contents of a private key file.
+    | SshKey of userName: string * keyFile: byte[]
 
 /// JSON encoding of the config, shared by the file store and the HTTP API. Since
 /// System.Text.Json can't serialize an F# union directly, each value is mapped to a
@@ -22,6 +24,7 @@ type ConfigValue =
 ///   file                  -> { "file": "<base64>" }
 ///   credential            -> { "userName": "...", "password": "..." }
 ///   protected certificate -> { "file": "<base64>", "password": "..." }
+///   ssh key               -> { "userName": "...", "keyFile": "<base64>" }
 module CustomOperationsConfig =
     let private str (object: JsonObject) (key: string) =
         match object[key] with
@@ -45,9 +48,16 @@ module CustomOperationsConfig =
             object["file"] <- JsonValue.Create(Convert.ToBase64String certificate)
             object["password"] <- JsonValue.Create password
             object
+        | SshKey(userName, keyFile) ->
+            let object = JsonObject()
+            object["userName"] <- JsonValue.Create userName
+            object["keyFile"] <- JsonValue.Create(Convert.ToBase64String keyFile)
+            object
 
     let private valueOfJson (node: JsonNode) : ConfigValue =
         match node with
+        | :? JsonObject as object when object.ContainsKey "userName" && object.ContainsKey "keyFile" ->
+            SshKey(str object "userName", Convert.FromBase64String(str object "keyFile"))
         | :? JsonObject as object when object.ContainsKey "userName" ->
             Credential(str object "userName", str object "password")
         | :? JsonObject as object when object.ContainsKey "file" && object.ContainsKey "password" ->

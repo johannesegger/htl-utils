@@ -1,12 +1,13 @@
 import type { WireConfig } from './api'
 
-export type ConfigKind = 'text' | 'file' | 'credential' | 'certificate'
+export type ConfigKind = 'text' | 'file' | 'credential' | 'certificate' | 'sshKey'
 
 export const configKindLabels: Record<ConfigKind, string> = {
   text: 'Text',
   file: 'File',
   credential: 'Credential',
   certificate: 'Protected certificate',
+  sshKey: 'SSH key',
 }
 
 // A flat entry (rather than a union) so every field is directly v-model-bindable;
@@ -31,6 +32,10 @@ export function fromDto(config: WireConfig): ConfigEntry[] {
     if (typeof value === 'string') {
       entry.kind = 'text'
       entry.text = value
+    } else if ('userName' in value && 'keyFile' in value) {
+      entry.kind = 'sshKey'
+      entry.userName = value.userName
+      entry.fileBase64 = value.keyFile
     } else if ('userName' in value) {
       entry.kind = 'credential'
       entry.userName = value.userName
@@ -62,6 +67,9 @@ export function toDto(entries: ConfigEntry[]): WireConfig {
         break
       case 'certificate':
         config[entry.key] = { file: entry.fileBase64, password: entry.password }
+        break
+      case 'sshKey':
+        config[entry.key] = { userName: entry.userName, keyFile: entry.fileBase64 }
         break
     }
   }

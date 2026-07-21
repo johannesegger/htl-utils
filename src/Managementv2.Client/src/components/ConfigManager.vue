@@ -120,6 +120,15 @@ onMounted(load)
             </LabeledInput>
           </template>
 
+          <template v-if="entry.kind === 'sshKey'">
+            <LabeledInput label="User name">
+              <input v-model="entry.userName" placeholder="User name" class="input w-full" />
+            </LabeledInput>
+            <LabeledInput label="Private key file">
+              <input type="file" class="text-sm" @change="onFile(entry, $event)" />
+            </LabeledInput>
+          </template>
+
           <template v-if="entry.kind === 'file' || entry.kind === 'certificate'">
             <div class="flex items-center gap-2">
               <LabeledInput label="File">
