@@ -55,9 +55,9 @@ type CodeExecution() =
                 | ProtectedCertificate(certificate, password) ->
                     X509CertificateLoader.LoadPkcs12(certificate, password)
                 | SshKey(userName, keyFile) ->
-                    let sshKey = PSObject()
-                    sshKey.Properties.Add(PSNoteProperty("UserName", userName))
-                    sshKey.Properties.Add(PSNoteProperty("KeyFilePath", writeSecretFile keyFile))
+                    let sshKey = Collections.Hashtable()
+                    sshKey["UserName"] <- userName
+                    sshKey["KeyFilePath"] <- writeSecretFile keyFile
                     sshKey
 
             psConfig.Properties.Add(PSNoteProperty(entry.Key, value))
