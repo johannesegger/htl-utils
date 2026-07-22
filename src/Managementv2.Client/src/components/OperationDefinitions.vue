@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, toRaw } from 'vue'
 import { api, EditableCustomOperationDefinition, type CustomOperationDefinitionTemplates } from '@/api'
 import ErrorMessage from './ErrorMessage.vue'
 import EditOperationForm from './EditOperationForm.vue'
@@ -51,9 +51,9 @@ function addOperation(operation: EditableCustomOperationDefinition) {
   loadState.value.operations.push(operation)
   loadState.value.newOperation = EditableCustomOperationDefinition.create({
     name: '',
-    form: { 'title': '', 'fields': [] },
-    calculate: '',
-    execute: ''
+    form: structuredClone(toRaw(loadState.value.templates.formDefinition)),
+    calculate: loadState.value.templates.calculateScript,
+    execute: loadState.value.templates.executeScript,
   }, true)
   loadState.value.selectedOperation = operation
 }
