@@ -136,7 +136,7 @@ onUnmounted(cancelAllCalculations)
     <div v-if="loadState.type === 'loaded'" v-for="operation in loadState.operations" :key="operation.data.name" class="space-y-1">
       <div class="flex items-center justify-between">
         <h3 class="font-medium">
-          {{ operation.data.form.title }}
+          {{ operation.data.settings.title }}
           <span v-if="operation.calculationState.type === 'calculated'"
             class="text-xs text-gray-500">
             ({{ pluralize(operation.calculationState.calculations.length, 'operation', 'operations') }} calculated)

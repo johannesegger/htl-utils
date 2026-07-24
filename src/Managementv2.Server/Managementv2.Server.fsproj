@@ -11,6 +11,7 @@
     <Compile Include="CustomOperationsStore.fs" />
     <Compile Include="PowerShellModulePath.fs" />
     <Compile Include="CodeExecution.fs" />
+    <Compile Include="OperationExecutionGate.fs" />
     <Compile Include="WeatherForecast.fs" />
     <Compile Include="Controllers/WeatherForecastController.fs" />
     <Compile Include="Controllers/CustomOperationsController.fs" />

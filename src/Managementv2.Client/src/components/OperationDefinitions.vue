@@ -25,7 +25,7 @@ async function load() {
     const operations = loadedOperations.operationDefinitions.map(v => EditableCustomOperationDefinition.create(v, false))
     const newOperation = EditableCustomOperationDefinition.create({
       name: '',
-      form: structuredClone(loadedOperations.templates.formDefinition),
+      settings: structuredClone(loadedOperations.templates.settings),
       calculate: loadedOperations.templates.calculateScript,
       execute: loadedOperations.templates.executeScript,
     }, true)
@@ -51,7 +51,7 @@ function addOperation(operation: EditableCustomOperationDefinition) {
   loadState.value.operations.push(operation)
   loadState.value.newOperation = EditableCustomOperationDefinition.create({
     name: '',
-    form: structuredClone(toRaw(loadState.value.templates.formDefinition)),
+    settings: structuredClone(toRaw(loadState.value.templates.settings)),
     calculate: loadState.value.templates.calculateScript,
     execute: loadState.value.templates.executeScript,
   }, true)

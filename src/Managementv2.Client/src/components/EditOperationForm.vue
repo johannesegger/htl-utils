@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted } from 'vue'
-import { api, EditableCustomOperationDefinition, type FormDefinition } from '@/api.ts'
+import { api, EditableCustomOperationDefinition, type OperationSettings } from '@/api.ts'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
 
@@ -27,16 +27,25 @@ async function save() {
   operation.value.saveError = null
   operation.value.message = null
   try {
-    const form = parseJson(operation.value.form, 'The form definition') as FormDefinition
+    const settings = parseJson(operation.value.settings, 'The settings') as OperationSettings
     if (operation.value.execute.trim() === '') throw new Error('An execute script is required.')
     let saved
     if (operation.value.isNew) {
       if (operation.value.name.trim() === '') throw new Error('A name is required.')
-      saved = await api.addOperation({ name: operation.value.name.trim(), form: form, calculate: calculateScript.value, execute: operation.value.execute })
+      saved = await api.addOperation({
+        name: operation.value.name.trim(),
+        settings: settings,
+        calculate: calculateScript.value,
+        execute: operation.value.execute,
+      })
       EditableCustomOperationDefinition.sync(operation.value, saved)
       emit('add', operation.value)
     } else {
-      saved = await api.updateOperation(operation.value.name, { form: form, calculate: calculateScript.value, execute: operation.value.execute })
+      saved = await api.updateOperation(operation.value.name, {
+        settings: settings,
+        calculate: calculateScript.value,
+        execute: operation.value.execute,
+      })
     }
     operation.value.message = 'Operation saved.'
   } catch (e) {
@@ -132,8 +141,8 @@ onUnmounted(() => {
         class="input w-full disabled:bg-gray-100"
       />
     </LabeledInput>
-    <LabeledInput label="Form definition (JSON)">
-      <textarea v-model="operation.form" rows="12" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    <LabeledInput label="Settings (JSON)">
+      <textarea v-model="operation.settings" rows="14" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     </LabeledInput>
     <LabeledInput label="Calculate script (optional, PowerShell)">
       <textarea v-model="operation.calculate" rows="12" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>

@@ -55,6 +55,7 @@ module Program =
         PowerShellModulePath.register powerShellModulesDirectory
 
         builder.Services.AddSingleton<CodeExecution>()
+        builder.Services.AddSingleton<OperationExecutionGate>()
 
         builder.Services.AddSingleton<ICustomOperationsConfig>(
             JsonFileCustomOperationsConfig(Path.Combine(customOperationsDirectory, "config.json"))

@@ -15,24 +15,25 @@ type CustomOperationsController
     (
         codeExecution: CodeExecution,
         customOperationsConfig: ICustomOperationsConfig,
-        customOperationsStore: ICustomOperationsStore
+        customOperationsStore: ICustomOperationsStore,
+        executionGate: OperationExecutionGate
     ) =
     inherit ControllerBase()
 
     let toDto (operation: CustomOperation) =
         {| Name = operation.Name
-           Form = operation.Form
+           Settings = operation.Settings
            CanCalculate = Option.isSome operation.Calculate |}
 
     let toDefinitionDto (operation: CustomOperation) =
         {| Name = operation.Name
-           Form = operation.Form
+           Settings = operation.Settings
            Calculate = Option.toObj operation.Calculate
            Execute = operation.Execute |}
 
-    let toOperation (name: string) (form: JsonNode) (calculate: string) (execute: string) : CustomOperation =
+    let toOperation (name: string) (settings: JsonNode) (calculate: string) (execute: string) : CustomOperation =
         { Name = name
-          Form = form
+          Settings = settings
           Calculate = Option.ofObj calculate
           Execute = execute }
 
@@ -46,7 +47,7 @@ type CustomOperationsController
         {|
             OperationDefinitions = customOperationsStore.GetAll() |> List.map toDefinitionDto
             Templates = {|
-                FormDefinition = JsonNode.Parse("""{"title":"","fields":[]}""")
+                Settings = JsonNode.Parse("""{"title":"","executionForm":[],"executionMode":"sequential"}""")
                 CalculateScript =
                     String.concat "\n" [
                         "param("
@@ -102,7 +103,12 @@ type CustomOperationsController
             match customOperationsStore.TryGet operation.Name with
             | Some stored ->
                 let config = customOperationsConfig.Read()
-                let! result = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
+                let run () = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
+
+                let! result =
+                    match ExecutionMode.ofSettings stored.Settings with
+                    | Parallel -> run ()
+                    | Sequential -> executionGate.RunExclusive(stored.Name, run, cancellationToken)
 
                 match result with
                 | Ok data -> return this.Ok data :> IActionResult
@@ -115,7 +121,7 @@ type CustomOperationsController
     member this.Add
         ([<FromBody>] operation:
             {| Name: string
-               Form: JsonNode
+               Settings: JsonNode
                Calculate: string
                Execute: string |})
         =
@@ -124,7 +130,7 @@ type CustomOperationsController
         | None ->
             try
                 let created =
-                    toOperation operation.Name operation.Form operation.Calculate operation.Execute
+                    toOperation operation.Name operation.Settings operation.Calculate operation.Execute
                     |> customOperationsStore.Save
                 this.Created($"custom-operations/%s{created.Name}", toDefinitionDto created) :> IActionResult
             with :? System.ArgumentException as e ->
@@ -136,7 +142,7 @@ type CustomOperationsController
         (
             name: string,
             [<FromBody>] operation:
-                {| Form: JsonNode
+                {| Settings: JsonNode
                    Calculate: string
                    Execute: string |}
         ) =
@@ -144,7 +150,7 @@ type CustomOperationsController
         | None -> this.NotFound() :> IActionResult
         | Some _ ->
             let updated =
-                toOperation name operation.Form operation.Calculate operation.Execute
+                toOperation name operation.Settings operation.Calculate operation.Execute
                 |> customOperationsStore.Save
             this.Ok(toDefinitionDto updated) :> IActionResult
 

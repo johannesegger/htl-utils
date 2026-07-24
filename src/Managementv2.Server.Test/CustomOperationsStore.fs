@@ -16,7 +16,7 @@ let private withStore (test: ICustomOperationsStore -> unit) =
     finally
         Directory.Delete(baseDir, true)
 
-let private form (json: string) = JsonNode.Parse json
+let private settings (json: string) = JsonNode.Parse json
 
 let tests =
     testList
@@ -27,7 +27,7 @@ let tests =
                   let op =
                       store.Save {
                         Name = "create-teacher"
-                        Form = form """{"fields":["a"]}"""
+                        Settings = settings """{"title":"Create teacher","executionForm":["a"],"executionMode":"parallel"}"""
                         Calculate = Some "calc"
                         Execute = "exec" }
 
@@ -36,7 +36,7 @@ let tests =
                       Expect.equal read.Name op.Name "name"
                       Expect.equal read.Calculate op.Calculate "calculate"
                       Expect.equal read.Execute op.Execute "execute"
-                      Expect.equal (read.Form.ToJsonString()) (op.Form.ToJsonString()) "form"
+                      Expect.equal (read.Settings.ToJsonString()) (op.Settings.ToJsonString()) "settings"
                   | None -> failtest "Expected the operation to be found")
 
           testCase "Save without a calculate script leaves Calculate = None"
@@ -44,7 +44,7 @@ let tests =
               withStore (fun store ->
                   store.Save
                       { Name = "op"
-                        Form = form "{}"
+                        Settings = settings "{}"
                         Calculate = None
                         Execute = "exec" } |> ignore
 
@@ -55,30 +55,50 @@ let tests =
               withStore (fun store ->
                   store.Save
                       { Name = "op"
-                        Form = form "{}"
+                        Settings = settings "{}"
                         Calculate = Some "calc"
                         Execute = "e" } |> ignore
 
                   store.Save
                       { Name = "op"
-                        Form = form "{}"
+                        Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
 
                   Expect.equal (store.TryGet "op" |> Option.get).Calculate None "Calculate should be gone")
+
+          testCase "Save then TryGet round-trips the execution mode in the settings"
+          <| fun () ->
+              withStore (fun store ->
+                  store.Save
+                      { Name = "op"
+                        Settings = settings """{"executionMode":"sequential"}"""
+                        Calculate = None
+                        Execute = "e" } |> ignore
+
+                  let read = store.TryGet "op" |> Option.get
+                  Expect.equal (ExecutionMode.ofSettings read.Settings) Sequential "Sequential setting is persisted")
+
+          testTheory "ExecutionMode defaults to Sequential" [
+              """{"title":"x","executionForm":[]}""" // executionMode is missing
+              "[]"                                   // the settings is not an object
+              """{"executionMode":"nonsense"}"""     // executionMode is an invalid value
+          ]
+          <| fun json ->
+              Expect.equal (ExecutionMode.ofSettings (settings json)) Sequential "defaults to Sequential"
 
           testCase "GetAll returns saved operations"
           <| fun () ->
               withStore (fun store ->
                   store.Save
                       { Name = "a"
-                        Form = form "{}"
+                        Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
 
                   store.Save
                       { Name = "b"
-                        Form = form "{}"
+                        Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
 
@@ -90,7 +110,7 @@ let tests =
               withStore (fun store ->
                   store.Save
                       { Name = "op"
-                        Form = form "{}"
+                        Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
 
@@ -103,7 +123,7 @@ let tests =
                   let saved =
                       store.Save
                           { Name = "../evil"
-                            Form = form "{}"
+                            Settings = settings "{}"
                             Calculate = None
                             Execute = "e" }
 

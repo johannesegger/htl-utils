@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, toRef } from 'vue'
-import { api, type FormDefinition, type FormFieldDefinition } from '@/api'
+import { api, type OperationSettings, type FormFieldDefinition } from '@/api'
 import { runExecution, type ExecutionState } from '@/execution'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue'
@@ -26,10 +26,10 @@ type LoadState =
 
 const loadState = ref<LoadState>({ type: 'notLoaded' })
 
-function toForm(def: FormDefinition): Form {
+function toForm(def: OperationSettings): Form {
   return {
     title: def.title,
-    fields: def.fields.map(field => ({ ...field, value: '' })),
+    fields: def.executionForm.map(field => ({ ...field, value: '' })),
   }
 }
 
@@ -39,7 +39,7 @@ async function load() {
     const data = await api.getOperations()
     const operations = data.map((v): ExecutableOperation => ({
       name: v.name,
-      form: toForm(v.form),
+      form: toForm(v.settings),
       executionState: { type: 'notExecuted' },
     }))
     loadState.value = { type: 'loaded', operations: operations }

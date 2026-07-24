@@ -26,26 +26,29 @@ export interface FormFieldDefinition {
   inputHint?: string
 }
 
-export interface FormDefinition {
+export type ExecutionMode = 'sequential' | 'parallel'
+
+export interface OperationSettings {
   title: string
-  fields: FormFieldDefinition[]
+  executionForm: FormFieldDefinition[]
+  executionMode: ExecutionMode
 }
 
 export interface CustomOperation {
   name: string
-  form: FormDefinition
+  settings: OperationSettings
   canCalculate: boolean
 }
 
 export interface CustomOperationDefinition {
   name: string
-  form: FormDefinition
+  settings: OperationSettings
   calculate: string | null
   execute: string
 }
 
 export interface CustomOperationDefinitionTemplates {
-  formDefinition: FormDefinition
+  settings: OperationSettings
   calculateScript: string
   executeScript: string
 }
@@ -58,7 +61,7 @@ export interface CustomOperationDefinitions {
 export interface EditableCustomOperationDefinition {
   isNew: boolean
   name: string
-  form: string
+  settings: string
   calculate: string
   execute: string
 
@@ -80,7 +83,7 @@ export namespace EditableCustomOperationDefinition {
     return {
       isNew: isNew,
       name: v.name,
-      form: JSON.stringify(v.form, null, 2),
+      settings: JSON.stringify(v.settings, null, 2),
       calculate: v.calculate ?? '',
       execute: v.execute,
 
@@ -102,7 +105,7 @@ export namespace EditableCustomOperationDefinition {
   export function sync(v: EditableCustomOperationDefinition, data: CustomOperationDefinition) {
     v.isNew = false
     v.name = data.name
-    v.form = JSON.stringify(data.form, null, 2)
+    v.settings = JSON.stringify(data.settings, null, 2)
     v.calculate = data.calculate ?? ''
     v.execute = data.execute
   }

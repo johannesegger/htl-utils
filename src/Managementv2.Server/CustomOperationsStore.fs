@@ -7,9 +7,27 @@ open System.Text.Json
 open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 
+type ExecutionMode =
+    | Sequential
+    | Parallel
+
+module ExecutionMode =
+    let parse (text: string) =
+        if String.Equals(text, "parallel", StringComparison.InvariantCultureIgnoreCase) then
+            Parallel
+        else Sequential
+
+    let ofSettings (settings: JsonNode) =
+        match settings with
+        | :? JsonObject as object ->
+            match object["executionMode"] with
+            | null -> Sequential
+            | node -> parse (node.GetValue<string>())
+        | _ -> Sequential
+
 type CustomOperation =
     { Name: string
-      Form: JsonNode
+      Settings: JsonNode
       Calculate: string option
       Execute: string }
 
@@ -23,21 +41,21 @@ type FileSystemCustomOperationsStore(baseDirectory: string, logger: ILogger<File
     let cleanName name =
         Regex.Replace(name, "[^a-zA-Z0-9-_]", "")
 
-    let formPath name =
-        Path.Combine(baseDirectory, name, "form.json")
-
     let calculatePath name =
         Path.Combine(baseDirectory, name, "calculate.ps1")
 
     let executePath name =
         Path.Combine(baseDirectory, name, "execute.ps1")
 
+    let settingsPath name =
+        Path.Combine(baseDirectory, name, "settings.json")
+
     let tryRead (name: string) : CustomOperation option =
-        if not <| name.StartsWith "_" && File.Exists(formPath name) && File.Exists(executePath name) then
+        if not <| name.StartsWith "_" && File.Exists(settingsPath name) && File.Exists(executePath name) then
             try
                 Some
                     { Name = name
-                      Form = JsonNode.Parse(File.ReadAllText(formPath name))
+                      Settings = JsonNode.Parse(File.ReadAllText(settingsPath name))
                       Calculate =
                         if File.Exists(calculatePath name) then
                             Some(File.ReadAllText(calculatePath name))
@@ -72,8 +90,8 @@ type FileSystemCustomOperationsStore(baseDirectory: string, logger: ILogger<File
             Directory.CreateDirectory(Path.Combine(baseDirectory, operationName)) |> ignore
 
             File.WriteAllText(
-                formPath operationName,
-                operation.Form.ToJsonString(JsonSerializerOptions(WriteIndented = true))
+                settingsPath operationName,
+                operation.Settings.ToJsonString(JsonSerializerOptions(WriteIndented = true))
             )
 
             File.WriteAllText(
