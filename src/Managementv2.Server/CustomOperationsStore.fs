@@ -17,6 +17,11 @@ module ExecutionMode =
             Parallel
         else Sequential
 
+    let maxConcurrency =
+        function
+        | Sequential -> 1
+        | Parallel -> 10
+
     let ofSettings (settings: JsonNode) =
         match settings with
         | :? JsonObject as object ->

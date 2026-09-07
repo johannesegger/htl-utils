@@ -105,10 +105,11 @@ type CustomOperationsController
                 let config = customOperationsConfig.Read()
                 let run () = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
 
-                let! result =
-                    match ExecutionMode.ofSettings stored.Settings with
-                    | Parallel -> run ()
-                    | Sequential -> executionGate.RunExclusive(stored.Name, run, cancellationToken)
+                let maxConcurrency =
+                    ExecutionMode.ofSettings stored.Settings
+                    |> ExecutionMode.maxConcurrency
+
+                let! result = executionGate.Run(stored.Name, maxConcurrency, run, cancellationToken)
 
                 match result with
                 | Ok data -> return this.Ok data :> IActionResult

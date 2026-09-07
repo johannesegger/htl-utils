@@ -5,11 +5,14 @@ open System.Threading
 open System.Threading.Tasks
 
 type OperationExecutionGate() =
-    let semaphores = ConcurrentDictionary<string, SemaphoreSlim>()
+    let semaphores = ConcurrentDictionary<string * int, SemaphoreSlim>()
 
-    member _.RunExclusive(operationName: string, action: unit -> Task<'T>, cancellationToken: CancellationToken) : Task<'T> =
+    member _.Run(operationName: string, maxConcurrency: int, action: unit -> Task<'T>, cancellationToken: CancellationToken) : Task<'T> =
         task {
-            let semaphore = semaphores.GetOrAdd(operationName, fun _ -> new SemaphoreSlim(1, 1))
+            let semaphore =
+                semaphores.GetOrAdd(
+                    (operationName, maxConcurrency),
+                    fun _ -> new SemaphoreSlim(maxConcurrency, maxConcurrency))
             do! semaphore.WaitAsync cancellationToken
 
             try
