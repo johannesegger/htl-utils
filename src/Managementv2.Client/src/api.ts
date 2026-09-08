@@ -26,12 +26,16 @@ export interface FormFieldDefinition {
   inputHint?: string
 }
 
-export type ExecutionMode = 'sequential' | 'parallel'
-
 export interface OperationSettings {
   title: string
   executionForm: FormFieldDefinition[]
-  executionMode: ExecutionMode
+  /** Executions of the operation that may run at the same time. At least 1. */
+  maxParallelism: number
+}
+
+/** The operation's parallelism limit, falling back to 1 for settings that don't set a valid one. */
+export function maxParallelism(settings: OperationSettings): number {
+  return Number.isInteger(settings.maxParallelism) ? Math.max(1, settings.maxParallelism) : 1
 }
 
 export interface CustomOperation {

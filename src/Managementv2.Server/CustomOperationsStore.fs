@@ -7,28 +7,18 @@ open System.Text.Json
 open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 
-type ExecutionMode =
-    | Sequential
-    | Parallel
-
-module ExecutionMode =
-    let parse (text: string) =
-        if String.Equals(text, "parallel", StringComparison.InvariantCultureIgnoreCase) then
-            Parallel
-        else Sequential
-
-    let maxConcurrency =
-        function
-        | Sequential -> 1
-        | Parallel -> 10
-
+module MaxParallelism =
+    /// Executions of the same operation that may run at the same time. Always at least 1.
     let ofSettings (settings: JsonNode) =
         match settings with
         | :? JsonObject as object ->
-            match object["executionMode"] with
-            | null -> Sequential
-            | node -> parse (node.GetValue<string>())
-        | _ -> Sequential
+            match object["maxParallelism"] with
+            | :? JsonValue as value ->
+                match value.TryGetValue<int>() with
+                | true, maxParallelism -> max 1 maxParallelism
+                | _ -> 1
+            | _ -> 1
+        | _ -> 1
 
 type CustomOperation =
     { Name: string

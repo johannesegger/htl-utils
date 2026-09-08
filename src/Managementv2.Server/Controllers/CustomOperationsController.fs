@@ -47,7 +47,7 @@ type CustomOperationsController
         {|
             OperationDefinitions = customOperationsStore.GetAll() |> List.map toDefinitionDto
             Templates = {|
-                Settings = JsonNode.Parse("""{"title":"","executionForm":[],"executionMode":"sequential"}""")
+                Settings = JsonNode.Parse("""{"title":"","executionForm":[],"maxParallelism":1}""")
                 CalculateScript =
                     String.concat "\n" [
                         "param("
@@ -105,11 +105,8 @@ type CustomOperationsController
                 let config = customOperationsConfig.Read()
                 let run () = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
 
-                let maxConcurrency =
-                    ExecutionMode.ofSettings stored.Settings
-                    |> ExecutionMode.maxConcurrency
-
-                let! result = executionGate.Run(stored.Name, maxConcurrency, run, cancellationToken)
+                let maxParallelism = MaxParallelism.ofSettings stored.Settings
+                let! result = executionGate.Run(stored.Name, maxParallelism, run, cancellationToken)
 
                 match result with
                 | Ok data -> return this.Ok data :> IActionResult

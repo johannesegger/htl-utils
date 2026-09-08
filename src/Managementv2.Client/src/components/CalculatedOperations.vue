@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, toRef } from 'vue'
-import { api, type CustomOperation } from '@/api'
+import pLimit from 'p-limit'
+import { api, maxParallelism, type CustomOperation } from '@/api'
 import { runExecution, type ExecutionState } from '@/execution'
 import ErrorMessage from './ErrorMessage.vue'
 import { pluralize } from '@/utils.ts'
@@ -101,9 +102,10 @@ async function executeOne(calculation: Calculation, name: string) {
 async function executeGroup(operation: ExecutableOperation) {
   if (operation.calculationState.type !== 'calculated') return
 
+  const limit = pLimit(maxParallelism(operation.data.settings))
   await Promise.all(
     operation.calculationState.calculations
-      .map(calculation => executeOne(calculation, operation.data.name)))
+      .map(calculation => limit(() => executeOne(calculation, operation.data.name))))
 }
 
 onMounted(load)

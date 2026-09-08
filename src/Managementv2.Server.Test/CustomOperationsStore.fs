@@ -67,25 +67,28 @@ let tests =
 
                   Expect.equal (store.TryGet "op" |> Option.get).Calculate None "Calculate should be gone")
 
-          testCase "Save then TryGet round-trips the execution mode in the settings"
+          testCase "Save then TryGet round-trips the max parallelism in the settings"
           <| fun () ->
               withStore (fun store ->
                   store.Save
                       { Name = "op"
-                        Settings = settings """{"executionMode":"sequential"}"""
+                        Settings = settings """{"maxParallelism":5}"""
                         Calculate = None
                         Execute = "e" } |> ignore
 
                   let read = store.TryGet "op" |> Option.get
-                  Expect.equal (ExecutionMode.ofSettings read.Settings) Sequential "Sequential setting is persisted")
+                  Expect.equal (MaxParallelism.ofSettings read.Settings) 5 "Max parallelism is persisted")
 
-          testTheory "ExecutionMode defaults to Sequential" [
-              """{"title":"x","executionForm":[]}""" // executionMode is missing
+          testTheory "MaxParallelism defaults to 1" [
+              """{"title":"x","executionForm":[]}""" // maxParallelism is missing
               "[]"                                   // the settings is not an object
-              """{"executionMode":"nonsense"}"""     // executionMode is an invalid value
+              """{"maxParallelism":"nonsense"}"""    // maxParallelism is not a number
+              """{"maxParallelism":1.5}"""           // maxParallelism is not an integer
+              """{"maxParallelism":0}"""             // maxParallelism is below the minimum
+              """{"maxParallelism":-3}"""            // maxParallelism is below the minimum
           ]
           <| fun json ->
-              Expect.equal (ExecutionMode.ofSettings (settings json)) Sequential "defaults to Sequential"
+              Expect.equal (MaxParallelism.ofSettings (settings json)) 1 "defaults to 1"
 
           testCase "GetAll returns saved operations"
           <| fun () ->
