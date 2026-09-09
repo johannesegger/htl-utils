@@ -3,6 +3,7 @@ import { api } from '@/api'
 
 export type ExecutionState =
   | { type: 'notExecuted' }
+  | { type: 'queuedForExecution' }
   | { type: 'executing' }
   | { type: 'executed'; output: unknown }
   | { type: 'executionError'; message: string }
