@@ -93,19 +93,15 @@ defineExpose({ calculate, cancelCalculation })
 <template>
   <div class="space-y-1">
     <div class="flex items-center justify-between">
-      <h3 class="font-medium">
-        {{ operation.settings.title }}
+      <div class="flex items-center gap-1">
+        <h3 class="font-medium">
+          {{ operation.settings.title }}
+        </h3>
         <span v-if="calculationState.type === 'calculated'"
-          class="text-xs text-gray-500">
-          {{ pluralize(calculationState.calculations.length, 'operation', 'operations') }} calculated
-        </span>
-        <span v-if="succeededCount > 0" class="text-xs text-green-700">
-          {{ succeededCount }} succeeded
-        </span>
-        <span v-if="failedCount > 0" class="text-xs text-red-700">
-          {{ failedCount }} failed
-        </span>
-      </h3>
+          class="text-xs text-gray-500">{{ pluralize(calculationState.calculations.length, 'operation', 'operations') }} calculated</span>
+        <span v-if="succeededCount > 0" class="text-xs text-green-700">{{ succeededCount }} succeeded</span>
+        <span v-if="failedCount > 0" class="text-xs text-red-700">{{ failedCount }} failed</span>
+      </div>
       <div class="flex gap-2">
         <button v-if="calculationState.type === 'calculated' && calculationState.calculations.some(v => v.execution.type === 'notExecuted' || v.execution.type === 'executionError')"
           class="btn-secondary"
