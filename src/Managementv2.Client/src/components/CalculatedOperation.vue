@@ -65,7 +65,10 @@ function cancelCalculation() {
   calculationState.value.abortController.abort()
 }
 
-const limit = pLimit(maxParallelism(operation.settings))
+const limit = pLimit({
+  concurrency: maxParallelism(operation.settings),
+  rejectOnClear: true,
+})
 
 async function executeOne(calculation: Calculation) {
   if (calculation.execution.type === 'queuedForExecution' ||
@@ -73,7 +76,14 @@ async function executeOne(calculation: Calculation) {
     calculation.execution.type === 'executed') return
 
   calculation.execution = { type: 'queuedForExecution' }
-  await limit(() => runExecution(operation.name, calculation.data, toRef(calculation, 'execution')))
+  try {
+    await limit(() => runExecution(operation.name, calculation.data, toRef(calculation, 'execution')))
+  }
+  catch (e) {
+    if (isAbort(e)) {
+      calculation.execution = { type: 'notExecuted' }
+    }
+  }
 }
 
 async function executeGroup() {
@@ -84,6 +94,19 @@ async function executeGroup() {
       .map(calculation => executeOne(calculation))
   )
 }
+
+const queuedExecutionCount = computed(() => {
+  if (calculationState.value.type !== 'calculated') return 0
+
+  return calculationState.value.calculations
+    .filter(v => v.execution.type === 'queuedForExecution')
+    .length
+})
+
+function cancelExecution() {
+  limit.clearQueue()
+}
+
 
 onUnmounted(cancelCalculation)
 
@@ -103,6 +126,7 @@ defineExpose({ calculate, cancelCalculation })
         <span v-if="failedCount > 0" class="text-xs text-red-700">{{ failedCount }} failed</span>
       </div>
       <div class="flex gap-2">
+        <button v-if="queuedExecutionCount > 0" class="btn-danger" @click="cancelExecution()">Cancel execution</button>
         <button v-if="calculationState.type === 'calculated' && calculationState.calculations.some(v => v.execution.type === 'notExecuted' || v.execution.type === 'executionError')"
           class="btn-secondary"
           @click="executeGroup">Execute all</button>
