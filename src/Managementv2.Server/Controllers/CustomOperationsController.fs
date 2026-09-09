@@ -31,7 +31,13 @@ type CustomOperationsController
            Calculate = Option.toObj operation.Calculate
            Execute = operation.Execute |}
 
-    let toOperation (name: string) (settings: JsonNode) (calculate: string) (execute: string) : CustomOperation =
+    let tryGetSettingsError (settings: OperationSettings) =
+        if settings.MaxParallelism < 1 then
+            Some $"maxParallelism must be at least 1, but was %d{settings.MaxParallelism}."
+        else
+            None
+
+    let toOperation (name: string) (settings: OperationSettings) (calculate: string) (execute: string) : CustomOperation =
         { Name = name
           Settings = settings
           Calculate = Option.ofObj calculate
@@ -47,7 +53,7 @@ type CustomOperationsController
         {|
             OperationDefinitions = customOperationsStore.GetAll() |> List.map toDefinitionDto
             Templates = {|
-                Settings = JsonNode.Parse("""{"title":"","executionForm":[],"maxParallelism":1}""")
+                Settings = OperationSettings.empty
                 CalculateScript =
                     String.concat "\n" [
                         "param("
@@ -105,8 +111,8 @@ type CustomOperationsController
                 let config = customOperationsConfig.Read()
                 let run () = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
 
-                let maxParallelism = MaxParallelism.ofSettings stored.Settings
-                let! result = executionGate.Run(stored.Name, maxParallelism, run, cancellationToken)
+                let! result =
+                    executionGate.Run(stored.Name, stored.Settings.MaxParallelism, run, cancellationToken)
 
                 match result with
                 | Ok data -> return this.Ok data :> IActionResult
@@ -119,10 +125,14 @@ type CustomOperationsController
     member this.Add
         ([<FromBody>] operation:
             {| Name: string
-               Settings: JsonNode
+               Settings: OperationSettings
                Calculate: string
                Execute: string |})
         =
+        match tryGetSettingsError operation.Settings with
+        | Some error -> this.BadRequest error :> IActionResult
+        | None ->
+
         match customOperationsStore.TryGet operation.Name with
         | Some _ -> this.Conflict($"A custom operation named '%s{operation.Name}' already exists.") :> IActionResult
         | None ->
@@ -140,10 +150,14 @@ type CustomOperationsController
         (
             name: string,
             [<FromBody>] operation:
-                {| Settings: JsonNode
+                {| Settings: OperationSettings
                    Calculate: string
                    Execute: string |}
         ) =
+        match tryGetSettingsError operation.Settings with
+        | Some error -> this.BadRequest error :> IActionResult
+        | None ->
+
         match customOperationsStore.TryGet name with
         | None -> this.NotFound() :> IActionResult
         | Some _ ->

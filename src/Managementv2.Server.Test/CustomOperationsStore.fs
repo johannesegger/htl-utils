@@ -2,7 +2,7 @@ module Managementv2.Server.Test.CustomOperationsStore
 
 open Expecto
 open System.IO
-open System.Text.Json.Nodes
+open System.Text.Json
 open Managementv2.Server
 open Microsoft.Extensions.Logging.Abstractions
 
@@ -16,7 +16,7 @@ let private withStore (test: ICustomOperationsStore -> unit) =
     finally
         Directory.Delete(baseDir, true)
 
-let private settings (json: string) = JsonNode.Parse json
+let private settings (json: string) = OperationSettings.ofJson json
 
 let tests =
     testList
@@ -27,7 +27,8 @@ let tests =
                   let op =
                       store.Save {
                         Name = "create-teacher"
-                        Settings = settings """{"title":"Create teacher","executionForm":["a"],"executionMode":"parallel"}"""
+                        Settings =
+                          settings """{"title":"Create teacher","executionForm":[{"name":"userName","title":"User name","type":"text","inputValidations":["notEmpty"],"inputHint":"e.g. eina"}],"maxParallelism":5}"""
                         Calculate = Some "calc"
                         Execute = "exec" }
 
@@ -36,7 +37,7 @@ let tests =
                       Expect.equal read.Name op.Name "name"
                       Expect.equal read.Calculate op.Calculate "calculate"
                       Expect.equal read.Execute op.Execute "execute"
-                      Expect.equal (read.Settings.ToJsonString()) (op.Settings.ToJsonString()) "settings"
+                      Expect.equal read.Settings op.Settings "settings"
                   | None -> failtest "Expected the operation to be found")
 
           testCase "Save without a calculate script leaves Calculate = None"
@@ -67,28 +68,32 @@ let tests =
 
                   Expect.equal (store.TryGet "op" |> Option.get).Calculate None "Calculate should be gone")
 
-          testCase "Save then TryGet round-trips the max parallelism in the settings"
+          testCase "Settings that are missing fields are read with their defaults"
           <| fun () ->
-              withStore (fun store ->
-                  store.Save
-                      { Name = "op"
-                        Settings = settings """{"maxParallelism":5}"""
-                        Calculate = None
-                        Execute = "e" } |> ignore
+              Expect.equal (settings "{}") OperationSettings.empty "Empty settings"
 
-                  let read = store.TryGet "op" |> Option.get
-                  Expect.equal (MaxParallelism.ofSettings read.Settings) 5 "Max parallelism is persisted")
-
-          testTheory "MaxParallelism defaults to 1" [
+          testTheory "Max parallelism is at least 1" [
               """{"title":"x","executionForm":[]}""" // maxParallelism is missing
-              "[]"                                   // the settings is not an object
-              """{"maxParallelism":"nonsense"}"""    // maxParallelism is not a number
-              """{"maxParallelism":1.5}"""           // maxParallelism is not an integer
               """{"maxParallelism":0}"""             // maxParallelism is below the minimum
               """{"maxParallelism":-3}"""            // maxParallelism is below the minimum
           ]
           <| fun json ->
-              Expect.equal (MaxParallelism.ofSettings (settings json)) 1 "defaults to 1"
+              Expect.equal (settings json).MaxParallelism 1 "Max parallelism"
+
+          testCase "Settings that don't match the schema can't be read"
+          <| fun () ->
+              Expect.throws (fun () -> settings """{"maxParallelism":"lots"}""" |> ignore) "Invalid settings"
+
+          testCase "Settings are bound from a request body"
+          <| fun () ->
+              let json =
+                  """{"title":"Create teacher","executionForm":[{"name":"userName","title":"User name","type":"text","inputValidations":["notEmpty"],"inputHint":null}],"maxParallelism":3}"""
+
+              let bound = JsonSerializer.Deserialize<OperationSettings>(json, JsonSerializerOptions JsonSerializerDefaults.Web)
+
+              Expect.equal bound (settings json) "Bound settings match the stored ones"
+              Expect.equal bound.MaxParallelism 3 "Max parallelism"
+              Expect.equal bound.ExecutionForm[0].Name "userName" "Form field name"
 
           testCase "GetAll returns saved operations"
           <| fun () ->

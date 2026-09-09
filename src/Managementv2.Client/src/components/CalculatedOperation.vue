@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, toRef } from 'vue'
 import pLimit from 'p-limit'
-import { api, maxParallelism, type CustomOperation } from '@/api'
+import { api, type CustomOperation } from '@/api'
 import { runExecution, type ExecutionState } from '@/execution'
 import ErrorMessage from './ErrorMessage.vue'
 import { pluralize } from '@/utils.ts'
@@ -66,7 +66,7 @@ function cancelCalculation() {
 }
 
 const limit = pLimit({
-  concurrency: maxParallelism(operation.settings),
+  concurrency: operation.settings.maxParallelism,
   rejectOnClear: true,
 })
 

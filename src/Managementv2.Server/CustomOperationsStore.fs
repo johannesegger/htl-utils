@@ -1,28 +1,60 @@
-namespace Managementv2.Server
+﻿namespace Managementv2.Server
 
 open Microsoft.Extensions.Logging
 open System
 open System.IO
 open System.Text.Json
-open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 
-module MaxParallelism =
-    /// Executions of the same operation that may run at the same time. Always at least 1.
-    let ofSettings (settings: JsonNode) =
-        match settings with
-        | :? JsonObject as object ->
-            match object["maxParallelism"] with
-            | :? JsonValue as value ->
-                match value.TryGetValue<int>() with
-                | true, maxParallelism -> max 1 maxParallelism
-                | _ -> 1
-            | _ -> 1
-        | _ -> 1
+type FormFieldDefinition =
+    { Name: string
+      Title: string
+      Type: string
+      InputValidations: string[]
+      InputHint: string }
+
+type OperationSettings =
+    { Title: string
+      ExecutionForm: FormFieldDefinition[]
+      MaxParallelism: int }
+
+module OperationSettings =
+    let private jsonOptions =
+        JsonSerializerOptions(
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            WriteIndented = true
+        )
+
+    let empty =
+        { Title = ""
+          ExecutionForm = [||]
+          MaxParallelism = 1 }
+
+    let private withDefaults (settings: OperationSettings) =
+        { Title = if isNull settings.Title then "" else settings.Title
+          ExecutionForm =
+            if isNull settings.ExecutionForm then
+                [||]
+            else
+                settings.ExecutionForm
+                |> Array.map (fun field ->
+                    if isNull field.InputValidations then
+                        { field with InputValidations = [||] }
+                    else
+                        field)
+          MaxParallelism = max 1 settings.MaxParallelism }
+
+    let ofJson (json: string) =
+        let settings = JsonSerializer.Deserialize<OperationSettings>(json, jsonOptions)
+        if isNull (box settings) then empty else withDefaults settings
+
+    let toJson (settings: OperationSettings) =
+        JsonSerializer.Serialize(withDefaults settings, jsonOptions)
 
 type CustomOperation =
     { Name: string
-      Settings: JsonNode
+      Settings: OperationSettings
       Calculate: string option
       Execute: string }
 
@@ -50,7 +82,7 @@ type FileSystemCustomOperationsStore(baseDirectory: string, logger: ILogger<File
             try
                 Some
                     { Name = name
-                      Settings = JsonNode.Parse(File.ReadAllText(settingsPath name))
+                      Settings = OperationSettings.ofJson(File.ReadAllText(settingsPath name))
                       Calculate =
                         if File.Exists(calculatePath name) then
                             Some(File.ReadAllText(calculatePath name))
@@ -84,10 +116,7 @@ type FileSystemCustomOperationsStore(baseDirectory: string, logger: ILogger<File
 
             Directory.CreateDirectory(Path.Combine(baseDirectory, operationName)) |> ignore
 
-            File.WriteAllText(
-                settingsPath operationName,
-                operation.Settings.ToJsonString(JsonSerializerOptions(WriteIndented = true))
-            )
+            File.WriteAllText(settingsPath operationName, OperationSettings.toJson operation.Settings)
 
             File.WriteAllText(
                 executePath operationName,

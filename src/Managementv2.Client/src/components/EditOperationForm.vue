@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted } from 'vue'
-import { api, EditableCustomOperationDefinition, type OperationSettings } from '@/api.ts'
+import { api, EditableCustomOperationDefinition, type FormFieldDefinition, type OperationSettings } from '@/api.ts'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
 
@@ -23,11 +23,20 @@ function parseJson(text: string, what: string): unknown {
   }
 }
 
+function readSettings(): OperationSettings {
+  const executionForm = parseJson(operation.value.executionForm, 'The execution form')
+  return {
+    title: operation.value.title,
+    executionForm: executionForm as FormFieldDefinition[],
+    maxParallelism: operation.value.maxParallelism,
+  }
+}
+
 async function save() {
   operation.value.saveError = null
   operation.value.message = null
   try {
-    const settings = parseJson(operation.value.settings, 'The settings') as OperationSettings
+    const settings = readSettings()
     if (operation.value.execute.trim() === '') throw new Error('An execute script is required.')
     let saved
     if (operation.value.isNew) {
@@ -141,8 +150,14 @@ onUnmounted(() => {
         class="input w-full disabled:bg-gray-100"
       />
     </LabeledInput>
-    <LabeledInput label="Settings (JSON)">
-      <textarea v-model="operation.settings" rows="14" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    <LabeledInput label="Title">
+      <input v-model="operation.title" placeholder="Create teacher" class="input w-full" />
+    </LabeledInput>
+    <LabeledInput label="Execution form (JSON)">
+      <textarea v-model="operation.executionForm" rows="10" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    </LabeledInput>
+    <LabeledInput label="Number of executions of this operation that may run at the same time">
+      <input v-model.number="operation.maxParallelism" type="number" min="1" step="1" class="input w-20 self-start" />
     </LabeledInput>
     <LabeledInput label="Calculate script (optional, PowerShell)">
       <textarea v-model="operation.calculate" rows="12" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>

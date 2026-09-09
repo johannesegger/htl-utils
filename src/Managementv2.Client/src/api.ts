@@ -23,7 +23,7 @@ export interface FormFieldDefinition {
   title: string
   type: string
   inputValidations: ('notEmpty')[]
-  inputHint?: string
+  inputHint: string | null
 }
 
 export interface OperationSettings {
@@ -31,11 +31,6 @@ export interface OperationSettings {
   executionForm: FormFieldDefinition[]
   /** Executions of the operation that may run at the same time. At least 1. */
   maxParallelism: number
-}
-
-/** The operation's parallelism limit, falling back to 1 for settings that don't set a valid one. */
-export function maxParallelism(settings: OperationSettings): number {
-  return Number.isInteger(settings.maxParallelism) ? Math.max(1, settings.maxParallelism) : 1
 }
 
 export interface CustomOperation {
@@ -65,7 +60,9 @@ export interface CustomOperationDefinitions {
 export interface EditableCustomOperationDefinition {
   isNew: boolean
   name: string
-  settings: string
+  title: string
+  executionForm: string
+  maxParallelism: number
   calculate: string
   execute: string
 
@@ -87,7 +84,9 @@ export namespace EditableCustomOperationDefinition {
     return {
       isNew: isNew,
       name: v.name,
-      settings: JSON.stringify(v.settings, null, 2),
+      title: v.settings.title,
+      executionForm: JSON.stringify(v.settings.executionForm, null, 2),
+      maxParallelism: v.settings.maxParallelism,
       calculate: v.calculate ?? '',
       execute: v.execute,
 
@@ -109,7 +108,9 @@ export namespace EditableCustomOperationDefinition {
   export function sync(v: EditableCustomOperationDefinition, data: CustomOperationDefinition) {
     v.isNew = false
     v.name = data.name
-    v.settings = JSON.stringify(data.settings, null, 2)
+    v.title = data.settings.title
+    v.executionForm = JSON.stringify(data.settings.executionForm, null, 2)
+    v.maxParallelism = data.settings.maxParallelism
     v.calculate = data.calculate ?? ''
     v.execute = data.execute
   }
