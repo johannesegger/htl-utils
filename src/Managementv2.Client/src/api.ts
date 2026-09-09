@@ -34,16 +34,19 @@ export interface OperationSettings {
 }
 
 export interface CustomOperation {
-  name: string
+  id: string
   settings: OperationSettings
   canCalculate: boolean
 }
 
-export interface CustomOperationDefinition {
-  name: string
+export interface NewCustomOperationDefinition {
   settings: OperationSettings
   calculate: string | null
   execute: string
+}
+
+export interface ExistingCustomOperationDefinition extends NewCustomOperationDefinition {
+  id: string
 }
 
 export interface CustomOperationDefinitionTemplates {
@@ -53,13 +56,13 @@ export interface CustomOperationDefinitionTemplates {
 }
 
 export interface CustomOperationDefinitions {
-  operationDefinitions: CustomOperationDefinition[]
+  operationDefinitions: ExistingCustomOperationDefinition[]
   templates: CustomOperationDefinitionTemplates
 }
 
 export interface EditableCustomOperationDefinition {
   isNew: boolean
-  name: string
+  id: string
   title: string
   executionForm: string
   maxParallelism: number
@@ -80,10 +83,10 @@ export interface EditableCustomOperationDefinition {
   message: string | null
 }
 export namespace EditableCustomOperationDefinition {
-  export function create(v: CustomOperationDefinition, isNew: boolean) : EditableCustomOperationDefinition {
+  export function create(v: ExistingCustomOperationDefinition, isNew: boolean) : EditableCustomOperationDefinition {
     return {
       isNew: isNew,
-      name: v.name,
+      id: v.id,
       title: v.settings.title,
       executionForm: JSON.stringify(v.settings.executionForm, null, 2),
       maxParallelism: v.settings.maxParallelism,
@@ -105,9 +108,9 @@ export namespace EditableCustomOperationDefinition {
     }
   }
 
-  export function sync(v: EditableCustomOperationDefinition, data: CustomOperationDefinition) {
+  export function sync(v: EditableCustomOperationDefinition, data: ExistingCustomOperationDefinition) {
     v.isNew = false
-    v.name = data.name
+    v.id = data.id
     v.title = data.settings.title
     v.executionForm = JSON.stringify(data.settings.executionForm, null, 2)
     v.maxParallelism = data.settings.maxParallelism
@@ -117,7 +120,7 @@ export namespace EditableCustomOperationDefinition {
 }
 
 export interface CalculatedOperations {
-  operations: { name: string; data: unknown }[]
+  operations: { id: string; data: unknown }[]
   errors: { operation: string; message: string }[]
 }
 
@@ -149,26 +152,26 @@ export const api = {
 
   getOperations: () => fetchAuthenticated(base).then((r) => handle<CustomOperation[]>(r)),
   getOperationDefinitions: () => fetchAuthenticated(`${base}/definitions`).then((r) => handle<CustomOperationDefinitions>(r)),
-  addOperation: (operation: CustomOperationDefinition) =>
+  addOperation: (operation: NewCustomOperationDefinition) =>
     fetchAuthenticated(base, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(operation) }).then((r) =>
-      handle<CustomOperationDefinition>(r),
+      handle<ExistingCustomOperationDefinition>(r),
     ),
-  updateOperation: (name: string, operation: Omit<CustomOperationDefinition, 'name'>) =>
-    fetchAuthenticated(`${base}/${encodeURIComponent(name)}`, {
+  updateOperation: (id: string, operation: NewCustomOperationDefinition) =>
+    fetchAuthenticated(`${base}/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: jsonHeaders,
       body: JSON.stringify(operation),
-    }).then((r) => handle<CustomOperationDefinition>(r)),
-  removeOperation: (name: string) =>
-    fetchAuthenticated(`${base}/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) => handle<void>(r)),
+    }).then((r) => handle<ExistingCustomOperationDefinition>(r)),
+  removeOperation: (id: string) =>
+    fetchAuthenticated(`${base}/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) => handle<void>(r)),
 
-  calculateOperation: (name: string, signal?: AbortSignal) =>
-    fetchAuthenticated(`${base}/${encodeURIComponent(name)}/calculated`, { signal }).then((r) => handle<unknown>(r)),
-  execute: (name: string, data: unknown, signal?: AbortSignal) =>
+  calculateOperation: (id: string, signal?: AbortSignal) =>
+    fetchAuthenticated(`${base}/${encodeURIComponent(id)}/calculated`, { signal }).then((r) => handle<unknown>(r)),
+  execute: (id: string, data: unknown, signal?: AbortSignal) =>
     fetchAuthenticated(`${base}/execution`, {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({ name, data }),
+      body: JSON.stringify({ id, data }),
       signal,
     }).then((r) => handle<unknown>(r)),
 }

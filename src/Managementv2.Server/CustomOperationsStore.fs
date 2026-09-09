@@ -53,47 +53,47 @@ module OperationSettings =
         JsonSerializer.Serialize(withDefaults settings, jsonOptions)
 
 type CustomOperation =
-    { Name: string
+    { Id: string
       Settings: OperationSettings
       Calculate: string option
       Execute: string }
 
 type ICustomOperationsStore =
     abstract member GetAll: unit -> CustomOperation list
-    abstract member TryGet: name: string -> CustomOperation option
+    abstract member TryGet: id: string -> CustomOperation option
     abstract member Save: operation: CustomOperation -> CustomOperation
-    abstract member Remove: name: string -> unit
+    abstract member Remove: id: string -> unit
 
 type FileSystemCustomOperationsStore(baseDirectory: string, logger: ILogger<FileSystemCustomOperationsStore>) =
-    let cleanName name =
-        Regex.Replace(name, "[^a-zA-Z0-9-_]", "")
+    let cleanId id =
+        Regex.Replace(id, "[^a-zA-Z0-9-_]", "")
 
-    let calculatePath name =
-        Path.Combine(baseDirectory, name, "calculate.ps1")
+    let calculatePath id =
+        Path.Combine(baseDirectory, id, "calculate.ps1")
 
-    let executePath name =
-        Path.Combine(baseDirectory, name, "execute.ps1")
+    let executePath id =
+        Path.Combine(baseDirectory, id, "execute.ps1")
 
-    let settingsPath name =
-        Path.Combine(baseDirectory, name, "settings.json")
+    let settingsPath id =
+        Path.Combine(baseDirectory, id, "settings.json")
 
-    let tryRead (name: string) : CustomOperation option =
-        if not <| name.StartsWith "_" && File.Exists(settingsPath name) && File.Exists(executePath name) then
+    let tryRead (id: string) : CustomOperation option =
+        if not <| id.StartsWith "_" && File.Exists(settingsPath id) && File.Exists(executePath id) then
             try
                 Some
-                    { Name = name
-                      Settings = OperationSettings.ofJson(File.ReadAllText(settingsPath name))
+                    { Id = id
+                      Settings = OperationSettings.ofJson(File.ReadAllText(settingsPath id))
                       Calculate =
-                        if File.Exists(calculatePath name) then
-                            Some(File.ReadAllText(calculatePath name))
+                        if File.Exists(calculatePath id) then
+                            Some(File.ReadAllText(calculatePath id))
                         else
                             None
-                      Execute = File.ReadAllText(executePath name) }
+                      Execute = File.ReadAllText(executePath id) }
             with e ->
-                logger.LogWarning(e, "Error while reading custom operation {CustomOperationName}", name)
+                logger.LogWarning(e, "Error while reading custom operation {CustomOperationId}", id)
                 None
         else
-            logger.LogInformation("Skipping custom operation {CustomOperationName}", name)
+            logger.LogInformation("Skipping custom operation {CustomOperationId}", id)
             None
 
     interface ICustomOperationsStore with
@@ -102,41 +102,42 @@ type FileSystemCustomOperationsStore(baseDirectory: string, logger: ILogger<File
                 Directory.GetDirectories baseDirectory
                 |> Seq.map Path.GetFileName
                 |> Seq.choose tryRead
-                |> Seq.sortBy _.Name
+                |> Seq.sortWith (fun a b ->
+                    String.Compare(a.Settings.Title, b.Settings.Title, StringComparison.InvariantCultureIgnoreCase))
                 |> List.ofSeq
             else
                 []
 
-        member _.TryGet name = cleanName name |> tryRead
+        member _.TryGet id = cleanId id |> tryRead
 
         member _.Save operation =
-            let operationName = cleanName operation.Name
-            if String.IsNullOrEmpty operationName then
-                invalidArg (nameof operation) $"Invalid custom operation name '%s{operation.Name}'."
+            let operationId = cleanId operation.Id
+            if String.IsNullOrEmpty operationId then
+                invalidArg (nameof operation) $"Invalid custom operation id '%s{operation.Id}'."
 
-            Directory.CreateDirectory(Path.Combine(baseDirectory, operationName)) |> ignore
+            Directory.CreateDirectory(Path.Combine(baseDirectory, operationId)) |> ignore
 
-            File.WriteAllText(settingsPath operationName, OperationSettings.toJson operation.Settings)
+            File.WriteAllText(settingsPath operationId, OperationSettings.toJson operation.Settings)
 
             File.WriteAllText(
-                executePath operationName,
+                executePath operationId,
                 operation.Execute)
 
             match operation.Calculate with
             | Some calculate when not <| String.IsNullOrWhiteSpace calculate ->
-                File.WriteAllText(calculatePath operationName, calculate)
+                File.WriteAllText(calculatePath operationId, calculate)
             | _ ->
-                if File.Exists(calculatePath operationName) then
-                    File.Delete(calculatePath operationName)
+                if File.Exists(calculatePath operationId) then
+                    File.Delete(calculatePath operationId)
 
-            { operation with Name = operationName }
+            { operation with Id = operationId }
 
-        member _.Remove name =
-            let operationName = cleanName name
-            if String.IsNullOrEmpty operationName then
-                invalidArg (nameof name) $"Invalid custom operation name '%s{name}'."
+        member _.Remove id =
+            let operationId = cleanId id
+            if String.IsNullOrEmpty operationId then
+                invalidArg (nameof id) $"Invalid custom operation id '%s{id}'."
 
-            let directory = Path.Combine(baseDirectory, operationName)
+            let directory = Path.Combine(baseDirectory, operationId)
 
             if Directory.Exists directory then
                 Directory.Delete(directory, recursive = true)

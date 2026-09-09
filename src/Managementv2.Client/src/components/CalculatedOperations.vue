@@ -71,7 +71,7 @@ onMounted(load)
     </div>
 
     <template v-if="loadState.type === 'loaded'">
-      <CalculatedOperation v-for="operation in loadState.operations" :key="operation.name"
+      <CalculatedOperation v-for="operation in loadState.operations" :key="operation.id"
         ref="operations"
         :operation="operation" />
     </template>

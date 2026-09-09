@@ -40,9 +40,7 @@ async function save() {
     if (operation.value.execute.trim() === '') throw new Error('An execute script is required.')
     let saved
     if (operation.value.isNew) {
-      if (operation.value.name.trim() === '') throw new Error('A name is required.')
       saved = await api.addOperation({
-        name: operation.value.name.trim(),
         settings: settings,
         calculate: calculateScript.value,
         execute: operation.value.execute,
@@ -50,7 +48,7 @@ async function save() {
       EditableCustomOperationDefinition.sync(operation.value, saved)
       emit('add', operation.value)
     } else {
-      saved = await api.updateOperation(operation.value.name, {
+      saved = await api.updateOperation(operation.value.id, {
         settings: settings,
         calculate: calculateScript.value,
         execute: operation.value.execute,
@@ -63,11 +61,11 @@ async function save() {
 }
 
 async function remove() {
-  if (!operation.value.name) return
-  if (!confirm(`Delete operation "${operation.value.name}"?`)) return
+  if (!operation.value.id) return
+  if (!confirm(`Delete operation "${operation.value.title || operation.value.id}"?`)) return
   operation.value.saveError = null
   try {
-    await api.removeOperation(operation.value.name)
+    await api.removeOperation(operation.value.id)
     emit('remove', operation.value)
   } catch (e) {
     operation.value.saveError = (e as Error).message
@@ -79,7 +77,7 @@ function isAbort(e: unknown): boolean {
 }
 
 async function runCalculate() {
-  if (!operation.value.name) return
+  if (!operation.value.id) return
   if (!calculateScript.value) return
 
   await save()
@@ -91,7 +89,7 @@ async function runCalculate() {
   operation.value.calculateError = null
   operation.value.calculateResult = null
   try {
-    const result = await api.calculateOperation(operation.value.name, controller.signal)
+    const result = await api.calculateOperation(operation.value.id, controller.signal)
     operation.value.calculateResult = result === undefined ? '(no calculate script)' : JSON.stringify(result, null, 2)
   } catch (e) {
     if (!isAbort(e)) operation.value.calculateError = (e as Error).message
@@ -106,7 +104,7 @@ function cancelCalculate() {
 }
 
 async function runExecute() {
-  if (!operation.value.name) return
+  if (!operation.value.id) return
 
   await save()
   if (operation.value.saveError) return
@@ -118,7 +116,7 @@ async function runExecute() {
   operation.value.executeResult = null
   try {
     const data = parseJson(operation.value.inputText, 'The input data')
-    const result = await api.execute(operation.value.name, data, controller.signal)
+    const result = await api.execute(operation.value.id, data, controller.signal)
     operation.value.executeResult = result ? JSON.stringify(result, null, 2) : '<No output>'
   } catch (e) {
     if (!isAbort(e)) operation.value.executeError = (e as Error).message
@@ -142,13 +140,8 @@ onUnmounted(() => {
   <div class="space-y-3 rounded border border-gray-200 p-4">
     <p v-if="operation.message" class="rounded bg-green-100 px-3 py-2 text-sm text-green-800">{{ operation.message }}</p>
 
-    <LabeledInput label="Name">
-      <input
-        v-model="operation.name"
-        :disabled="!operation.isNew"
-        placeholder="operation-name"
-        class="input w-full disabled:bg-gray-100"
-      />
+    <LabeledInput v-if="!operation.isNew" label="Id">
+      <input :value="operation.id" disabled class="input w-full disabled:bg-gray-100" />
     </LabeledInput>
     <LabeledInput label="Title">
       <input v-model="operation.title" placeholder="Create teacher" class="input w-full" />

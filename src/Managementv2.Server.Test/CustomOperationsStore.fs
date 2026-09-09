@@ -26,7 +26,7 @@ let tests =
               withStore (fun store ->
                   let op =
                       store.Save {
-                        Name = "create-teacher"
+                        Id = "create-teacher"
                         Settings =
                           settings """{"title":"Create teacher","executionForm":[{"name":"userName","title":"User name","type":"text","inputValidations":["notEmpty"],"inputHint":"e.g. eina"}],"maxParallelism":5}"""
                         Calculate = Some "calc"
@@ -34,7 +34,7 @@ let tests =
 
                   match store.TryGet "create-teacher" with
                   | Some read ->
-                      Expect.equal read.Name op.Name "name"
+                      Expect.equal read.Id op.Id "id"
                       Expect.equal read.Calculate op.Calculate "calculate"
                       Expect.equal read.Execute op.Execute "execute"
                       Expect.equal read.Settings op.Settings "settings"
@@ -44,7 +44,7 @@ let tests =
           <| fun () ->
               withStore (fun store ->
                   store.Save
-                      { Name = "op"
+                      { Id = "op"
                         Settings = settings "{}"
                         Calculate = None
                         Execute = "exec" } |> ignore
@@ -55,13 +55,13 @@ let tests =
           <| fun () ->
               withStore (fun store ->
                   store.Save
-                      { Name = "op"
+                      { Id = "op"
                         Settings = settings "{}"
                         Calculate = Some "calc"
                         Execute = "e" } |> ignore
 
                   store.Save
-                      { Name = "op"
+                      { Id = "op"
                         Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
@@ -99,25 +99,38 @@ let tests =
           <| fun () ->
               withStore (fun store ->
                   store.Save
-                      { Name = "a"
+                      { Id = "a"
                         Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
 
                   store.Save
-                      { Name = "b"
+                      { Id = "b"
                         Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
 
-                  let names = store.GetAll() |> List.map (fun o -> o.Name) |> List.sort
-                  Expect.equal names [ "a"; "b" ] "Both operations")
+                  let ids = store.GetAll() |> List.map _.Id |> List.sort
+                  Expect.equal ids [ "a"; "b" ] "Both operations")
+
+          testCase "GetAll sorts operations by title"
+          <| fun () ->
+              withStore (fun store ->
+                  for id, title in [ "op-c", "Zeugnis drucken"; "op-a", "abschluss"; "op-b", "Lehrer anlegen" ] do
+                      store.Save
+                          { Id = id
+                            Settings = { OperationSettings.empty with Title = title }
+                            Calculate = None
+                            Execute = "e" } |> ignore
+
+                  let titles = store.GetAll() |> List.map _.Settings.Title
+                  Expect.equal titles [ "abschluss"; "Lehrer anlegen"; "Zeugnis drucken" ] "Sorted by title, ignoring case")
 
           testCase "Remove deletes an operation"
           <| fun () ->
               withStore (fun store ->
                   store.Save
-                      { Name = "op"
+                      { Id = "op"
                         Settings = settings "{}"
                         Calculate = None
                         Execute = "e" } |> ignore
@@ -125,18 +138,18 @@ let tests =
                   store.Remove "op"
                   Expect.isNone (store.TryGet "op") "Should be gone")
 
-          testCase "Save cleans an unsafe name"
+          testCase "Save cleans an unsafe id"
           <| fun () ->
               withStore (fun store ->
                   let saved =
                       store.Save
-                          { Name = "../evil"
+                          { Id = "../evil"
                             Settings = settings "{}"
                             Calculate = None
                             Execute = "e" }
 
-                  Expect.equal saved.Name "evil" "Unsafe characters are stripped from the name"
-                  Expect.isSome (store.TryGet "evil") "Operation is saved under the cleaned name")
+                  Expect.equal saved.Id "evil" "Unsafe characters are stripped from the id"
+                  Expect.isSome (store.TryGet "evil") "Operation is saved under the cleaned id")
 
-          testCase "TryGet with an unsafe name returns None"
-          <| fun () -> withStore (fun store -> Expect.isNone (store.TryGet "../evil") "Unsafe name -> None") ]
+          testCase "TryGet with an unsafe id returns None"
+          <| fun () -> withStore (fun store -> Expect.isNone (store.TryGet "../evil") "Unsafe id -> None") ]

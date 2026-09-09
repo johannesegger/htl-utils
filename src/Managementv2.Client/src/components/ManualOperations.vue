@@ -13,7 +13,7 @@ type Form = {
 }
 
 type ExecutableOperation = {
-  name: string
+  id: string
   form: Form
   executionState: ExecutionState
 }
@@ -38,7 +38,7 @@ async function load() {
   try {
     const data = await api.getOperations()
     const operations = data.map((v): ExecutableOperation => ({
-      name: v.name,
+      id: v.id,
       form: toForm(v.settings),
       executionState: { type: 'notExecuted' },
     }))
@@ -63,7 +63,7 @@ function formIsValid(operation: ExecutableOperation) {
 async function execute(operation: ExecutableOperation) {
   if (!formIsValid(operation)) return
   const data = Object.fromEntries(operation.form.fields.map(v => [v.name, v.value]))
-  await runExecution(operation.name, data, toRef(operation, 'executionState'))
+  await runExecution(operation.id, data, toRef(operation, 'executionState'))
   if (operation.executionState.type === 'executed') {
     operation.form.fields.forEach(v => v.value = '')
   }
@@ -88,10 +88,10 @@ onMounted(load)
       No operations.
     </div>
 
-    <form v-if="loadState.type === 'loaded'" v-for="operation in loadState.operations" :key="operation.name"
+    <form v-if="loadState.type === 'loaded'" v-for="operation in loadState.operations" :key="operation.id"
       class="space-y-3 rounded border border-gray-300 p-4"
       @submit.prevent="execute(operation)">
-      <h3 class="font-medium">{{ operation.form.title || operation.name }}</h3>
+      <h3 class="font-medium">{{ operation.form.title || operation.id }}</h3>
 
       <LabeledInput v-for="field in operation.form.fields" :key="field.name" :label="field.title ?? field.name">
         <input

@@ -21,12 +21,12 @@ type CustomOperationsController
     inherit ControllerBase()
 
     let toDto (operation: CustomOperation) =
-        {| Name = operation.Name
+        {| Id = operation.Id
            Settings = operation.Settings
            CanCalculate = Option.isSome operation.Calculate |}
 
     let toDefinitionDto (operation: CustomOperation) =
-        {| Name = operation.Name
+        {| Id = operation.Id
            Settings = operation.Settings
            Calculate = Option.toObj operation.Calculate
            Execute = operation.Execute |}
@@ -37,8 +37,8 @@ type CustomOperationsController
         else
             None
 
-    let toOperation (name: string) (settings: OperationSettings) (calculate: string) (execute: string) : CustomOperation =
-        { Name = name
+    let toOperation (id: string) (settings: OperationSettings) (calculate: string) (execute: string) : CustomOperation =
+        { Id = id
           Settings = settings
           Calculate = Option.ofObj calculate
           Execute = execute }
@@ -72,10 +72,10 @@ type CustomOperationsController
             |}
         |}
 
-    [<HttpGet("{name}/calculated")>]
-    member this.GetCalculatedOperation(name: string, cancellationToken: CancellationToken) : Task<IActionResult> =
+    [<HttpGet("{id}/calculated")>]
+    member this.GetCalculatedOperation(id: string, cancellationToken: CancellationToken) : Task<IActionResult> =
         task {
-            match customOperationsStore.TryGet name with
+            match customOperationsStore.TryGet id with
             | None -> return this.NotFound() :> IActionResult
             | Some operation ->
                 match operation.Calculate with
@@ -104,15 +104,15 @@ type CustomOperationsController
 
     [<HttpPost("execution")>]
     member this.Execute
-        ([<FromBody>] operation: {| Name: string; Data: JsonNode |}, cancellationToken: CancellationToken) =
+        ([<FromBody>] operation: {| Id: string; Data: JsonNode |}, cancellationToken: CancellationToken) =
         task {
-            match customOperationsStore.TryGet operation.Name with
+            match customOperationsStore.TryGet operation.Id with
             | Some stored ->
                 let config = customOperationsConfig.Read()
                 let run () = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
 
                 let! result =
-                    executionGate.Run(stored.Name, stored.Settings.MaxParallelism, run, cancellationToken)
+                    executionGate.Run(stored.Id, stored.Settings.MaxParallelism, run, cancellationToken)
 
                 match result with
                 | Ok data -> return this.Ok data :> IActionResult
@@ -124,8 +124,7 @@ type CustomOperationsController
     [<Authorize("ManageCustomOperations")>]
     member this.Add
         ([<FromBody>] operation:
-            {| Name: string
-               Settings: OperationSettings
+            {| Settings: OperationSettings
                Calculate: string
                Execute: string |})
         =
@@ -133,22 +132,19 @@ type CustomOperationsController
         | Some error -> this.BadRequest error :> IActionResult
         | None ->
 
-        match customOperationsStore.TryGet operation.Name with
-        | Some _ -> this.Conflict($"A custom operation named '%s{operation.Name}' already exists.") :> IActionResult
-        | None ->
-            try
-                let created =
-                    toOperation operation.Name operation.Settings operation.Calculate operation.Execute
-                    |> customOperationsStore.Save
-                this.Created($"custom-operations/%s{created.Name}", toDefinitionDto created) :> IActionResult
-            with :? System.ArgumentException as e ->
-                this.BadRequest(e.Message) :> IActionResult
+        let id = System.Guid.NewGuid().ToString()
 
-    [<HttpPut("{name}")>]
+        let created =
+            toOperation id operation.Settings operation.Calculate operation.Execute
+            |> customOperationsStore.Save
+
+        this.Created($"custom-operations/%s{created.Id}", toDefinitionDto created) :> IActionResult
+
+    [<HttpPut("{id}")>]
     [<Authorize("ManageCustomOperations")>]
     member this.Edit
         (
-            name: string,
+            id: string,
             [<FromBody>] operation:
                 {| Settings: OperationSettings
                    Calculate: string
@@ -158,19 +154,19 @@ type CustomOperationsController
         | Some error -> this.BadRequest error :> IActionResult
         | None ->
 
-        match customOperationsStore.TryGet name with
+        match customOperationsStore.TryGet id with
         | None -> this.NotFound() :> IActionResult
-        | Some _ ->
+        | Some stored ->
             let updated =
-                toOperation name operation.Settings operation.Calculate operation.Execute
+                toOperation stored.Id operation.Settings operation.Calculate operation.Execute
                 |> customOperationsStore.Save
             this.Ok(toDefinitionDto updated) :> IActionResult
 
-    [<HttpDelete("{name}")>]
+    [<HttpDelete("{id}")>]
     [<Authorize("ManageCustomOperations")>]
-    member this.Remove(name: string) =
-        match customOperationsStore.TryGet name with
+    member this.Remove(id: string) =
+        match customOperationsStore.TryGet id with
         | None -> this.NotFound() :> IActionResult
-        | Some _ ->
-            customOperationsStore.Remove name
+        | Some stored ->
+            customOperationsStore.Remove stored.Id
             this.NoContent() :> IActionResult

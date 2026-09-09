@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, toRaw } from 'vue'
+import { computed, onMounted, ref, toRaw } from 'vue'
 import { api, EditableCustomOperationDefinition, type CustomOperationDefinitionTemplates } from '@/api'
 import ErrorMessage from './ErrorMessage.vue'
 import EditOperationForm from './EditOperationForm.vue'
@@ -18,13 +18,20 @@ type LoadState =
 
 const loadState = ref<LoadState>({ type: 'notLoaded' })
 
+const operationsByTitle = computed(() => {
+  if (loadState.value.type !== 'loaded') return []
+
+  return [...loadState.value.operations]
+    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })) // compare case-insensitive
+})
+
 async function load() {
   loadState.value = { type: 'loading' }
   try {
     const loadedOperations = await api.getOperationDefinitions()
     const operations = loadedOperations.operationDefinitions.map(v => EditableCustomOperationDefinition.create(v, false))
     const newOperation = EditableCustomOperationDefinition.create({
-      name: '',
+      id: '',
       settings: structuredClone(loadedOperations.templates.settings),
       calculate: loadedOperations.templates.calculateScript,
       execute: loadedOperations.templates.executeScript,
@@ -50,7 +57,7 @@ function addOperation(operation: EditableCustomOperationDefinition) {
 
   loadState.value.operations.push(operation)
   loadState.value.newOperation = EditableCustomOperationDefinition.create({
-    name: '',
+    id: '',
     settings: structuredClone(toRaw(loadState.value.templates.settings)),
     calculate: loadState.value.templates.calculateScript,
     execute: loadState.value.templates.executeScript,
@@ -70,15 +77,15 @@ onMounted(load)
       </div>
       <p v-if="loadState.type === 'loading'" class="text-sm text-gray-500 self-center">Loading…</p>
       <div v-else-if="loadState.type === 'loaded'" class="flex flex-wrap gap-2">
-        <button v-for="operation in loadState.operations"
-          :key="operation.name"
+        <button v-for="operation in operationsByTitle"
+          :key="operation.id"
           class="rounded border px-4 py-3 text-sm cursor-pointer"
           :class="
             operation === loadState.selectedOperation
               ? 'border-blue-600 bg-blue-100 font-medium hover:bg-blue-200'
               : 'border-gray-300 hover:bg-gray-100'"
           @click="loadState.selectedOperation = operation">
-          {{ operation.name }}
+          {{ operation.title || '(untitled)' }}
           <span v-if="operation.calculate" class="ml-1 text-xs text-gray-400">(calc)</span>
         </button>
         <button

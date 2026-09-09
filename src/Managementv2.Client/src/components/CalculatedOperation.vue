@@ -46,7 +46,7 @@ async function calculate() {
   const abortController = new AbortController()
   calculationState.value = { type: 'calculating', abortController: abortController }
   try {
-    const data = (await api.calculateOperation(operation.name, abortController.signal)) as unknown[]
+    const data = (await api.calculateOperation(operation.id, abortController.signal)) as unknown[]
     const calculations = data.map((entry) : Calculation => ({ data: entry, execution: { type: 'notExecuted' } }))
     calculationState.value = { type: 'calculated', calculations: calculations }
   } catch (e) {
@@ -77,7 +77,7 @@ async function executeOne(calculation: Calculation) {
 
   calculation.execution = { type: 'queuedForExecution' }
   try {
-    await limit(() => runExecution(operation.name, calculation.data, toRef(calculation, 'execution')))
+    await limit(() => runExecution(operation.id, calculation.data, toRef(calculation, 'execution')))
   }
   catch (e) {
     if (isAbort(e)) {
