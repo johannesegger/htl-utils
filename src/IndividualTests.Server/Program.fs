@@ -36,7 +36,13 @@ let main args =
         )
     ) |> ignore
 
-    builder.Services.AddSingleton<Sokrates.SokratesApi>(fun _ -> Sokrates.SokratesApi.FromEnvironment()) |> ignore
+    builder.Services.AddSingleton<Sokrates.ISokratesData>(fun _ ->
+        let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
+        match Sokrates.SokratesExport.TryCreateFromEnvironment() with
+        | Some sokratesExport ->
+            Sokrates.FallbackSokratesData([sokratesApi; sokratesExport]) :> Sokrates.ISokratesData
+        | None -> sokratesApi
+    ) |> ignore
 
     builder.Services.AddSingleton<GraphServiceClient>(fun v ->
         let credential = new ClientSecretCredential(

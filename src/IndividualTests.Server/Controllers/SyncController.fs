@@ -67,7 +67,7 @@ module Sync =
 [<ApiController>]
 [<Route("api/sync")>]
 [<Authorize>]
-type SyncController (graphClient: GraphServiceClient, sokratesApi: SokratesApi, config: IConfiguration, logger : ILogger<SyncController>) =
+type SyncController (graphClient: GraphServiceClient, sokrates: ISokratesData, config: IConfiguration, logger : ILogger<SyncController>) =
     inherit ControllerBase()
 
     let tryFindStudent (sokratesStudents: Sokrates.Student list) (sokratesStudentsAddress: Map<string, Sokrates.Address>) studentsMailLookup (student: StudentIdentifier) =
@@ -113,12 +113,12 @@ type SyncController (graphClient: GraphServiceClient, sokratesApi: SokratesApi, 
     member _.SyncStudentData ([<FromBody>]students: StudentIdentifierDto list) = async {
         let! sokratesStudents =
             [ for offset in 0..-1..-6 do DateTime.Today.AddMonths(offset) ]
-            |> List.map (fun date -> sokratesApi.FetchStudents None (Some date))
+            |> List.map (fun date -> sokrates.FetchStudents None (Some date))
             |> Async.Parallel
             |> Async.map (Seq.collect id >> Seq.distinctBy _.Id >> Seq.toList)
         let! sokratesStudentAddresses =
             [ for offset in 0..-1..-6 do DateTime.Today.AddMonths(offset) ]
-            |> List.map (fun date -> sokratesApi.FetchStudentAddresses (Some date))
+            |> List.map (fun date -> sokrates.FetchStudentAddresses (Some date))
             |> Async.Parallel
             |> Async.map (
                 Seq.collect id
@@ -168,7 +168,7 @@ type SyncController (graphClient: GraphServiceClient, sokratesApi: SokratesApi, 
     [<Route("teachers")>]
     member _.SyncTeacherData ([<FromBody>]teacherShortNames: string list) = async {
         let! sokratesTeacherLookup = async {
-            let! teachers = sokratesApi.FetchTeachers
+            let! teachers = sokrates.FetchTeachers
             return teachers |> List.map (fun v -> (TeacherName.create v.ShortName, v)) |> Map.ofList
         }
         let teachersGroupId = config.["TeachersGroupId"]

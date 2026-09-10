@@ -1,6 +1,7 @@
 module Sokrates
 
 open FSharp.Data
+open Microsoft.Extensions.Configuration
 open System
 open System.IO
 open System.Net.Http
@@ -24,8 +25,6 @@ type Config = {
     ClientCertificate: X509Certificate2
 }
 module Config =
-    open Microsoft.Extensions.Configuration
-
     type SokratesConfig() =
         member val WebServiceUrl = "" with get, set
         member val UserName = "" with get, set
@@ -128,6 +127,13 @@ type private SokratesWebService = XmlProvider<Schema = SchemaFile>
 type private ParameterType =
     | Simple of string
     | List of (string * string) list
+
+type ISokratesData =
+    abstract FetchTeachers : Async<Teacher list>
+    abstract FetchClasses : schoolYear: int option -> Async<string list>
+    abstract FetchStudents : className: string option -> date: DateTime option -> Async<Student list>
+    abstract FetchStudentAddresses : date: DateTime option -> Async<StudentAddress list>
+    abstract FetchStudentContactInfos : studentIds: SokratesId list -> date: DateTime option -> Async<StudentContact list>
 
 type SokratesApi(config: Config) =
     let getSchoolYear (date: DateTime) =
@@ -405,5 +411,151 @@ type SokratesApi(config: Config) =
         return parseContactInfos xmlElement
     }
 
+    interface ISokratesData with
+        member this.FetchTeachers = this.FetchTeachers
+        member this.FetchClasses schoolYear = this.FetchClasses schoolYear
+        member this.FetchStudents className date = this.FetchStudents className date
+        member this.FetchStudentAddresses date = this.FetchStudentAddresses date
+        member this.FetchStudentContactInfos studentIds date = this.FetchStudentContactInfos studentIds date
     static member FromEnvironment () =
         SokratesApi(Config.fromEnvironment ())
+
+type SokratesExportConfig = {
+    StudentFiles: string[]
+    TeacherFile: string
+}
+
+type SokratesExport(config: SokratesExportConfig) =
+    let tryGetAddress street streetNumber zip city country =
+        match Option.ofString street, Option.ofString zip, Option.ofString city, Option.ofString country with
+        | Some street, Some zip, Some city, Some country ->
+            Some {
+                Country = country
+                Zip = zip
+                City = city
+                Street =
+                    match Option.ofString streetNumber with
+                    | Some streetNumber -> sprintf "%s %s" street streetNumber
+                    | None -> street
+            }
+        | _ -> None
+
+    let teachers =
+        use fileStream = File.OpenRead config.TeacherFile
+        use csvFile = CsvFile.Load(fileStream, ";")
+        csvFile.Rows
+        |> Seq.map (fun v -> {
+            Id = SokratesId v.["LR_ID"]
+            Title = Option.ofString v.["AkadGrad"] // TODO same as DegreeFront?
+            LastName = v.["Familienname"]
+            FirstName = v.["Vorname"]
+            ShortName = v.["Kürzel"]
+            DateOfBirth = DateTime.ParseExact(v.["Geburtsdatum"], "dd.MM.yyyy", null)
+            DegreeFront = Option.ofString v.["AkadGrad"]
+            DegreeBack = Option.ofString v.["AkadGradNach"]
+            Phones = [] // TODO
+            Address = tryGetAddress v.["Strasse"] v.["HausNr"] v.["PLZ"] v.["Ort"] v.["Land"]
+            Gender = None // TODO
+        })
+        |> Seq.toList
+
+    let readStudents file =
+        use fileStream = File.OpenRead file
+        use csvFile = CsvFile.Load(fileStream, ";")
+        csvFile.Rows
+        |> Seq.map (fun v -> {|
+            Data = {
+                Id = SokratesId v.["Schülerkennzahl"]
+                LastName = v.["Familienname"]
+                FirstName1 = v.["Vorname"]
+                FirstName2 = Option.ofString v.["Vornamen"]
+                DateOfBirth = DateTime.ParseExact(v.["Geburtsdatum"], "dd.MM.yyyy", null)
+                SchoolClass = v.["Klasse"]
+                Gender =
+                    let genderText = v.["Geschlecht"]
+                    if genderText = "m" then Male
+                    elif genderText = "w" then Female
+                    else failwith $"Unknown gender \"%s{genderText}\""
+            }
+            Address = {
+                StudentId = SokratesId v.["Schülerkennzahl"]
+                Address = tryGetAddress v.["Straße"] v.["Hausnummer"] v.["PLZ"] v.["Ort"] v.["Staat"]
+                Phone1 = None
+                Phone2 = None
+                From = None
+                Till = None
+                UpdateDate = None
+            }
+        |})
+        |> Seq.toList
+
+    let students =
+        config.StudentFiles
+        |> Seq.collect readStudents
+        |> Seq.rev
+        |> Seq.distinctBy _.Data.Id
+        |> Seq.toList
+
+    interface ISokratesData with
+        member _.FetchTeachers = async {
+            return teachers
+        }
+
+        member _.FetchClasses (schoolYear: int option): Async<string list> = async {
+            return students
+                |> Seq.map _.Data.SchoolClass
+                |> Seq.distinct
+                |> Seq.sort
+                |> Seq.toList
+        }
+
+        member _.FetchStudents className date = async {
+            match className with
+            | Some className ->
+                return students
+                    |> List.map _.Data
+                    |> List.filter (fun v -> v.SchoolClass = className)
+            | None -> return students |> List.map _.Data
+        }
+
+        member _.FetchStudentAddresses date = async {
+            return students
+            |> List.map _.Address
+        }
+
+        member _.FetchStudentContactInfos studentIds date =
+            raise (NotImplementedException())
+
+    static member TryCreateFromEnvironment() =
+        let config =
+            ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddUserSecrets<SokratesExport>()
+                .Build()
+        let configSection = config.GetSection "SokratesExport"
+        if configSection.Exists() then
+            configSection
+            |> ConfigurationBinder.Get<SokratesExportConfig>
+            |> SokratesExport
+            |> Some
+        else None
+
+type FallbackSokratesData(inner: ISokratesData list) =
+    let run fn = async {
+        let rec run' inner errors = async {
+            match inner with
+            | x :: xs ->
+                try
+                    return! fn x
+                with
+                    e -> return! run' xs (errors @ [e])
+            | [] -> return raise (AggregateException errors)
+        }
+        return! run' inner []
+    }
+    interface ISokratesData with
+        member _.FetchTeachers = run (fun v -> v.FetchTeachers)
+        member _.FetchClasses schoolYear = run (fun v -> v.FetchClasses schoolYear)
+        member _.FetchStudents className date = run (fun v -> v.FetchStudents className date)
+        member _.FetchStudentAddresses date = run (fun v -> v.FetchStudentAddresses date)
+        member _.FetchStudentContactInfos studentIds date = run (fun v -> v.FetchStudentContactInfos studentIds date)
