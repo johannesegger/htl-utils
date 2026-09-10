@@ -4,9 +4,6 @@
   .input {
     @apply rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none;
   }
-  .textarea {
-    @apply w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs focus:border-blue-500 focus:outline-none;
-  }
   .btn-primary {
     @apply cursor-pointer disabled:cursor-not-allowed rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white not-disabled:hover:bg-blue-700 disabled:opacity-50;
   }

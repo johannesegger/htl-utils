@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed, onUnmounted } from 'vue'
+import { computed, defineAsyncComponent, onUnmounted } from 'vue'
 import { api, EditableCustomOperationDefinition, type FormFieldDefinition, type OperationSettings } from '@/api.ts'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
+
+// Monaco is big, so keep it out of the initial bundle - it's only needed when editing an operation.
+const CodeEditor = defineAsyncComponent(() => import('./CodeEditor.vue'))
 
 const operation = defineModel<EditableCustomOperationDefinition>({ required: true })
 
@@ -147,16 +150,16 @@ onUnmounted(() => {
       <input v-model="operation.title" placeholder="Create teacher" class="input w-full" />
     </LabeledInput>
     <LabeledInput label="Execution form (JSON)">
-      <textarea v-model="operation.executionForm" rows="10" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <CodeEditor v-model="operation.executionForm" language="json" :lines="10" />
     </LabeledInput>
     <LabeledInput label="Number of executions of this operation that may run at the same time">
       <input v-model.number="operation.maxParallelism" type="number" min="1" step="1" class="input w-20 self-start" />
     </LabeledInput>
     <LabeledInput label="Calculate script (optional, PowerShell)">
-      <textarea v-model="operation.calculate" rows="12" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <CodeEditor v-model="operation.calculate" language="powershell" :lines="12" />
     </LabeledInput>
     <LabeledInput label="Execute script (PowerShell)">
-      <textarea v-model="operation.execute" rows="16" class="textarea" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <CodeEditor v-model="operation.execute" language="powershell" :lines="16" />
     </LabeledInput>
     <div class="flex gap-2">
       <button class="btn-primary" @click="save">Save</button>
@@ -179,7 +182,7 @@ onUnmounted(() => {
     <hr class="border-gray-500" />
 
     <LabeledInput label="Input data (JSON)">
-      <textarea v-model="operation.inputText" rows="5" class="textarea" placeholder='{ "userName": "eina" }'></textarea>
+      <CodeEditor v-model="operation.inputText" language="json" :lines="5" placeholder='{ "userName": "eina" }' />
     </LabeledInput>
     <button v-if="operation.runningExecute" class="btn-danger" @click="cancelExecute">Cancel</button>
     <button v-else class="btn-secondary" :disabled="running" @click="runExecute">Run execute</button>
