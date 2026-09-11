@@ -463,12 +463,15 @@ type SokratesExport(config: SokratesExportConfig) =
     let readStudents file =
         use fileStream = File.OpenRead file
         use csvFile = CsvFile.Load(fileStream, ";")
+        // Two columns with same header -> use first one
+        let lastNameIndex = csvFile.Headers |> Option.get |> Seq.findIndex ((=) "Familienname")
+        let firstNameIndex = csvFile.Headers |> Option.get |> Seq.findIndex ((=) "Vorname")
         csvFile.Rows
         |> Seq.map (fun v -> {|
             Data = {
                 Id = SokratesId v.["Schülerkennzahl"]
-                LastName = v.["Familienname"]
-                FirstName1 = v.["Vorname"]
+                LastName = v.[lastNameIndex]
+                FirstName1 = v.[firstNameIndex]
                 FirstName2 = Option.ofString v.["Vornamen"]
                 DateOfBirth = DateTime.ParseExact(v.["Geburtsdatum"], "dd.MM.yyyy", null)
                 SchoolClass = v.["Klasse"]
