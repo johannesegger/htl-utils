@@ -14,7 +14,7 @@ let modifications classGroups = reader {
             |> List.choose (fun (index, ruleGroup) ->
                 ruleGroup.Rules
                 |> List.tryPick (fun rule ->
-                    let m = rule.Pattern.Match(groupName)
+                    let m = rule.Pattern.Match groupName
                     if m.Success then
                         match rule.Strategy with
                         | Increment ->

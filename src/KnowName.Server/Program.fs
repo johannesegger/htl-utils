@@ -6,37 +6,36 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open System
-open System.IO
 open System.Security.Cryptography.X509Certificates
 
 [<EntryPoint>]
 let main args =
 
-    let builder = WebApplication.CreateBuilder(args)
+    let builder = WebApplication.CreateBuilder args
 
     builder.Services.AddControllers() |> ignore
 
     builder.Services.AddAuthentication()
         .AddJwtBearer(fun options ->
-            builder.Configuration.GetSection("Oidc").Bind(options)
+            builder.Configuration.GetSection("Oidc").Bind options
         ) |> ignore
-    builder.Services.AddTransient<IClaimsTransformation>(fun provider ->
-        new KeycloakRolesClaimsTransformation("htl-utils")
+    builder.Services.AddTransient<IClaimsTransformation>(fun _ ->
+        new KeycloakRolesClaimsTransformation "htl-utils"
     ) |> ignore
 
     builder.Services.AddAuthorization(fun v ->
         v.AddPolicy("ReadPersonData", fun policy ->
-            policy.RequireRole("knowname-user") |> ignore
+            policy.RequireRole "knowname-user" |> ignore
         )
     ) |> ignore
 
     builder.Services.AddAuthorization(fun v ->
         v.AddPolicy("ManageSettings", fun policy ->
-            policy.RequireRole("knowname-admin") |> ignore
+            policy.RequireRole "knowname-admin" |> ignore
         )
     ) |> ignore
 
-    builder.Services.AddSingleton(AppConfigStorage(builder.Configuration.GetValue<string>("AppConfigPath"))) |> ignore
+    builder.Services.AddSingleton(AppConfigStorage(builder.Configuration.GetValue<string> "AppConfigPath")) |> ignore
     builder.Services.AddScoped<Sokrates.Config>(fun (ctx: IServiceProvider) ->
         let appConfigStorage = ctx.GetRequiredService<AppConfigStorage>()
         match appConfigStorage.TryReadConfig() with
@@ -69,7 +68,7 @@ let main args =
     if app.Environment.IsProduction() then
         app.UseDefaultFiles() |> ignore
         app.UseStaticFiles() |> ignore
-        app.MapFallbackToFile("/index.html") |> ignore
+        app.MapFallbackToFile "/index.html" |> ignore
 
     app.UseAuthentication() |> ignore
     app.UseAuthorization() |> ignore

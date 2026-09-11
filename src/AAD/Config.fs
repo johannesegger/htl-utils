@@ -93,4 +93,4 @@ module Config =
                 .AddEnvironmentVariables()
                 .AddUserSecrets<AADConfig>()
                 .Build()
-        ConfigurationBinder.Get<AADConfig>(config.GetSection("AAD")).Build()
+        ConfigurationBinder.Get<AADConfig>(config.GetSection "AAD").Build()

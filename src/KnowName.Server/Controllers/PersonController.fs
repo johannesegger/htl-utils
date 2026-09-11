@@ -22,7 +22,7 @@ module Game =
 [<ApiController>]
 [<Route("/api/person")>]
 [<Authorize("ReadPersonData")>]
-type PersonController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: PhotoLibrary.Configuration.Config, logger : ILogger<PersonController>) =
+type PersonController (sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: PhotoLibrary.Configuration.Config, _logger : ILogger<PersonController>) =
     inherit ControllerBase()
 
     [<HttpGet("groups")>]

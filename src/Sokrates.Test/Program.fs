@@ -4,7 +4,7 @@ open Expecto
 open Sokrates
 
 let private sokratesConfig = Config.fromEnvironment ()
-let private sokratesApi = SokratesApi(sokratesConfig)
+let private sokratesApi = SokratesApi sokratesConfig
 
 let tests =
     testList "Fetch students" [

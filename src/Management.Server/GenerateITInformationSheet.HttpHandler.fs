@@ -79,14 +79,14 @@ let private createFullHtmlDocument documentTemplate content =
 
 let private initializePuppeteer = lazy(
     let browserFetcher = Puppeteer.CreateBrowserFetcher(BrowserFetcherOptions(Path = Path.Combine(Path.GetTempPath(), "htl-utils", "puppeteer", ".local-chromium")))
-    browserFetcher.DownloadAsync(BrowserFetcher.DefaultRevision) |> Async.AwaitTask |> Async.RunSynchronously
+    browserFetcher.DownloadAsync BrowserFetcher.DefaultRevision |> Async.AwaitTask |> Async.RunSynchronously
 )
 
 let private htmlToPdf header footer content =
     let browserRevisionInfo = initializePuppeteer.Force()
     let browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true, ExecutablePath = browserRevisionInfo.ExecutablePath)) |> Async.AwaitTask |> Async.RunSynchronously
     let page = browser.NewPageAsync() |> Async.AwaitTask |> Async.RunSynchronously
-    page.SetContentAsync(content) |> Async.AwaitTask |> Async.RunSynchronously
+    page.SetContentAsync content |> Async.AwaitTask |> Async.RunSynchronously
     let pdfOptions =
         PdfOptions(
             DisplayHeaderFooter = true,
@@ -95,9 +95,9 @@ let private htmlToPdf header footer content =
             Format = PaperFormat.A4,
             PrintBackground = true
         )
-    use pdfStream = page.PdfStreamAsync(pdfOptions) |> Async.AwaitTask |> Async.RunSynchronously
+    use pdfStream = page.PdfStreamAsync pdfOptions |> Async.AwaitTask |> Async.RunSynchronously
     use stream = new MemoryStream()
-    pdfStream.CopyToAsync(stream) |> Async.AwaitTask |> Async.RunSynchronously
+    pdfStream.CopyToAsync stream |> Async.AwaitTask |> Async.RunSynchronously
     stream.ToArray()
 
 let generateSheet (adApi: AD.Core.ADApi) config : HttpHandler =

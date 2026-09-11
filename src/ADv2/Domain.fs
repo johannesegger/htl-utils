@@ -33,7 +33,7 @@ type ProxyAddress =
     }
 module ProxyAddress =
     let tryParse (v: string) =
-        match v.IndexOf(':') with
+        match v.IndexOf ':' with
         | -1 -> None
         | idx ->
             match ProxyAddressProtocol.tryParse (v.Substring(0, idx)), MailAddress.tryParse (v.Substring(idx + 1)) with

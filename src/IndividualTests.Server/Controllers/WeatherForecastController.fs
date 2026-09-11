@@ -1,16 +1,13 @@
 ﻿namespace IndividualTests.Server.Controllers
 
 open System
-open System.Collections.Generic
-open System.Linq
-open System.Threading.Tasks
 open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Logging
 open IndividualTests.Server
 
 [<ApiController>]
 [<Route("[controller]")>]
-type WeatherForecastController (logger : ILogger<WeatherForecastController>) =
+type WeatherForecastController (_logger : ILogger<WeatherForecastController>) =
     inherit ControllerBase()
 
     let summaries =
@@ -29,7 +26,7 @@ type WeatherForecastController (logger : ILogger<WeatherForecastController>) =
 
     [<HttpGet>]
     member _.Get() =
-        let rng = System.Random()
+        let rng = Random()
         [|
             for index in 0..4 ->
                 { Date = DateTime.Now.AddDays(float index)

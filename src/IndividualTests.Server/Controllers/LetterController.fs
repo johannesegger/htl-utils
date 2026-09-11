@@ -23,7 +23,7 @@ module Html =
     type BrowserFactory(logger: ILogger<BrowserFactory>) =
         member _.LaunchBrowser() = task {
             if Environment.getEnvVar "DOTNET_RUNNING_IN_CONTAINER" = "true" then
-                logger.LogInformation("Launching browser in container environment")
+                logger.LogInformation "Launching browser in container environment"
                 let browserPath =
                     Directory.GetDirectories("/chromium", "linux-*")
                     |> Seq.tryPick(fun v ->
@@ -45,7 +45,7 @@ module Html =
                 )
                 |> Puppeteer.LaunchAsync
             else
-                logger.LogInformation("Launching browser in normal environment")
+                logger.LogInformation "Launching browser in normal environment"
                 let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-manage-guest-accounts-browser")
                 let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
                 let! downloadedBrowser = browserFetcher.DownloadAsync()
@@ -65,7 +65,7 @@ module Html =
 
         use! browser = browserFactory.LaunchBrowser()
         let! page = browser.NewPageAsync()
-        let! response = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
+        let! _ = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
         return! page.PdfDataAsync(PdfOptions(
             PrintBackground = true,
             DisplayHeaderFooter = true,
@@ -172,7 +172,7 @@ module Letter =
             let fromTimeOfDay (v: Dto.TimeOfDay) = TimeSpan.FromHours v.Hours
         module TestPart =
             let private tryParseTimeSpan (text: string) =
-                match DateTime.TryParse(text) with
+                match DateTime.TryParse text with
                 | (true, v) -> Some v.TimeOfDay
                 | _ -> None
             let private tryParseExactTime text room =
@@ -225,13 +225,13 @@ module Letter =
             let toString = function
                 | ExactTimeSpan (start, ``end``, room) ->
                     let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-                    sprintf "%s - %s%s" (start.ToString("hh\\:mm")) (``end``.ToString("hh\\:mm")) roomText
+                    sprintf "%s - %s%s" (start.ToString "hh\\:mm") (``end``.ToString "hh\\:mm") roomText
                 | ExactTime (v, room) ->
                     let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-                    sprintf "%s%s" (v.ToString("hh\\:mm")) roomText
+                    sprintf "%s%s" (v.ToString "hh\\:mm") roomText
                 | StartTime (v, room) ->
                     let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-                    sprintf "ab %s%s" (v.ToString("hh\\:mm")) roomText
+                    sprintf "ab %s%s" (v.ToString "hh\\:mm") roomText
                 | Afterwards room ->
                     let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
                     sprintf "anschließend%s" roomText
@@ -324,7 +324,7 @@ module Letter =
                 )
 
         module Date =
-            let culture = CultureInfo.GetCultureInfo("de-AT")
+            let culture = CultureInfo.GetCultureInfo "de-AT"
             let toString (v: DateTime) = sprintf "%s, %s" (v.ToString("ddd", culture)) (v.ToString("d", culture))
 
 
@@ -409,7 +409,7 @@ module Letter =
             |> String.replace "{{city}}" (student.Address |> Option.map _.City |> Option.defaultValue "")
             |> String.replace "{{testTableRows}}" testTableRows
             |> String.replace "{{testCountGroup}}" (if tests.Length = 1 then "single-test" else "multiple-tests")
-            |> String.replace "{{date}}" (DateTime.Today.ToString("D", CultureInfo.GetCultureInfo("de-AT")))
+            |> String.replace "{{date}}" (DateTime.Today.ToString("D", CultureInfo.GetCultureInfo "de-AT"))
 
         let generateStudentLetters (documentTemplate, letterTemplate, testRowTemplate) tests =
             let includeRoom = tests |> List.exists (fun v -> v.PartOral |> Option.bind TestPart.tryGetRoom |> Option.isSome)
@@ -509,7 +509,7 @@ module Letter =
 [<ApiController>]
 [<Route("api/letter")>]
 [<Authorize>]
-type LetterController (graphClient: GraphServiceClient, browserFactory: Html.BrowserFactory, config: IConfiguration, logger : ILogger<LetterController>) =
+type LetterController (graphClient: GraphServiceClient, browserFactory: Html.BrowserFactory, config: IConfiguration, _logger : ILogger<LetterController>) =
     inherit ControllerBase()
 
     [<HttpQuery>]
@@ -548,7 +548,7 @@ type LetterController (graphClient: GraphServiceClient, browserFactory: Html.Bro
                             | _, _ -> "Einteilung zu Wiederholungsprüfungen.pdf"
                         do! Domain.sendMail graphClient senderAddress mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
                         return Ok ()
-                    with e -> return Error {| Type = "sending-mail-failed"; StudentMailAddress = Some mailToAddress; Student = None |}
+                    with _ -> return Error {| Type = "sending-mail-failed"; StudentMailAddress = Some mailToAddress; Student = None |}
                 | None -> return Error {| Type = "student-has-no-mail-address"; StudentMailAddress = None; Student = Some {| ClassName = student.ClassName; LastName = student.LastName; FirstName = student.FirstName |} |}
             })
             |> Async.Sequential
@@ -593,7 +593,7 @@ type LetterController (graphClient: GraphServiceClient, browserFactory: Html.Bro
                             | _ -> "Einteilung zu Wiederholungsprüfungen.pdf"
                         do! Domain.sendMail graphClient senderAddress mailToAddress data.MailSubject data.MailText (letterFileName, pdfLetter)
                         return Ok ()
-                    with e -> return Error {| Type = "sending-mail-failed"; TeacherMailAddress = Some mailToAddress; TeacherShortName = None |}
+                    with _ -> return Error {| Type = "sending-mail-failed"; TeacherMailAddress = Some mailToAddress; TeacherShortName = None |}
                 | None -> return Error {| Type = "teacher-has-no-mail-address"; TeacherMailAddress = None; TeacherShortName = teacher.ShortName |}
             })
             |> Async.Sequential

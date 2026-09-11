@@ -65,7 +65,7 @@ let tryCreate userName password path =
         else None
     match networkName with
     | Some networkName ->
-        let result = Win32.WNetAddConnection2(NetResource(networkName), password, userName, 0)
+        let result = Win32.WNetAddConnection2(NetResource networkName, password, userName, 0)
         if result <> 0 then raise (Win32Exception(result, $"Error connecting to remote share %s{networkName} as \"%s{userName}\""))
         { new IDisposable with member _.Dispose() = Win32.WNetCancelConnection2(networkName, 0, true) |> ignore }
     | None -> { new IDisposable with member _.Dispose() = () }

@@ -1,16 +1,14 @@
 module AD.Test.Modifications
 
-open AD.Configuration
 open AD.Core
 open AD.Domain
 open AD.Test.Setup
 open Expecto
-open System
 
 //let private config = Config.fromEnvironment ()
 
-let private randomName prefix =
-    sprintf "%s-%O" prefix (Guid.NewGuid())
+// let private randomName prefix =
+//     sprintf "%s-%O" prefix (Guid.NewGuid())
 
 // let private createUser userType =
 //     {
@@ -20,11 +18,11 @@ let private randomName prefix =
 //         LastName = "Einstein"
 //         Type = userType
 //     }
-let private mailAliases = [
-    { IsPrimary = true; UserName = "Albert.Einstein"; Domain = DefaultDomain }
-    { IsPrimary = false; UserName = "Einstein.Albert"; Domain = DefaultDomain }
-]
-let private password = "!A1b2C3#"
+// let private mailAliases = [
+//     { IsPrimary = true; UserName = "Albert.Einstein"; Domain = DefaultDomain }
+//     { IsPrimary = false; UserName = "Einstein.Albert"; Domain = DefaultDomain }
+// ]
+// let private password = "!A1b2C3#"
 
 let tests =
     testList "Modifications" [
@@ -39,7 +37,7 @@ let tests =
                 MailAliases = [ { IsPrimary = true; UserName = "Albert.Mozart"; Domain = DefaultDomain } ]
                 Password = "Test123"
             }
-            let! result = adApi.ApplyDirectoryModifications([ CreateUser user ])
+            let! result = adApi.ApplyDirectoryModifications [ CreateUser user ]
 
             Expect.isOk result $"Error while creating user. Result = %A{result}"
 

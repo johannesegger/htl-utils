@@ -5,8 +5,8 @@ open Expecto
 open System
 
 let private adConfig = Config.fromEnvironment ()
-let private adHelper = ADHelper(adConfig)
-let private adApi = ADApi(adConfig)
+let private adHelper = ADHelper adConfig
+let private adApi = ADApi adConfig
 
 let private randomName prefix =
     sprintf "%s-%O" prefix (Guid.NewGuid())
@@ -66,7 +66,7 @@ let tests =
                 CreateGroup (Student (GroupName group1Name))
                 CreateGroup (Student (GroupName group2Name))
                 CreateUser (einstein, mailAliases, password)
-                UpdateUser (einstein.Name, einstein.Type, (MoveStudentToClass (GroupName group2Name)))
+                UpdateUser (einstein.Name, einstein.Type, MoveStudentToClass (GroupName group2Name))
             ]
 
             let (path, department, homePath, group1Members, group2Members) =
@@ -81,7 +81,7 @@ let tests =
                 adGroup2.Properties.["member"] |> Seq.cast<string> |> Seq.map DistinguishedName |> Seq.toList
 
             adApi.ApplyDirectoryModifications [
-                DeleteUser (einstein.Name, (Student (GroupName group2Name)))
+                DeleteUser (einstein.Name, Student (GroupName group2Name))
                 DeleteGroup (Student (GroupName group2Name))
                 DeleteGroup (Student (GroupName group1Name))
             ]
@@ -100,7 +100,7 @@ let tests =
             adApi.ApplyDirectoryModifications [
                 CreateGroup (Student (GroupName groupName))
                 CreateUser (einstein, mailAliases, password)
-                UpdateGroup (Student (GroupName groupName), (ChangeGroupName (GroupName newGroupName)))
+                UpdateGroup (Student (GroupName groupName), ChangeGroupName (GroupName newGroupName))
             ]
 
             let (department, homePath) =
@@ -110,7 +110,7 @@ let tests =
                 adUser.Properties.["homeDirectory"].[0] :?> string
 
             adApi.ApplyDirectoryModifications [
-                DeleteUser (einstein.Name, (Student (GroupName newGroupName)))
+                DeleteUser (einstein.Name, Student (GroupName newGroupName))
                 DeleteGroup (Student (GroupName newGroupName))
             ]
 

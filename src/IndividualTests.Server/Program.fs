@@ -3,18 +3,16 @@ module IndividualTests.Server.Main
 open Azure.Identity
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Authentication
-open Microsoft.AspNetCore.Authentication.JwtBearer
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
-open Microsoft.Identity.Web
 open Microsoft.IdentityModel.Logging
 open System.Text.Json.Serialization
 open Microsoft.Graph.Beta
 
 [<EntryPoint>]
 let main args =
-    let builder = WebApplication.CreateBuilder(args)
+    let builder = WebApplication.CreateBuilder args
 
     builder.Services.AddControllers()
         .AddJsonOptions(fun options ->
@@ -23,16 +21,16 @@ let main args =
 
     builder.Services.AddAuthentication()
         .AddJwtBearer(fun options ->
-            builder.Configuration.GetSection("Oidc").Bind(options)
+            builder.Configuration.GetSection("Oidc").Bind options
         ) |> ignore
 
-    builder.Services.AddTransient<IClaimsTransformation>(fun provider ->
-        new KeycloakRolesClaimsTransformation("htl-utils")
+    builder.Services.AddTransient<IClaimsTransformation>(fun _ ->
+        new KeycloakRolesClaimsTransformation "htl-utils"
     ) |> ignore
 
     builder.Services.AddAuthorization(fun v ->
         v.AddPolicy("SendLetters", fun policy ->
-            policy.RequireRole("individualtests-lettersender") |> ignore
+            policy.RequireRole "individualtests-lettersender" |> ignore
         )
     ) |> ignore
 
@@ -40,11 +38,11 @@ let main args =
         let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
         match Sokrates.SokratesExport.TryCreateFromEnvironment() with
         | Some sokratesExport ->
-            Sokrates.FallbackSokratesData([sokratesApi; sokratesExport]) :> Sokrates.ISokratesData
+            Sokrates.FallbackSokratesData [sokratesApi; sokratesExport] :> Sokrates.ISokratesData
         | None -> sokratesApi
     ) |> ignore
 
-    builder.Services.AddSingleton<GraphServiceClient>(fun v ->
+    builder.Services.AddSingleton<GraphServiceClient>(fun _ ->
         let credential = new ClientSecretCredential(
             builder.Configuration["AAD:TenantId"],
             builder.Configuration["AAD:ClientId"],

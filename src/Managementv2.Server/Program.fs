@@ -17,7 +17,7 @@ module Program =
     [<EntryPoint>]
     let main args =
 
-        let builder = WebApplication.CreateBuilder(args)
+        let builder = WebApplication.CreateBuilder args
 
         builder.Services.AddControllers(fun opt ->
             opt.OutputFormatters.RemoveType<HttpNoContentOutputFormatter>()
@@ -25,18 +25,18 @@ module Program =
 
         builder.Services.AddAuthentication()
             .AddJwtBearer(fun options ->
-                builder.Configuration.GetSection("Oidc").Bind(options)
+                builder.Configuration.GetSection("Oidc").Bind options
             ) |> ignore
-        builder.Services.AddTransient<IClaimsTransformation>(fun provider ->
-            new KeycloakRolesClaimsTransformation("htl-utils")
+        builder.Services.AddTransient<IClaimsTransformation>(fun _ ->
+            new KeycloakRolesClaimsTransformation "htl-utils"
         ) |> ignore
 
         builder.Services.AddAuthorization(fun v ->
             v.AddPolicy("ExecuteCustomOperations", fun policy ->
-                policy.RequireRole("itmgmt-custom-operation-executor") |> ignore
+                policy.RequireRole "itmgmt-custom-operation-executor" |> ignore
             )
             v.AddPolicy("ManageCustomOperations", fun policy ->
-                policy.RequireRole("itmgmt-custom-operation-manager") |> ignore
+                policy.RequireRole "itmgmt-custom-operation-manager" |> ignore
             )
         ) |> ignore
 

@@ -43,7 +43,7 @@ let fetchGenders (teachers: Sokrates.Teacher list) =
             |> String.concat "&"
         use httpClient = new HttpClient()
         let url = $"https://api.genderize.io/?%s{namesParams}&country_id=AT"
-        let! genders = httpClient.GetFromJsonAsync<GenderizeResult list>(url) |> Async.AwaitTask
+        let! genders = httpClient.GetFromJsonAsync<GenderizeResult list> url |> Async.AwaitTask
         return
             genders
             |> List.map (fun v ->
@@ -62,7 +62,7 @@ let genderTitle gender (v: string) =
     match gender with
     | Male -> v
     | Female ->
-        v.Split(' ')
+        v.Split ' '
         |> Array.map (fun v ->
             if CIString v = CIString "Dr." then "Dr.ⁱⁿ"
             elif CIString v = CIString "DI" then "DIⁱⁿ"
@@ -126,7 +126,7 @@ let getYear (className: string) =
 
 let getDepartment (className: string) =
     match className.IndexOf '_' with
-    | -1 -> className.Substring(2)
+    | -1 -> className.Substring 2
     | idx -> className.Substring(2, idx - 2)
 
 let getShortDepartment className =
@@ -176,11 +176,11 @@ let generateStudentNamePlates templateDir = async {
 let main argv =
     match argv with
     | [| templateBaseDir |] ->
-        Directory.GetDirectories(templateBaseDir)
+        Directory.GetDirectories templateBaseDir
         |> Seq.iter (fun templateDir ->
-            let templateDirName = Path.GetFileName(templateDir)
-            if templateDirName.Equals("teachers") then generateTeacherNamePlates templateDir |> Async.RunSynchronously
-            elif templateDirName.Equals("students") then generateStudentNamePlates templateDir |> Async.RunSynchronously
+            let templateDirName = Path.GetFileName templateDir
+            if templateDirName.Equals "teachers" then generateTeacherNamePlates templateDir |> Async.RunSynchronously
+            elif templateDirName.Equals "students" then generateStudentNamePlates templateDir |> Async.RunSynchronously
             else printfn $"WARNING: Ignoring %s{templateDir}"
         )
         printfn "Done."

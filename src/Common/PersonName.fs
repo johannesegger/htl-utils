@@ -5,11 +5,11 @@ open System.Globalization
 
 #if !FABLE_COMPILER
 module private Helper =
-    let nameComparer = System.StringComparer.Create(CultureInfo.GetCultureInfo("de-AT"), ignoreCase = true)
+    let nameComparer = System.StringComparer.Create(CultureInfo.GetCultureInfo "de-AT", ignoreCase = true)
 [<CustomEquality; CustomComparison>]
 type Name =
     PersonName of string
-        override this.Equals(arg) =
+        override this.Equals arg =
             if isNull arg then false
             elif obj.ReferenceEquals(this, arg) then true
             else
@@ -22,9 +22,9 @@ type Name =
 
         override this.GetHashCode() =
             let (PersonName v) = this
-            Helper.nameComparer.GetHashCode(v)
+            Helper.nameComparer.GetHashCode v
 
-        interface System.IComparable with
+        interface IComparable with
             member this.CompareTo other =
                 match other with
                 | :? Name as other ->

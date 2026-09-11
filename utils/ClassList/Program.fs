@@ -3,7 +3,7 @@ open System
 
 let listClasses (sokratesApi: SokratesApi) =
     printfn "Classes:"
-    sokratesApi.FetchClasses(None)
+    sokratesApi.FetchClasses None
     |> Async.RunSynchronously
     |> List.sort
     |> List.iter (printfn "  * %s")

@@ -26,7 +26,7 @@ let createNodeAndParents (ldap: Ldap) node nodeType properties = async {
     return
         createdNodes
         |> List.rev
-        |> List.map (fun node -> async { do! ldap.DeleteNode(node) } |> Async.toAsyncDisposable)
+        |> List.map (fun node -> async { do! ldap.DeleteNode node } |> Async.toAsyncDisposable)
         |> AsyncDisposable.combine
 }
 

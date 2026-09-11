@@ -38,7 +38,7 @@ module Config =
             Password = x.Password
             SchoolId = x.SchoolId
             ClientCertificate = new X509Certificate2(
-                File.ReadAllBytes(x.ClientCertificatePath),
+                File.ReadAllBytes x.ClientCertificatePath,
                 x.ClientCertificatePassphrase
             )
         }
@@ -49,7 +49,7 @@ module Config =
                 .AddEnvironmentVariables()
                 .AddUserSecrets<Config>()
                 .Build()
-        ConfigurationBinder.Get<SokratesConfig>(config.GetSection("Sokrates")).Build()
+        ConfigurationBinder.Get<SokratesConfig>(config.GetSection "Sokrates").Build()
 
 type SokratesId =
     SokratesId of string
@@ -189,7 +189,7 @@ type SokratesApi(config: Config) =
         response.EnsureSuccessStatusCode() |> ignore
         use! contentStream = response.Content.ReadAsStreamAsync() |> Async.AwaitTask
 
-        let doc = XDocument.Load(contentStream)
+        let doc = XDocument.Load contentStream
         let namespaceManager = XmlNamespaceManager(NameTable())
         namespaceManager.AddNamespace("S", "http://schemas.xmlsoap.org/soap/envelope/")
         namespaceManager.AddNamespace("ns2", "http://wservices.sokrateslfs.siemens.at/")
@@ -223,7 +223,8 @@ type SokratesApi(config: Config) =
         let prefix = text.Substring(0, 4) |> int
         // see https://de.wikipedia.org/wiki/Telefonvorwahl_(%C3%96sterreich)#Mobilfunk
         if ((prefix >= 650 && prefix <= 653) ||
-            (prefix = 655) || (prefix = 657) ||
+            prefix = 655 ||
+            prefix = 657 ||
             (prefix >= 659 && prefix <= 661) ||
             (prefix >= 663 && prefix <= 699)) then
             Mobile text
@@ -387,8 +388,8 @@ type SokratesApi(config: Config) =
     member _.FetchStudents className date = async {
         let date = date |> Option.defaultValue DateTime.Today
         let schoolYear = getSchoolYear date
-        let! mainStudentXmlData = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ] |> fetch
-        let! additionalStudentXmlData = getRequestContent "getTSNPupils" [ "schoolYear", Simple (string schoolYear); "dateOfInterest", Simple (date.ToString("s")) ] |> fetch
+        let! mainStudentXmlData = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString "s") ] |> fetch
+        let! additionalStudentXmlData = getRequestContent "getTSNPupils" [ "schoolYear", Simple (string schoolYear); "dateOfInterest", Simple (date.ToString "s") ] |> fetch
         let students = parseStudents mainStudentXmlData additionalStudentXmlData
         match className with
         | Some className -> return students |> List.filter (fun student -> CIString student.SchoolClass = CIString className)
@@ -397,7 +398,7 @@ type SokratesApi(config: Config) =
 
     member _.FetchStudentAddresses date = async {
         let date = date |> Option.defaultValue DateTime.Today
-        let! xmlElement = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString("s")) ] |> fetch
+        let! xmlElement = getRequestContent "getPupils" [ "dateOfInterest", Simple (date.ToString "s") ] |> fetch
         return parseStudentAddresses xmlElement
     }
 
@@ -407,7 +408,7 @@ type SokratesApi(config: Config) =
             studentIds
             |> List.map (fun (SokratesId sokratesId) -> "personIDEntry", sokratesId)
             |> List
-        let! xmlElement = getRequestContent "getContactInfos" [ "dateOfInterest", Simple (date.ToString("s")); "personIDs", personIdsParameter ] |> fetch
+        let! xmlElement = getRequestContent "getContactInfos" [ "dateOfInterest", Simple (date.ToString "s"); "personIDs", personIdsParameter ] |> fetch
         return parseContactInfos xmlElement
     }
 
@@ -501,7 +502,7 @@ type SokratesExport(config: SokratesExportConfig) =
             return teachers
         }
 
-        member _.FetchClasses (schoolYear: int option): Async<string list> = async {
+        member _.FetchClasses (_schoolYear: int option): Async<string list> = async {
             return students
                 |> Seq.map _.Data.SchoolClass
                 |> Seq.distinct
@@ -509,7 +510,7 @@ type SokratesExport(config: SokratesExportConfig) =
                 |> Seq.toList
         }
 
-        member _.FetchStudents className date = async {
+        member _.FetchStudents className _date = async {
             match className with
             | Some className ->
                 return students
@@ -518,12 +519,12 @@ type SokratesExport(config: SokratesExportConfig) =
             | None -> return students |> List.map _.Data
         }
 
-        member _.FetchStudentAddresses date = async {
+        member _.FetchStudentAddresses _date = async {
             return students
             |> List.map _.Address
         }
 
-        member _.FetchStudentContactInfos studentIds date =
+        member _.FetchStudentContactInfos _studentIds _date =
             raise (NotImplementedException())
 
     static member TryCreateFromEnvironment() =

@@ -88,7 +88,7 @@ type Ldap(config: LdapConnectionConfig) =
 
     let sendRequest (request: #DirectoryRequest) : Async<#DirectoryResponse> = async {
         return lock gate (fun () ->
-            connection.SendRequest(request) :?> 'res
+            connection.SendRequest request :?> 'res
         )
     }
     let search (request: SearchRequest) : Async<SearchResponse> = sendRequest request
@@ -276,7 +276,7 @@ type Ldap(config: LdapConnectionConfig) =
     member _.DeleteNode (DistinguishedName node) = async {
         try
             do!
-                DeleteRequest(node)
+                DeleteRequest node
                 |> delete
                 |> Async.Ignore
         with

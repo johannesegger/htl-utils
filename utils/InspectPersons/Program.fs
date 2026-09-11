@@ -4,7 +4,7 @@ let adApi = AD.ADApi.FromEnvironment()
 let untisApi = Untis.UntisExport.FromEnvironment()
 let sokratesApi = Sokrates.SokratesApi.FromEnvironment()
 
-let teachers = adApi.GetUsers(AD.Teacher)
+let teachers = adApi.GetUsers AD.Teacher
 let teachingData = untisApi.GetTeachingData()
 let sokratesTeachers = sokratesApi.FetchTeachers |> Async.RunSynchronously
 
@@ -21,7 +21,7 @@ teachers
         teachingData
         |> List.exists (fun teacherTask ->
             match teacherTask with
-            | Untis.FormTeacher (schoolClass, Untis.TeacherShortName shortName)
+            | Untis.FormTeacher (_, Untis.TeacherShortName shortName)
                 when CIString shortName = CIString teacherShortName -> true
             | _ -> false
         )

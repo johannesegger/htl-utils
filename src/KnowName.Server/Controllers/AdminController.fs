@@ -14,14 +14,14 @@ module Admin =
     module Photos =
         let private getFileContent (file: IFormFile) = async {
             use stream = new MemoryStream()
-            do! file.CopyToAsync(stream) |> Async.AwaitTask
+            do! file.CopyToAsync stream |> Async.AwaitTask
             return stream.ToArray()
         }
         let getFromUploadedFile (file: IFormFile) = async {
             let! fileContent = getFileContent file
             match PhotoLibrary.Core.tryLoad fileContent with
             | Some image ->
-                let name = Path.GetFileNameWithoutExtension(file.FileName)
+                let name = Path.GetFileNameWithoutExtension file.FileName
                 return Some (name, image)
             | None -> return None
         }
@@ -117,9 +117,9 @@ module Admin =
 
         let certificate (cert: string) (passphrase: string) = validation {
             try
-                let certBytes = Convert.FromBase64String(cert)
+                let certBytes = Convert.FromBase64String cert
                 let cert = new X509Certificate2(certBytes, passphrase)
-                return cert.Export(X509ContentType.Pkcs12)
+                return cert.Export X509ContentType.Pkcs12
             with e ->
                 return! Error e
         }
@@ -148,7 +148,7 @@ module Admin =
 [<ApiController>]
 [<Route("/api/admin")>]
 [<Authorize("ManageSettings")>]
-type AdminController (appConfigStorage: AppConfigStorage, sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: PhotoLibrary.Configuration.Config, logger : ILogger<AdminController>) =
+type AdminController (appConfigStorage: AppConfigStorage, sokratesApi: Sokrates.SokratesApi, photoLibraryConfig: PhotoLibrary.Configuration.Config, _logger : ILogger<AdminController>) =
     inherit ControllerBase()
 
     [<HttpGet("settings")>]
@@ -169,8 +169,8 @@ type AdminController (appConfigStorage: AppConfigStorage, sokratesApi: Sokrates.
             | Some config ->
                 appConfigStorage.WriteConfig config
                 return this.Ok(Admin.DataTransfer.existingConfig (Some config)) :> IActionResult
-            | None -> return this.BadRequest(["incomplete-config"])
-        | Error e -> return this.BadRequest(e)
+            | None -> return this.BadRequest ["incomplete-config"]
+        | Error e -> return this.BadRequest e
     }
 
     [<HttpGet("persons")>]
@@ -270,7 +270,7 @@ type AdminController (appConfigStorage: AppConfigStorage, sokratesApi: Sokrates.
                 |> List.choose (fun (name, image) ->
                     teacherPhotoNameMap
                     |> List.tryPick (fun (pattern, teacherId) ->
-                        if pattern.IsMatch(name) then Some teacherId
+                        if pattern.IsMatch name then Some teacherId
                         else None
                     )
                     |> Option.map (fun teacherId -> PhotoLibrary.Domain.TeacherPhoto teacherId, image)

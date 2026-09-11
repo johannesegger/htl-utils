@@ -3,7 +3,7 @@ open Sokrates
 open System
 open System.IO
 
-let photoTargetDir = Directory.CreateDirectory(@".\schueler")
+let photoTargetDir = Directory.CreateDirectory @".\schueler"
 
 let sokratesApi = SokratesApi.FromEnvironment()
 let photoLibraryConfig = PhotoLibrary.Configuration.Config.fromEnvironment ()

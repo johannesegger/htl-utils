@@ -9,17 +9,17 @@ open System.Net
 
 module private Observable =
     let awaitList (obs: IObservable<_>) =
-        Async.FromContinuations (fun (cont, econt, ccont) ->
+        Async.FromContinuations (fun (cont, econt, _) ->
             let mutable result = Collections.Generic.List<_>()
             let obv =
                 { new IObserver<_> with
-                    member _.OnNext(v) =
-                        result.Add(v)
+                    member _.OnNext v =
+                        result.Add v
                     member _.OnCompleted() =
                         cont (Seq.toList result)
-                    member _.OnError(v) = econt v
+                    member _.OnError v = econt v
                 }
-            obs.Subscribe(obv) |> ignore
+            obs.Subscribe obv |> ignore
         )
 
     let await (obs: IObservable<_>) = async {
@@ -33,13 +33,13 @@ type CIMApi(config) =
         try
             let credentials = CimCredential(PasswordAuthenticationMechanism.Default, credentials.Domain, credentials.UserName, credentials.SecurePassword)
             use sessionOptions = new WSManSessionOptions()
-            sessionOptions.AddDestinationCredentials(credentials)
+            sessionOptions.AddDestinationCredentials credentials
 
             use! cimSession = CimSession.CreateAsync(computerName, sessionOptions) |> Observable.await
             do! cimSession.TestConnectionAsync () |> Observable.awaitList |> Async.Ignore
 
             let! ct = Async.CancellationToken
-            use queryOptions = new CimOperationOptions(Timeout = TimeSpan.FromMinutes(1.), CancellationToken = Nullable ct)
+            use queryOptions = new CimOperationOptions(Timeout = TimeSpan.FromMinutes 1., CancellationToken = Nullable ct)
             let query namespaceName queryString = async {
                 try
                     let! queryInstances = cimSession.QueryInstancesAsync(namespaceName, "WQL", queryString, queryOptions) |> Observable.awaitList

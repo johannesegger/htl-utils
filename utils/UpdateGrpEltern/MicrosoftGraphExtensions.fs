@@ -46,7 +46,7 @@ module TypeExtensions =
                     SendInvitationMessage = false
                 )
             return!
-                this.Invitations.PostAsync(invitation) |> Async.AwaitTask
+                this.Invitations.PostAsync invitation |> Async.AwaitTask
                 |> GraphServiceClient.formatError $"Error while adding %s{mailAddress}"
         }
 
@@ -67,7 +67,7 @@ module TypeExtensions =
 
             let group = Models.Group(
                 DisplayName = groupName,
-                GroupTypes = Collections.Generic.List<_>([ "Unified" ]),
+                GroupTypes = Collections.Generic.List<_> [ "Unified" ],
                 MailEnabled = true,
                 MailNickname = groupName,
                 ResourceBehaviorOptions = Collections.Generic.List [ "SubscribeNewGroupMembers"; "WelcomeEmailDisabled" ],
@@ -79,7 +79,7 @@ module TypeExtensions =
                 AccessType = Models.GroupAccessType.Private
             )
             let! aadGroup =
-                this.Groups.PostAsync(group) |> Async.AwaitTask
+                this.Groups.PostAsync group |> Async.AwaitTask
                 |> GraphServiceClient.formatError $"Error while adding %s{groupName}"
             // let! aadGroup = this.Groups.["b958388f-0b84-42e8-abad-fd59d58aeefe"].GetAsync() |> Async.AwaitTask
             // let! aadGroup = Async.retryIfError (async {
@@ -87,14 +87,14 @@ module TypeExtensions =
             // })
             do! Async.retryIfErrorWithTimeout (TimeSpan.FromSeconds 5.) (async {
                 do!
-                    this.Groups.[aadGroup.Id].PatchAsync(patch) |> Async.AwaitTask |> Async.Ignore
+                    this.Groups.[aadGroup.Id].PatchAsync patch |> Async.AwaitTask |> Async.Ignore
                     |> GraphServiceClient.formatError $"Error while patching %s{groupName}"
             })
             // do! this.Groups.[aadGroup.Id].Owners.[aadGroup.Owners.[0].Id].Ref.DeleteAsync() |> Async.AwaitTask |> GraphServiceClient.formatError "Error while removing default owner"
             // do! this.Groups.[aadGroup.Id].Owners.Ref.PostAsync(adminUser.GetDirectoryObjectReference()) |> Async.AwaitTask |> GraphServiceClient.formatError "Error while adding group owner"
             do! Async.retryIfErrorWithTimeout (TimeSpan.FromSeconds 5.) (async {
                 do!
-                    this.Groups.[aadGroup.Id].AcceptedSenders.Ref.PostAsync(this.GetDirectoryObjectReference(teachersGroup)) |> Async.AwaitTask
+                    this.Groups.[aadGroup.Id].AcceptedSenders.Ref.PostAsync(this.GetDirectoryObjectReference teachersGroup) |> Async.AwaitTask
                     |> GraphServiceClient.formatError $"Error while adding accepted senders to %s{groupName}"
             })
             return aadGroup

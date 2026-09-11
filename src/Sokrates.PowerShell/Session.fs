@@ -51,9 +51,7 @@ type SokratesCmdlet() =
             | Some session -> session
             | None ->
                 let ex =
-                    InvalidOperationException(
-                        "No Sokrates session available. Run Connect-Sokrates first, or pass -Session."
-                    )
+                    InvalidOperationException "No Sokrates session available. Run Connect-Sokrates first, or pass -Session."
 
                 this.ThrowTerminatingError(ErrorRecord(ex, "NoSokratesSession", ErrorCategory.ConnectionError, null))
                 Unchecked.defaultof<SokratesSession>

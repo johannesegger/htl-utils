@@ -102,7 +102,7 @@ type JsonFileCustomOperationsConfig(filePath: string) =
             else
                 Map.empty
 
-        member _.Write(config) =
+        member _.Write config =
             let directory = IO.Path.GetDirectoryName filePath
 
             if not (String.IsNullOrEmpty directory) then

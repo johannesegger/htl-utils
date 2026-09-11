@@ -88,9 +88,6 @@ module private AD =
     let withUserName userName (user: User) =
         { user with Name = UserName userName }
 
-    let withName firstName lastName (user: User) =
-        { user with FirstName = firstName; LastName = lastName }
-
     let einstein =
         {
             Name = UserName "EINA"

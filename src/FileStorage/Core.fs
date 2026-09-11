@@ -13,7 +13,7 @@ let private virtualPathToRealPath (v: string) = reader {
         let! config = Reader.environment
         match Map.tryFind baseDirectory config.BaseDirectories with
         | Some baseDirectory ->
-            return Path.Combine([| baseDirectory; yield! pathTail |]) |> Ok // TODO verify that absolute pathTail works as expected
+            return Path.Combine [| baseDirectory; yield! pathTail |] |> Ok // TODO verify that absolute pathTail works as expected
         | None -> return Error (InvalidBaseDirectory baseDirectory)
 }
 
@@ -31,7 +31,7 @@ let private createStudentDirectories parentDirectory names =
     |> Result.mapError CreatingSomeDirectoriesFailed
 
 let private fileInfo path =
-    let info = System.IO.FileInfo path
+    let info = FileInfo path
     {
         Name = info.Name
         Size = Bytes info.Length

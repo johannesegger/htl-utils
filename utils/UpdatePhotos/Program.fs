@@ -46,7 +46,7 @@ let prepareStudentPhotos baseDir students =
         let studentClass = Path.GetDirectoryName file |> Path.GetFileName
         let fileName = Path.GetFileName file
         let studentName = Path.GetFileNameWithoutExtension file
-        let fileExtension = Path.GetExtension(file)
+        let fileExtension = Path.GetExtension file
         Map.tryFind (CIString studentClass, CIString studentName) studentMap
         |> Option.map (fun studentId ->
             Path.Combine(studentClass, fileName), sprintf "%s%s" studentId fileExtension
@@ -59,29 +59,29 @@ let prepareStudentPhotos baseDir students =
     )
 
 let updatePhotos existingPhotosPath newPhotosPath names =
-    Directory.GetFiles(newPhotosPath)
-    |> Seq.filter (fun file -> Path.GetFileNameWithoutExtension(file) |> CIString |> flip List.contains names)
+    Directory.GetFiles newPhotosPath
+    |> Seq.filter (fun file -> Path.GetFileNameWithoutExtension file |> CIString |> flip List.contains names)
     |> Seq.iter (fun file ->
-        printfn "Update photo of %s" (Path.GetFileNameWithoutExtension(file))
+        printfn "Update photo of %s" (Path.GetFileNameWithoutExtension file)
         if not dryRun then
-            File.Move(file, Path.Combine(existingPhotosPath, Path.GetFileName(file)), overwrite=true)
+            File.Move(file, Path.Combine(existingPhotosPath, Path.GetFileName file), overwrite=true)
     )
 
-    Directory.GetFiles(existingPhotosPath)
+    Directory.GetFiles existingPhotosPath
     |> Seq.filter (fun file ->
-        let fileName = Path.GetFileNameWithoutExtension(file)
+        let fileName = Path.GetFileNameWithoutExtension file
         names
         |> List.exists (fun name -> name = CIString fileName)
         |> not
     )
     |> Seq.iter (fun file ->
-        printfn "Remove photo of %s" (Path.GetFileNameWithoutExtension(file))
+        printfn "Remove photo of %s" (Path.GetFileNameWithoutExtension file)
         if not dryRun then
-            File.Delete(file)
+            File.Delete file
     )
 
 [<EntryPoint>]
-let main argv =
+let main _ =
     let users = adApi.GetUsers ()
 
     let newTeacherPhotosPath = Environment.getEnvVarOrFail "NEW_TEACHER_PHOTOS_PATH"
@@ -92,7 +92,7 @@ let main argv =
             match user.Type with
             | AD.Teacher ->
                 Some {
-                    ShortName = (let (AD.UserName userName) = user.Name in userName)
+                    ShortName = let (AD.UserName userName) = user.Name in userName
                     FirstName = user.FirstName
                     LastName = user.LastName
                 }

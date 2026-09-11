@@ -45,7 +45,7 @@ let private getFilteredGroups (graphServiceClient: GraphServiceClient) prefix (e
         graphGroups
         |> Seq.filter (fun (g: Models.Group) ->
             match excludePattern with
-            | Some v -> not <| v.IsMatch(g.DisplayName)
+            | Some v -> not <| v.IsMatch g.DisplayName
             | None -> true
         )
         |> Seq.map (fun (g: Models.Group) -> async {
@@ -92,11 +92,11 @@ let private createGroup (graphServiceClient: GraphServiceClient) name = async {
             MailEnabled = Nullable true,
             MailNickname = name,
             SecurityEnabled = Nullable true,
-            GroupTypes = Collections.Generic.List([ "Unified" ]),
+            GroupTypes = Collections.Generic.List [ "Unified" ],
             Visibility = "Private",
             ResourceBehaviorOptions = Collections.Generic.List [ "SubscribeNewGroupMembers"; "WelcomeEmailDisabled" ]
         )
-    return! graphServiceClient.Groups.PostAsync(group) |> Async.AwaitTask
+    return! graphServiceClient.Groups.PostAsync group |> Async.AwaitTask
 }
 
 let private deleteGroup (graphServiceClient: GraphServiceClient) (GroupId groupId) = async {
@@ -129,7 +129,7 @@ let private changeGroupName (graphServiceClient: GraphServiceClient) (GroupId gr
             // Mail = group.Mail.Replace(group.MailNickname, newName), // TODO mail address is read-only and can't be changed
             // ProxyAddresses = (group.ProxyAddresses |> Seq.map (fun address -> Regex.Replace(address, "(?<=^(SMTP|smtp):)[^@]*", newName))) // TODO insufficient permissions for updating proxy addresses
         )
-    do! graphServiceClient.Groups.[groupId].PatchAsync(update) |> Async.AwaitTask |> Async.Ignore
+    do! graphServiceClient.Groups.[groupId].PatchAsync update |> Async.AwaitTask |> Async.Ignore
 }
 
 let private applySingleGroupModifications (graphServiceClient: GraphServiceClient) modifications = async {
@@ -182,12 +182,12 @@ let private removeAutoContacts (graphServiceClient: GraphServiceClient) userId c
     |> Async.Ignore
 
 let private addContact (graphServiceClient: GraphServiceClient) (UserId userId) contact = async {
-    return! graphServiceClient.Users.[userId].Contacts.PostAsync(contact) |> Async.AwaitTask
+    return! graphServiceClient.Users.[userId].Contacts.PostAsync contact |> Async.AwaitTask
 }
 
 let private setContactPhoto (graphServiceClient: GraphServiceClient) (UserId userId) contactId (Base64EncodedImage photo) = async {
     use stream = new MemoryStream(Convert.FromBase64String photo)
-    do! graphServiceClient.Users.[userId].Contacts.[contactId].Photo.Content.PutAsync(stream) |> Async.AwaitTask |> Async.Ignore
+    do! graphServiceClient.Users.[userId].Contacts.[contactId].Photo.Content.PutAsync stream |> Async.AwaitTask |> Async.Ignore
 }
 
 let private addAutoContact (graphServiceClient: GraphServiceClient) userId contact = async {
@@ -210,8 +210,8 @@ let private addAutoContact (graphServiceClient: GraphServiceClient) userId conta
                     yield! contact.HomePhones |> List.map (fun v -> Models.Phone(Number = v, Type = Models.PhoneType.Home))
                     yield! contact.MobilePhone |> Option.map (fun v -> Models.Phone(Number = v, Type = Models.PhoneType.Mobile)) |> Option.toList
                 ]),
-            EmailAddresses = Collections.Generic.List(mailAddresses),
-            Categories = Collections.Generic.List([ "htl-utils-auto-generated" ])
+            EmailAddresses = Collections.Generic.List mailAddresses,
+            Categories = Collections.Generic.List [ "htl-utils-auto-generated" ]
         )
         |> addContact graphServiceClient userId
 
@@ -273,7 +273,7 @@ let private getCalendarEventIds (graphServiceClient: GraphServiceClient) (UserId
 }
 
 let private updateCalendarEvent (graphServiceClient: GraphServiceClient) (UserId userId) eventId updatedEvent = async {
-    do! graphServiceClient.Users.[userId].Events.[eventId].PatchAsync(updatedEvent) |> Async.AwaitTask |> Async.Ignore
+    do! graphServiceClient.Users.[userId].Events.[eventId].PatchAsync updatedEvent |> Async.AwaitTask |> Async.Ignore
 }
 
 let private getBirthdayCalendarEventCount (graphServiceClient: GraphServiceClient) userId = async {
@@ -314,7 +314,7 @@ let updateAutoContacts (graphServiceClient: GraphServiceClient) userId contacts 
     printfn "%O: Waiting until birthday calendar is cleared" DateTime.Now
     do! waitUntil (async {
         let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient userId
-        return newBirthdayEventCount = birthdayEventCount - (List.length autoContactIds)
+        return newBirthdayEventCount = birthdayEventCount - List.length autoContactIds
     })
     let! birthdayEventCount = getBirthdayCalendarEventCount graphServiceClient userId
 
@@ -324,7 +324,7 @@ let updateAutoContacts (graphServiceClient: GraphServiceClient) userId contacts 
     printfn "%O: Waiting until birthday calendar is filled" DateTime.Now
     do! waitUntil (async {
         let! newBirthdayEventCount = getBirthdayCalendarEventCount graphServiceClient userId
-        return newBirthdayEventCount = birthdayEventCount + (List.length contacts)
+        return newBirthdayEventCount = birthdayEventCount + List.length contacts
     })
 
     printfn "%O: Configuring birthday events" DateTime.Now

@@ -4,15 +4,13 @@ open AAD
 open Microsoft.Graph.Beta.Models
 open Sokrates
 open System
-open System.IO
-open System.Threading.Tasks
 
 type StudentData = {
     Address: Address
     MailAddress: string
 }
 
-let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
+let getLookup _tenantId _clientId studentsGroupId sokratesReferenceDates =
     let sokratesApi = SokratesApi.FromEnvironment()
     let addressLookup =
         sokratesReferenceDates
@@ -23,7 +21,7 @@ let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
         |> List.distinctBy fst
         |> Map.ofList
     let mailLookup =
-        let aadConfig = AAD.Configuration.Config.fromEnvironment ()
+        let aadConfig = Configuration.Config.fromEnvironment ()
         use graphClient = GraphServiceClientFactory.createWithDeviceCode aadConfig.OidcConfig [| "GroupMember.Read.All" |] "HtlUtils.IndividualTests"
         graphClient.Groups.[studentsGroupId].Members.GetAsync(fun config ->
             config.QueryParameters.Select <- [| "extension_0b429365529a4f1ea9337bdcd9346b84_htlvbSokratesId"; "mail" |]
@@ -32,7 +30,7 @@ let getLookup tenantId clientId studentsGroupId sokratesReferenceDates =
         |> Async.RunSynchronously
         |> Linq.Enumerable.OfType<User>
         |> Seq.choose (fun v ->
-            match v.AdditionalData.TryGetValue("extension_0b429365529a4f1ea9337bdcd9346b84_htlvbSokratesId") with
+            match v.AdditionalData.TryGetValue "extension_0b429365529a4f1ea9337bdcd9346b84_htlvbSokratesId" with
             | (true, sokratesId) -> Some (sokratesId :?> string, v.Mail)
             | (false, _) -> None
         )

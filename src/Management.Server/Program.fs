@@ -8,7 +8,6 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
-open Microsoft.Extensions.Options
 open System
 open System.Collections.Generic
 open Thoth.Json.Giraffe
@@ -111,10 +110,10 @@ let configureApp (app : IApplicationBuilder) =
         .UseDefaultFiles()
         .UseStaticFiles()
         .UseAuthentication()
-        .UseGiraffe(webApp)
+        .UseGiraffe webApp
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
-    services.AddOptions<Untis.Config.UntisConfig>().BindConfiguration("Untis") |> ignore
+    services.AddOptions<Untis.Config.UntisConfig>().BindConfiguration "Untis" |> ignore
     services.AddSingleton<AD.Core.ADApi>(fun _ -> AD.Core.ADApi.FromEnvironment()) |> ignore
     services.AddSingleton<Sokrates.SokratesApi>(fun _ -> Sokrates.SokratesApi.FromEnvironment()) |> ignore
     services.AddSingleton<Untis.UntisExport>(fun _ -> Untis.UntisExport.FromEnvironment()) |> ignore
@@ -151,7 +150,7 @@ let main args =
         ]
         |> Seq.map KeyValuePair
     Host.CreateDefaultBuilder(args)
-        .ConfigureAppConfiguration(fun hostBuilderContext config -> config.AddInMemoryCollection(configDict) |> ignore)
+        .ConfigureAppConfiguration(fun _ config -> config.AddInMemoryCollection configDict |> ignore)
         .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)

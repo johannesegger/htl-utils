@@ -5,7 +5,6 @@ open System
 open System.Globalization
 open System.IO
 open iText.Kernel.Pdf
-open iText.IO.Source
 open iText.Kernel.Utils
 
 let getFullTests tests students =
@@ -46,9 +45,9 @@ let teacherLetterToPdf (browser: IBrowser) teacherShortName htmlLetter = task {
         PdfOptions(
             PrintBackground = true,
             DisplayHeaderFooter = true,
-            Format = PuppeteerSharp.Media.PaperFormat.A4,
+            Format = Media.PaperFormat.A4,
             Landscape = true,
-            MarginOptions = PuppeteerSharp.Media.MarginOptions(
+            MarginOptions = Media.MarginOptions(
                 Top = "1cm",
                 Left = "1cm",
                 Right = "1cm",
@@ -72,8 +71,8 @@ let studentLetterToPdf (browser: IBrowser) (student: Letter.Student) htmlLetter 
         PdfOptions(
             PrintBackground = true,
             DisplayHeaderFooter = true,
-            Format = PuppeteerSharp.Media.PaperFormat.A4,
-            MarginOptions = PuppeteerSharp.Media.MarginOptions(
+            Format = Media.PaperFormat.A4,
+            MarginOptions = Media.MarginOptions(
                 Top = "0cm",
                 Left = "0cm",
                 Right = "0cm",
@@ -109,7 +108,7 @@ let generateLetters fullTests includeRoom = task {
     let combinedLetterTargetDir = "./out"
 
     let targetDir = "./out/teachers"
-    Directory.CreateDirectory(targetDir) |> ignore
+    Directory.CreateDirectory targetDir |> ignore
     let! teacherLetters =
         Letter.generateTeacherLetters fullTests includeRoom
         |> List.map (fun (teacherShortName, htmlLetter) -> async {
@@ -123,7 +122,7 @@ let generateLetters fullTests includeRoom = task {
     File.WriteAllBytes(System.IO.Path.Combine(combinedLetterTargetDir, $"Lehrer.pdf"), teacherLetters |> Seq.map snd |> combinePdfs)
 
     let targetDir = "./out/students"
-    Directory.CreateDirectory(targetDir) |> ignore
+    Directory.CreateDirectory targetDir |> ignore
     let! studentLetters =
         Letter.generateStudentLetters fullTests includeRoom
         |> List.map (fun (student, htmlLetter) -> async {

@@ -33,7 +33,7 @@ type ConnectSokratesCommand() =
               ClientCertificate = this.Certificate }
 
         let session =
-            SokratesSession(SokratesApi(config), $"Sokrates %s{this.Credential.UserName}@%s{this.Url}")
+            SokratesSession(SokratesApi config, $"Sokrates %s{this.Credential.UserName}@%s{this.Url}")
 
         DefaultSession.set this.SessionState session
         this.WriteObject session
@@ -131,7 +131,7 @@ type GetSokratesStudentContactInfoCommand() =
     [<Parameter>]
     member val Date = Nullable<DateTime>() with get, set
 
-    member val private Ids = System.Collections.Generic.List<string>() with get
+    member val private Ids = Collections.Generic.List<string>() with get
 
     override this.ProcessRecord() =
         if not (isNull this.StudentId) then

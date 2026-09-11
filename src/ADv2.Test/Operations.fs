@@ -14,12 +14,12 @@ open System.IO
 type TemporaryFolder(networkShare: NetworkShare) =
     let path = Path.Combine(networkSharePath, Guid.NewGuid().ToString())
     do
-        networkShare.Open(path)
-        Directory.CreateDirectory(path) |> ignore
+        networkShare.Open path
+        Directory.CreateDirectory path |> ignore
     member _.Path = path
     interface IDisposable with
         member self.Dispose() =
-            networkShare.Open(path)
+            networkShare.Open path
             Directory.delete self.Path
 
 let private userPassword = "Test123"
@@ -59,8 +59,8 @@ let tests =
 
             let! selfWriteResult =
                 async {
-                    use networkShare = new NetworkShare({ UserName = "htlvb.intern\\BOHN1"; Password = userPassword })
-                    networkShare.Open(homePath)
+                    use networkShare = new NetworkShare { UserName = "htlvb.intern\\BOHN1"; Password = userPassword }
+                    networkShare.Open homePath
                     File.WriteAllText(Path.Combine(homePath, "sample.txt"), "Sample text")
                 }
                 |> Async.Catch
@@ -69,8 +69,8 @@ let tests =
             use! __ = createUser ldap user2Dn []
             let! otherWriteResult =
                 async {
-                    use networkShare = new NetworkShare({ UserName = "htlvb.intern\\BOHN2"; Password = userPassword })
-                    networkShare.Open(homePath)
+                    use networkShare = new NetworkShare { UserName = "htlvb.intern\\BOHN2"; Password = userPassword }
+                    networkShare.Open homePath
                     File.WriteAllText(Path.Combine(homePath, "sample.txt"), "Sample text")
                 }
                 |> Async.Catch

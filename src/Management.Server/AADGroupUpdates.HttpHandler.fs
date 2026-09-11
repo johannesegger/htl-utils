@@ -18,7 +18,7 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
             desiredGroups
             |> List.choose (fun (groupName, userIds) ->
                 actualGroups
-                |> List.tryFind (fun (actualGroup, members) -> CIString groupName = CIString actualGroup.Name)
+                |> List.tryFind (fun (actualGroup, _) -> CIString groupName = CIString actualGroup.Name)
                 |> function
                 | Some (actualGroup, members) ->
                     let memberUpdates = calculateMemberUpdates userIds members
@@ -30,9 +30,9 @@ let private calculateAll (actualGroups: (Group * User list) list) desiredGroups 
 
         yield!
             actualGroups
-            |> List.choose (fun (aadGroup, members) ->
+            |> List.choose (fun (aadGroup, _) ->
                 desiredGroups
-                |> List.tryFind (fun (groupName, userIds) -> CIString groupName = CIString aadGroup.Name)
+                |> List.tryFind (fun (groupName, _) -> CIString groupName = CIString aadGroup.Name)
                 |> function
                 | Some _ -> None
                 | None -> DeleteGroup aadGroup |> Some
@@ -60,11 +60,11 @@ let getAADGroupUpdates (adApi: ADApi) (aadConfig: AAD.Configuration.Config) fina
         }
         let aadUserLookupById =
             aadUsers
-            |> List.map (fun (user, mailAddresses) -> user.Id, user)
+            |> List.map (fun (user, _) -> user.Id, user)
             |> Map.ofList
         let aadUserLookupByUserName =
             aadUsers
-            |> List.map (fun (user, mailAddresses) -> user.UserName, user)
+            |> List.map (fun (user, _) -> user.UserName, user)
             |> Map.ofList
         let! aadPredefinedGroups = async {
             let! predefinedGroups =

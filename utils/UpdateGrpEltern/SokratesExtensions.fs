@@ -19,7 +19,7 @@ type SokratesApi with
                     v.ContactAddresses
                     |> List.filter (fun v -> v.Type <> "Eigen" && v.Type <> "Eigenberechtigt")
                     |> List.choose _.EMailAddress
-                    |> List.filter (fun v -> v.Contains("@"))
+                    |> List.filter (fun v -> v.Contains "@")
                 v.StudentId, contacts
             )
             |> Map.ofList

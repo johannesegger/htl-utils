@@ -1,5 +1,4 @@
 ﻿open Sokrates
-open System
 open Untis
 open System.Text.RegularExpressions
 

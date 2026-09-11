@@ -5,7 +5,7 @@ open System.Globalization
 open System.IO
 
 module Date =
-    let culture = CultureInfo.GetCultureInfo("de-AT")
+    let culture = CultureInfo.GetCultureInfo "de-AT"
     let toString (v: DateTime) = sprintf "%s, %s" (v.ToString("ddd", culture)) (v.ToString("d", culture))
 
 type Student = {
@@ -133,7 +133,7 @@ let generateStudentLetter letterTemplate testRowTemplate student tests =
     |> String.replace "{{city}}" student.Address.City
     |> String.replace "{{testTableRows}}" testTableRows
     |> String.replace "{{testCountGroup}}" (if tests.Length = 1 then "single-test" else "multiple-tests")
-    |> String.replace "{{date}}" (DateTime.Today.ToString("D", CultureInfo.GetCultureInfo("de-AT")))
+    |> String.replace "{{date}}" (DateTime.Today.ToString("D", CultureInfo.GetCultureInfo "de-AT"))
     |> String.replace "{{testTypeSingular}}" (TestData.TestType.singularText testType)
     |> String.replace "{{testTypePlural}}" (TestData.TestType.pluralText testType)
 

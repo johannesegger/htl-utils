@@ -4,7 +4,7 @@ open AD.Configuration
 open CPI.DirectoryServices
 
 let private child name (DistinguishedName path) =
-    let dn = DN(path)
+    let dn = DN path
     dn.GetChild(name).ToString() |> DistinguishedName
 
 let childOU name = child (sprintf "OU=%s" name)
@@ -28,14 +28,14 @@ let parentsAndSelf (DistinguishedName path) =
             let acc' = DistinguishedName (dn.ToString()) :: acc
             fn dn.Parent acc'
 
-    fn (DN(path)) []
+    fn (DN path) []
 
 let tryFindParent path filter =
     parentsAndSelf path
-    |> Seq.tryFind (fun (DistinguishedName parentPath) -> DN(parentPath).RDNs |> Seq.head |> (fun v -> filter (v.ToString())))
+    |> Seq.tryFind (fun (DistinguishedName parentPath) -> DN(parentPath).RDNs |> Seq.head |> fun v -> filter (v.ToString()))
 
 let isOU (DistinguishedName path) =
-    let dn = DN(path)
+    let dn = DN path
     dn.RDNs
     |> Seq.tryHead
     |> Option.bind (fun v -> v.Components |> Seq.tryExactlyOne)

@@ -293,7 +293,7 @@ let configureApp (app : IApplicationBuilder) =
         .UseDefaultFiles()
         .UseStaticFiles()
         .UseAuthentication()
-        .UseGiraffe(webApp)
+        .UseGiraffe webApp
 
 let configureServices (hostBuilderContext: HostBuilderContext) (services : IServiceCollection) =
     services.AddHttpClient() |> ignore
@@ -329,7 +329,7 @@ let main args =
         ]
         |> Seq.map KeyValuePair
     Host.CreateDefaultBuilder(args)
-        .ConfigureAppConfiguration(fun hostBuilderContext config -> config.AddInMemoryCollection(configDict) |> ignore)
+        .ConfigureAppConfiguration(fun _ config -> config.AddInMemoryCollection configDict |> ignore)
         .ConfigureWebHostDefaults(fun webHostBuilder -> webHostBuilder.Configure configureApp |> ignore)
         .ConfigureServices(configureServices)
         .ConfigureLogging(configureLogging)

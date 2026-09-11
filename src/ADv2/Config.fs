@@ -120,4 +120,4 @@ module Config =
                 .AddEnvironmentVariables()
                 .AddUserSecrets<Config>()
                 .Build()
-        ConfigurationBinder.Get<Config>(config.GetSection("AD")).Build()
+        ConfigurationBinder.Get<Config>(config.GetSection "AD").Build()

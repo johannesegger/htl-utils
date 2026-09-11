@@ -6,7 +6,7 @@ open System.Globalization
 open System.Text.RegularExpressions
 
 module Date =
-    let culture = CultureInfo.GetCultureInfo("de-AT")
+    let culture = CultureInfo.GetCultureInfo "de-AT"
     let tryParse (v: string) =
         let rawDate = 
             match v.IndexOf(',') with
@@ -24,7 +24,7 @@ type TestPart =
     | NoTime
 module TestPart =
     let private tryParseTimeSpan (text: string) =
-        match DateTime.TryParse(text) with
+        match DateTime.TryParse text with
         | (true, v) -> Some v.TimeOfDay
         | _ -> None
     let private tryParseExactTime text room =
@@ -69,13 +69,13 @@ module TestPart =
     let toString = function
         | ExactTimeSpan (start, ``end``, room) ->
             let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-            sprintf "%s - %s%s" (start.ToString("hh\\:mm")) (``end``.ToString("hh\\:mm")) roomText
+            sprintf "%s - %s%s" (start.ToString "hh\\:mm") (``end``.ToString "hh\\:mm") roomText
         | ExactTime (v, room) ->
             let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-            sprintf "%s%s" (v.ToString("hh\\:mm")) roomText
+            sprintf "%s%s" (v.ToString "hh\\:mm") roomText
         | StartTime (v, room) ->
             let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
-            sprintf "ab %s%s" (v.ToString("hh\\:mm")) roomText
+            sprintf "ab %s%s" (v.ToString "hh\\:mm") roomText
         | Afterwards room ->
             let roomText = room |> Option.map (fun v -> $" (%s{v})") |> Option.defaultValue ""
             sprintf "anschließend%s" roomText
@@ -134,7 +134,7 @@ let private parseTeacher v =
 
 let load (filePath: string) includeRoom =
     use workbook = new XLWorkbook(filePath)
-    let sheet = workbook.Worksheet(1)
+    let sheet = workbook.Worksheet 1
     sheet.Rows()
     |> Seq.skip 1
     |> Seq.filter (fun row ->
@@ -156,8 +156,8 @@ let load (filePath: string) includeRoom =
             Teacher1 = row.Cell("F").GetValue<string>().Trim()
             Teacher2 = row.Cell("G").GetValue<string>() |> parseTeacher |> Option.map _.Trim()
             Date = row.Cell("M").GetValue<string>() |> parseDate
-            PartWritten = (row.Cell("N").GetValue<string>(), row.Cell("O").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("P").GetValue<string>()) else None) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
-            PartOral = (row.Cell("Q").GetValue<string>(), row.Cell("R").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("S").GetValue<string>()) else None) |> (fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber())))
+            PartWritten = (row.Cell("N").GetValue<string>(), row.Cell("O").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("P").GetValue<string>()) else None) |> fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber()))
+            PartOral = (row.Cell("Q").GetValue<string>(), row.Cell("R").GetValue<string>(), if includeRoom then TestPart.parseRoom (row.Cell("S").GetValue<string>()) else None) |> fun v -> uncurry3 TestPart.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse \"%A\" as test part (row #%d)" v (row.RowNumber()))
         }
     )
     |> Seq.toList
@@ -206,7 +206,7 @@ let getProblems tests =
             let teacherTestsByDate =
                 teacherTests |> List.groupBy (fun test -> DateOnly.FromDateTime test.Date)
             teacherTestsByDate
-            |> List.choose (fun (date, teacherTestsAtDate) ->
+            |> List.choose (fun (_, teacherTestsAtDate) ->
                 if teacherTestsAtDate |> List.choose (fun v -> TestPart.tryGetRoom v.PartWritten) |> List.distinct |> List.length > 1 then
                     Some (TeacherWithMultipleTestsInDifferentRooms (teacher, teacherTestsAtDate))
                 else None

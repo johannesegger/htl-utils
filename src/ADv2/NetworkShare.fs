@@ -67,11 +67,11 @@ type NetworkShare(config: NetworkShareConnectionConfig) =
             |> Seq.iter (fun v -> Win32.WNetCancelConnection2(v, 0, true) |> ignore)
             shareNames.Clear()
 
-    member _.Open(path) =
+    member _.Open path =
         let networkName =
             let m = Regex.Match(path, @"^\\\\[^\\]+\\[^\\]+")
             if m.Success then m.Value
             else failwithf "Can't get share name from path \"%s\"" path
-        let result = Win32.WNetAddConnection2(NetResource(networkName), config.Password, config.UserName, 0)
+        let result = Win32.WNetAddConnection2(NetResource networkName, config.Password, config.UserName, 0)
         if result <> 0 then raise (Win32Exception(result, sprintf "Error connecting to remote share %s" networkName))
-        shareNames.Add(networkName) |> ignore
+        shareNames.Add networkName |> ignore

@@ -39,7 +39,7 @@ type Address = {
 
 let syncStudents (sokratesApi: SokratesApi) (adApi: ADApi) = async {
     use connection = new MySqlConnection(connectionString)
-    let! sisStudents = connection.QueryAsync<Pupil>("SELECT * FROM pupil") |> Async.AwaitTask |> Async.map Seq.toList
+    let! sisStudents = connection.QueryAsync<Pupil> "SELECT * FROM pupil" |> Async.AwaitTask |> Async.map Seq.toList
     let! adUsers = adApi.GetUsers ()
     let! sokratesStudents = sokratesApi.FetchStudents None None
 
@@ -66,7 +66,7 @@ let syncStudents (sokratesApi: SokratesApi) (adApi: ADApi) = async {
             let (SokratesId sokratesId) = sokratesStudent.Id
             let (accountName, accountCreatedAt) =
                 Map.tryFind sokratesId adUsersBySokratesId
-                |> Option.map (fun adUser -> let (AD.Domain.UserName userName) = adUser.Name in userName, Nullable(adUser.CreatedAt))
+                |> Option.map (fun adUser -> let (AD.Domain.UserName userName) = adUser.Name in userName, Nullable adUser.CreatedAt)
                 |> Option.defaultValue (null, Nullable<DateTime>())
             let update =
                 {
@@ -124,12 +124,12 @@ let syncStudentAddresses (sokratesApi: SokratesApi) = async {
     use connection = new MySqlConnection(connectionString)
     do! connection.OpenAsync() |> Async.AwaitTask
     let! dbTransaction = connection.BeginTransactionAsync().AsTask() |> Async.AwaitTask
-    do! connection.ExecuteAsync("DELETE FROM address WHERE addrType='Wohnadresse'") |> Async.AwaitTask |> Async.Ignore
+    do! connection.ExecuteAsync "DELETE FROM address WHERE addrType='Wohnadresse'" |> Async.AwaitTask |> Async.Ignore
     let updates =
         addresses
         |> List.map (fun address ->
             {
-                PersonId = (let (SokratesId studentId) = address.StudentId in studentId)
+                PersonId = let (SokratesId studentId) = address.StudentId in studentId
                 AddressType = "Wohnadresse"
                 Zip = address.Address |> Option.map (fun address -> address.Zip) |> Option.toObj
                 City = address.Address |> Option.map (fun address -> address.City) |> Option.toObj
@@ -151,13 +151,13 @@ let syncStudentAddresses (sokratesApi: SokratesApi) = async {
 
 let syncStudentContactInfos (sokratesApi: SokratesApi) = async {
     use connection = new MySqlConnection(connectionString)
-    let! studentIds = connection.QueryAsync<string>("SELECT DISTINCT personID FROM pupil") |> Async.AwaitTask |> Async.map (Seq.map SokratesId >> Seq.toList)
+    let! studentIds = connection.QueryAsync<string> "SELECT DISTINCT personID FROM pupil" |> Async.AwaitTask |> Async.map (Seq.map SokratesId >> Seq.toList)
 
     let! contactInfos = sokratesApi.FetchStudentContactInfos studentIds None
     use connection = new MySqlConnection(connectionString)
     do! connection.OpenAsync() |> Async.AwaitTask
     let dbTransaction = connection.BeginTransaction()
-    do! connection.ExecuteAsync("DELETE FROM address WHERE addrType<>'Wohnadresse'") |> Async.AwaitTask |> Async.Ignore
+    do! connection.ExecuteAsync "DELETE FROM address WHERE addrType<>'Wohnadresse'" |> Async.AwaitTask |> Async.Ignore
     let updates =
         contactInfos
         |> List.collect (fun contactInfo -> contactInfo.ContactAddresses |> List.map (fun address -> contactInfo.StudentId, address))
@@ -273,7 +273,7 @@ type PhoneNumberModification =
 let syncTeacherPhoneNumbers (excelDocPath: string) = async {
     let rows =
         use doc = new XLWorkbook(excelDocPath)
-        let worksheet = doc.Worksheets.Worksheet(1)
+        let worksheet = doc.Worksheets.Worksheet 1
         worksheet.Rows()
         |> Seq.skip 1
         |> Seq.cast<IXLRow>
@@ -283,7 +283,7 @@ let syncTeacherPhoneNumbers (excelDocPath: string) = async {
         |> Seq.filter (fun v -> not <| String.IsNullOrWhiteSpace v.PhoneNumber)
         |> Seq.toList
     use connection = new MySqlConnection(connectionString)
-    let! existingPhoneNumbers = connection.QueryAsync<ExistingPhoneNumber>("SELECT Llogin as ShortName, Raum as PhoneType, Telefon as PhoneNumber, nr as RowId FROM telefonliste WHERE quelle LIKE 'LehrerDB %'") |> Async.AwaitTask |> Async.map Seq.toList
+    let! existingPhoneNumbers = connection.QueryAsync<ExistingPhoneNumber> "SELECT Llogin as ShortName, Raum as PhoneType, Telefon as PhoneNumber, nr as RowId FROM telefonliste WHERE quelle LIKE 'LehrerDB %'" |> Async.AwaitTask |> Async.map Seq.toList
 
     let addModifications =
         rows
@@ -339,7 +339,7 @@ let syncTeacherPhoneNumbers (excelDocPath: string) = async {
 }
 
 [<EntryPoint>]
-let main argv =
+let main _ =
     let sokratesApi = SokratesApi.FromEnvironment()
     use adApi = ADApi.FromEnvironment()
 

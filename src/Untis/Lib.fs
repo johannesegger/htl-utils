@@ -79,7 +79,7 @@ module Config =
 
     let fromEnvironment () =
         let config = ConfigurationBuilder().AddEnvironmentVariables().Build()
-        ConfigurationBinder.Get<UntisConfig>(config.GetSection("Untis")).Build()
+        ConfigurationBinder.Get<UntisConfig>(config.GetSection "Untis").Build()
 
 [<Literal>]
 let private TimetablePath = __SOURCE_DIRECTORY__ + "/data/GPU001.TXT"

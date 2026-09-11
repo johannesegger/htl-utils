@@ -86,8 +86,8 @@ module Operation =
         SecurityIdentifier(WellKnownSidType.CreatorOwnerSid, null)
 
     let private createGroupHomePath (networkShare: NetworkShare) path =
-        networkShare.Open(path)
-        Directory.CreateDirectory(path) |> ignore
+        networkShare.Open path
+        Directory.CreateDirectory path |> ignore
     let private createUserHomePath (ldap: Ldap) (networkShare: NetworkShare) user = async {
         let! user = async {
             return! ldap.FindObjectByDn(user, [| "objectSid"; "homeDirectory" |])
@@ -98,22 +98,22 @@ module Operation =
             |> Option.defaultWith (fun () -> failwith $"Invalid SID of user {user.DistinguishedName}")
         let homePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
 
-        networkShare.Open(homePath)
+        networkShare.Open homePath
 
-        let dir = Directory.CreateDirectory(homePath)
+        let dir = Directory.CreateDirectory homePath
         let acl = dir.GetAccessControl()
         acl.SetAccessRuleProtection(isProtected = true, preserveInheritance = false)
         acl.AddAccessRule(FileSystemAccessRule(administratorsSID, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        dir.SetAccessControl(acl)
+        dir.SetAccessControl acl
     }
     let private moveUserHomePath (ldap: Ldap) (networkShare: NetworkShare) userDn newHomePath = async {
         let! user = ldap.FindObjectByDn(userDn, [| "homeDirectory" |])
         let currentHomePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
 
         if CIString currentHomePath <> CIString newHomePath then
-            networkShare.Open(currentHomePath)
-            networkShare.Open(newHomePath)
+            networkShare.Open currentHomePath
+            networkShare.Open newHomePath
 
             try
                 Directory.Move(currentHomePath, newHomePath)
@@ -127,7 +127,7 @@ module Operation =
 
         let homePath = SearchResultEntry.getStringAttributeValue "homeDirectory" user
         try
-            networkShare.Open(homePath)
+            networkShare.Open homePath
             Directory.delete homePath
         with e ->
             failwith $"Failed to delete user home path \"{homePath}\": {e.Message}"
@@ -147,9 +147,9 @@ module Operation =
         let! studentGroupSID = findSIDByDn groups.Students
         let! testUserGroupSID = findSIDByDn groups.TestUsers
 
-        networkShare.Open(basePath)
+        networkShare.Open basePath
 
-        let dir = Directory.CreateDirectory(basePath)
+        let dir = Directory.CreateDirectory basePath
         let acl = dir.GetAccessControl()
         acl.SetAccessRuleProtection(isProtected = true, preserveInheritance = false)
         acl.AddAccessRule(FileSystemAccessRule(localSystemSID, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -157,9 +157,9 @@ module Operation =
         acl.AddAccessRule(FileSystemAccessRule(teacherGroupSID, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(studentGroupSID, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(testUserGroupSID, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        dir.SetAccessControl(acl)
+        dir.SetAccessControl acl
 
-        let instructionDir = dir.CreateSubdirectory("Abgabe")
+        let instructionDir = dir.CreateSubdirectory "Abgabe"
         let acl = instructionDir.GetAccessControl()
         acl.SetAccessRuleProtection(isProtected = true, preserveInheritance = false)
         acl.AddAccessRule(FileSystemAccessRule(localSystemSID, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -168,9 +168,9 @@ module Operation =
         acl.AddAccessRule(FileSystemAccessRule(studentGroupSID, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-        instructionDir.SetAccessControl(acl)
+        instructionDir.SetAccessControl acl
 
-        let testInstructionDir = dir.CreateSubdirectory("Abgabe_SA")
+        let testInstructionDir = dir.CreateSubdirectory "Abgabe_SA"
         let acl = testInstructionDir.GetAccessControl()
         acl.SetAccessRuleProtection(isProtected = true, preserveInheritance = false)
         acl.AddAccessRule(FileSystemAccessRule(localSystemSID, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -179,9 +179,9 @@ module Operation =
         acl.AddAccessRule(FileSystemAccessRule(testUserGroupSID, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-        testInstructionDir.SetAccessControl(acl)
+        testInstructionDir.SetAccessControl acl
 
-        let deliveryDir = dir.CreateSubdirectory("Angabe")
+        let deliveryDir = dir.CreateSubdirectory "Angabe"
         let acl = deliveryDir.GetAccessControl()
         acl.SetAccessRuleProtection(isProtected = true, preserveInheritance = false)
         acl.AddAccessRule(FileSystemAccessRule(localSystemSID, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -190,9 +190,9 @@ module Operation =
         acl.AddAccessRule(FileSystemAccessRule(studentGroupSID, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-        deliveryDir.SetAccessControl(acl)
+        deliveryDir.SetAccessControl acl
 
-        let testDeliveryDir = dir.CreateSubdirectory("Angabe_SA")
+        let testDeliveryDir = dir.CreateSubdirectory "Angabe_SA"
         let acl = testDeliveryDir.GetAccessControl()
         acl.SetAccessRuleProtection(isProtected = true, preserveInheritance = false)
         acl.AddAccessRule(FileSystemAccessRule(localSystemSID, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -201,7 +201,7 @@ module Operation =
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(userSID, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
         acl.AddAccessRule(FileSystemAccessRule(testUserGroupSID, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-        testDeliveryDir.SetAccessControl(acl)
+        testDeliveryDir.SetAccessControl acl
     }
     let private deleteDirectory path =
         try
@@ -209,8 +209,8 @@ module Operation =
         with e ->
             failwith $"Failed to delete directory \"{path}\": {e.Message}"
     let private moveDirectory (networkShare: NetworkShare) source target =
-        networkShare.Open(source)
-        networkShare.Open(target)
+        networkShare.Open source
+        networkShare.Open target
 
         try
             Directory.Move(source, target)
@@ -227,13 +227,13 @@ module Operation =
         | ReplaceTextInNodePropertyValues v ->
             do! ldap.ReplaceTextInNodePropertyValues(v.Node, v.Properties)
         | DisableAccount userDn ->
-            do! ldap.DisableAccount(userDn)
+            do! ldap.DisableAccount userDn
         | EnableAccount userDn ->
-            do! ldap.EnableAccount(userDn)
+            do! ldap.EnableAccount userDn
         | RemoveGroupMemberships userDn ->
-            do! ldap.RemoveGroupMemberships(userDn)
+            do! ldap.RemoveGroupMemberships userDn
         | DeleteNode node ->
-            do! ldap.DeleteNode(node)
+            do! ldap.DeleteNode node
         | AddObjectToGroup v ->
             do! ldap.AddObjectToGroup(v.Group, v.Object)
         | RemoveObjectFromGroup v ->

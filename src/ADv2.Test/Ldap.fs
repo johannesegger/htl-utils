@@ -10,7 +10,7 @@ open System
 open System.Text.RegularExpressions
 
 type TemporaryGroup(dn: DistinguishedName, disposable: IAsyncDisposable) =
-    member this.Dn = dn
+    member _.Dn = dn
     interface IAsyncDisposable with member _.DisposeAsync() = disposable.DisposeAsync()
 
 let private createTemporaryGroup ldap name = task {
@@ -85,7 +85,7 @@ let tests =
             let userDn = DistinguishedName "CN=EINE,CN=Users,DC=htlvb,DC=intern"
             use! __ = createNodeAndParents ldap userDn ADUser []
 
-            do! ldap.DeleteNode(userDn)
+            do! ldap.DeleteNode userDn
             let! findResult = ldap.FindObjectByDn(userDn, [||]) |> Async.Catch
 
             Expect.isChoice2Of2 findResult "Node should not be found after deletion"
@@ -95,7 +95,7 @@ let tests =
             use ldap = new Ldap(connectionConfig.Ldap)
             use! group = createTemporaryGroup ldap "EINF"
 
-            let! actualMembers = ldap.FindGroupMembersIfGroupExists(group.Dn)
+            let! actualMembers = ldap.FindGroupMembersIfGroupExists group.Dn
 
             Expect.isNonEmpty actualMembers "Member list should not be empty"
             Expect.all actualMembers (fun (DistinguishedName v) -> not <| String.IsNullOrEmpty v) "Group members should be stored"
@@ -173,7 +173,7 @@ let tests =
             use! __ = createNodeAndParents ldap (DN.parent targetDn) ADOrganizationalUnit []
 
             do! ldap.MoveNode(sourceDn, targetDn)
-            use __ = async { do! ldap.DeleteNode(targetDn)  } |> Async.toAsyncDisposable
+            use __ = async { do! ldap.DeleteNode targetDn  } |> Async.toAsyncDisposable
             let! oldNode = ldap.FindObjectByDn(sourceDn, [||]) |> Async.Catch
             let! newNode = ldap.FindObjectByDn(targetDn, [||]) |> Async.Catch
 
@@ -188,7 +188,7 @@ let tests =
             let targetDn = DistinguishedName "CN=EINI2,CN=Users,DC=htlvb,DC=intern"
 
             do! ldap.MoveNode(sourceDn, targetDn)
-            use __ = async { do! ldap.DeleteNode(targetDn) } |> Async.toAsyncDisposable
+            use __ = async { do! ldap.DeleteNode targetDn } |> Async.toAsyncDisposable
             let! oldNode = ldap.FindObjectByDn(sourceDn, [||]) |> Async.Catch
             let! newNode = ldap.FindObjectByDn(targetDn, [||]) |> Async.Catch
 
@@ -220,12 +220,12 @@ let tests =
             do! ldap.ReplaceTextInNodePropertyValues(userDn, [
                 {|
                     Name = "displayName"
-                    Pattern = Regex(@"(?<= )Karl$")
+                    Pattern = Regex @"(?<= )Karl$"
                     Replacement = "Konrad"
                 |}
                 {|
                     Name = "homeDirectory"
-                    Pattern = Regex(@"(?<=\.)Karl$")
+                    Pattern = Regex @"(?<=\.)Karl$"
                     Replacement = "Konrad"
                 |}
             ])
@@ -244,11 +244,11 @@ let tests =
             let userDn = DistinguishedName "CN=EINL,CN=Users,DC=htlvb,DC=intern"
             use! __ = createUser ldap userDn []
 
-            do! ldap.DisableAccount(userDn)
+            do! ldap.DisableAccount userDn
 
             Expect.throws (fun () ->
                 let userName = let (DistinguishedName v) = userDn in v
-                use c = new Ldap({ connectionConfig.Ldap with UserName = userName; Password = userPassword })
+                use c = new Ldap { connectionConfig.Ldap with UserName = userName; Password = userPassword }
                 c.FindObjectByDn(userDn, [||]) |> Async.Ignore |> Async.RunSynchronously
             ) "Login succeeded for disabled account"
         })
@@ -321,7 +321,7 @@ let tests =
             let removedMember = members1Before |> List.head
             do! ldap.AddObjectToGroup(temporaryGroup2.Dn, removedMember)
 
-            do! ldap.RemoveGroupMemberships(removedMember)
+            do! ldap.RemoveGroupMemberships removedMember
 
             let! group1 = ldap.FindObjectByDn(temporaryGroup1.Dn, [| "member" |])
             let members1After = SearchResultEntry.getStringAttributeValues "member" group1 |> List.map DistinguishedName

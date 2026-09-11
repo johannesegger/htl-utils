@@ -7,11 +7,7 @@ open AAD.Domain
 open Azure.Identity
 open Expecto
 open Microsoft.Graph.Beta
-open Microsoft.Identity.Client
-open Microsoft.Kiota.Abstractions
-open Microsoft.Kiota.Http.HttpClientLibrary.Middleware.Options
 open System
-open System.Net
 
 let config = AAD.Configuration.Config.fromEnvironment ()
 
@@ -78,7 +74,7 @@ let tests =
                     ]
                 )
             let body = Me.SendMail.SendMailPostRequestBody(Message = message, SaveToSentItems = Nullable false)
-            do! graphServiceClient.Me.SendMail.PostAsync(body) |> Async.AwaitTask
+            do! graphServiceClient.Me.SendMail.PostAsync body |> Async.AwaitTask
 
             do! graphServiceClient.Groups.[group.Id].DeleteAsync() |> Async.AwaitTask
 
@@ -102,7 +98,7 @@ let tests =
             let! group = getGroup groupName
             do! graphServiceClient.Groups.[group.Id].DeleteAsync() |> Async.AwaitTask
 
-            Expect.all (group.Mail :: Seq.toList group.ProxyAddresses) (fun address -> address.Contains(groupName)) "Mail addresses should contain new group name"
+            Expect.all (group.Mail :: Seq.toList group.ProxyAddresses) (fun address -> address.Contains groupName) "Mail addresses should contain new group name"
         }
     ]
 

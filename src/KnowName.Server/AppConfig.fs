@@ -14,7 +14,6 @@ type AppConfig = {
     |}
 }
 module AppConfig =
-    open System.Security.Cryptography.X509Certificates
 
     let private isNonEmpty = String.IsNullOrEmpty >> not
 

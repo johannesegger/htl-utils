@@ -9,9 +9,9 @@ let delete path =
 
     let robocopy =
         let psi = ProcessStartInfo("robocopy", $"\"%s{empty.FullName}\" \"%s{path}\" /purge", UseShellExecute = true)
-        Process.Start(psi)
+        Process.Start psi
     robocopy.WaitForExit()
     if robocopy.ExitCode > 8 then failwith $"Robocopy exited with code %d{robocopy.ExitCode}"
 
     empty.Delete()
-    Directory.Delete(path)
+    Directory.Delete path

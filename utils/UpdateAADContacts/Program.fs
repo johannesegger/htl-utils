@@ -12,9 +12,9 @@ let main args =
     async {
         match args with
         | [| userName |] ->
-            let aadConfig = AAD.Configuration.Config.fromEnvironment ()
+            let aadConfig = Configuration.Config.fromEnvironment ()
             use graphServiceClient = GraphServiceClientFactory.createWithAppSecret aadConfig.OidcConfig
-            let! aadUsers = AAD.Core.getUsers graphServiceClient
+            let! aadUsers = Core.getUsers graphServiceClient
 
             let sokratesApi = SokratesApi.FromEnvironment()
             let! sokratesTeachers = sokratesApi.FetchTeachers
@@ -46,14 +46,14 @@ let main args =
                             AAD.Domain.Contact.HomePhones =
                                 sokratesTeacher.Phones
                                 |> List.choose (function
-                                    | Sokrates.Home number -> Some number
-                                    | Sokrates.Mobile _ -> None
+                                    | Home number -> Some number
+                                    | Mobile _ -> None
                                 )
                             AAD.Domain.Contact.MobilePhone =
                                 sokratesTeacher.Phones
                                 |> List.tryPick (function
-                                    | Sokrates.Home _ -> None
-                                    | Sokrates.Mobile number -> Some number
+                                    | Home _ -> None
+                                    | Mobile number -> Some number
                                 )
                                 |> Option.defaultValue (phoneNumbers |> Map.find sokratesTeacher.ShortName)
                                 |> Some
@@ -61,13 +61,13 @@ let main args =
                             AAD.Domain.Contact.Photo =
                                 photo
                                 |> Option.map (fun (PhotoLibrary.Domain.Base64EncodedJpgImage data) ->
-                                    AAD.Domain.Base64EncodedImage data
+                                    Domain.Base64EncodedImage data
                                 )
                         }
                     | None -> None
                 )
 
-            do! AAD.Core.updateAutoContacts graphServiceClient (AAD.Domain.UserId userName) contacts
+            do! Core.updateAutoContacts graphServiceClient (Domain.UserId userName) contacts
             return 0
         | _ ->
             eprintfn "Usage: dotnet run -- <user-principal-name>"

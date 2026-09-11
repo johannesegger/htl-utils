@@ -67,7 +67,7 @@ type ADApi(config: Config) =
         let department = getDepartmentFromUserType newUser.Type
         let division = getDivisionFromUserType newUser.Type
         let userHomePath = getUserHomePath newUser.Name newUser.Type
-        let userDn = (let (UserName userName) = newUser.Name in DN.childCN userName parentNode)
+        let userDn = let (UserName userName) = newUser.Name in DN.childCN userName parentNode
         let groupDn = getGroupPathFromUserType newUser.Type
         [
             yield CreateNode
@@ -112,8 +112,8 @@ type ADApi(config: Config) =
     let changeUserName userName userType (newUserName, newFirstName, newLastName, newMailAliases) =
         let parentNode = getUserContainer userType
         let userPrincipalName = getUserPrincipalName newUserName
-        let oldUserDn = (let (UserName userName) = userName in DN.childCN userName parentNode)
-        let newUserDn = (let (UserName userName) = newUserName in DN.childCN userName parentNode)
+        let oldUserDn = let (UserName userName) = userName in DN.childCN userName parentNode
+        let newUserDn = let (UserName userName) = newUserName in DN.childCN userName parentNode
         let homePath = getUserHomePath newUserName userType
         [
             yield MoveNode {| Source = oldUserDn; Target = newUserDn |}
@@ -144,7 +144,7 @@ type ADApi(config: Config) =
 
     let setSokratesId userName userType (SokratesId sokratesId) =
         let parentNode = getUserContainer userType
-        let userDn = (let (UserName userName) = userName in DN.childCN userName parentNode)
+        let userDn = let (UserName userName) = userName in DN.childCN userName parentNode
         [
             SetNodeProperties
                 {|
@@ -160,8 +160,8 @@ type ADApi(config: Config) =
         let newGroup = getGroupPathFromUserType (Student newClassName)
         let oldParentNode = getUserContainer (Student oldClassName)
         let newParentNode = getUserContainer (Student newClassName)
-        let oldUserDn = (let (UserName userName) = userName in DN.childCN userName oldParentNode)
-        let newUserDn = (let (UserName userName) = userName in DN.childCN userName newParentNode)
+        let oldUserDn = let (UserName userName) = userName in DN.childCN userName oldParentNode
+        let newUserDn = let (UserName userName) = userName in DN.childCN userName newParentNode
         let homePath = getUserHomePath userName (Student newClassName)
         [
             RemoveObjectFromGroup {| Object = oldUserDn; Group = oldGroup |}
@@ -173,7 +173,7 @@ type ADApi(config: Config) =
 
     let deleteUser userName userType =
         let parentNode = getUserContainer userType
-        let userDn = (let (UserName userName) = userName in DN.childCN userName parentNode)
+        let userDn = let (UserName userName) = userName in DN.childCN userName parentNode
         [
             yield DeleteUserHomePath userDn
             yield SetNodeProperties {|
@@ -194,10 +194,10 @@ type ADApi(config: Config) =
 
             match userType with
             | Teacher ->
-                let targetDn = (let (UserName userName) = userName in DN.childCN userName config.Properties.ExTeacherContainer)
+                let targetDn = let (UserName userName) = userName in DN.childCN userName config.Properties.ExTeacherContainer
                 yield MoveNode {| Source = userDn; Target = targetDn |}
             | Student _ ->
-                let targetDn = (let (UserName userName) = userName in DN.childCN userName config.Properties.ExStudentContainer)
+                let targetDn = let (UserName userName) = userName in DN.childCN userName config.Properties.ExStudentContainer
                 yield MoveNode {| Source = userDn; Target = targetDn |}
         ]
 
@@ -295,7 +295,7 @@ type ADApi(config: Config) =
                             {|
                                 Node = userDn
                                 Properties = [
-                                    {| Name = "homeDirectory"; Pattern = Regex($"^{Regex.Escape(oldGroupHomePath)}"); Replacement = newGroupHomePath |}
+                                    {| Name = "homeDirectory"; Pattern = Regex $"^{Regex.Escape oldGroupHomePath}"; Replacement = newGroupHomePath |}
                                 ]
                             |}
                     ]
@@ -420,7 +420,7 @@ type ADApi(config: Config) =
     }
 
     member _.GetUsers () = async {
-        let! teachers = ldap.FindGroupMembersIfGroupExists(config.Properties.TeacherGroup)
+        let! teachers = ldap.FindGroupMembersIfGroupExists config.Properties.TeacherGroup
 
         let! classGroups = async {
             let! groups = ldap.FindFullGroupMembers(config.Properties.StudentGroup, [| "sAMAccountName"; "member" |])
@@ -472,11 +472,10 @@ type ADApi(config: Config) =
             MailAddressUserNames = [
                 yield! users |> List.map (
                     SearchResultEntry.getStringAttributeValue "userPrincipalName"
-                    >> (fun address ->
+                    >> fun address ->
                         MailAddress.tryParse address
                         |> Option.defaultWith (fun () -> failwith $"Can't parse \"%s{address}\" as mail address.")
                         |> fun v -> v.UserName
-                    )
                 )
                 yield!
                     users
@@ -499,7 +498,7 @@ type ADApi(config: Config) =
 
     member _.GetUser(userName, userType) = async {
         let containerDn = getUserContainer userType
-        let userDn = (let (UserName userName) = userName in DN.childCN userName containerDn)
+        let userDn = let (UserName userName) = userName in DN.childCN userName containerDn
 
         let! adUser = ldap.FindObjectByDn(userDn, userProperties)
         return getUserFromSearchResult userType adUser
@@ -538,7 +537,7 @@ type ADApi(config: Config) =
             )
     }
 
-    member this.CreateGuestAccounts(group: string, count: int, wlanOnly: bool, notes: string option) = async {
+    member _.CreateGuestAccounts(group: string, count: int, wlanOnly: bool, notes: string option) = async {
         let! existingUserNames = async {
             let! existingAccounts =
                 ldap.FindFullGroupMembers(
@@ -619,7 +618,7 @@ type ADApi(config: Config) =
                 let (UserName userName) = account.Name
                 let userDn = DN.childCN userName config.Properties.GuestContainer
                 let newUserDn =
-                    let timestamp = timeProvider.GetLocalNow().ToString("yyyyMMdd-HHmmss")
+                    let timestamp = timeProvider.GetLocalNow().ToString "yyyyMMdd-HHmmss"
                     DN.childCN $"%s{timestamp}_%s{userName}" config.Properties.GuestContainer
                 let newUserName = userName.Replace("htlgast", "xxxgast")
                 let! results =

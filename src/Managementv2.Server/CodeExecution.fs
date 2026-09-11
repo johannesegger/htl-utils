@@ -98,7 +98,7 @@ type CodeExecution() =
 
             let initialState = InitialSessionState.CreateDefault()
             initialState.ImportPSModule [| sokratesModulePath |]
-            use runspace = RunspaceFactory.CreateRunspace(initialState)
+            use runspace = RunspaceFactory.CreateRunspace initialState
             runspace.Open()
 
             use ps = PowerShell.Create()
@@ -132,7 +132,7 @@ type CodeExecution() =
                 let! results = ps.InvokeAsync()
 
                 if ps.InvocationStateInfo.State = PSInvocationState.Stopped then
-                    return raise (OperationCanceledException(cancellationToken))
+                    return raise (OperationCanceledException cancellationToken)
                 elif ps.HadErrors then
                     let errorText =
                         ps.Streams.Error
@@ -144,8 +144,8 @@ type CodeExecution() =
                     return results |> Seq.tryHead |> Option.map (fun r -> JsonNode.Parse(string r)) |> Ok
             with
             // A stop surfaces as either of these; treat it as cancellation, not an error.
-            | :? OperationCanceledException -> return raise (OperationCanceledException(cancellationToken))
-            | :? PipelineStoppedException -> return raise (OperationCanceledException(cancellationToken))
+            | :? OperationCanceledException -> return raise (OperationCanceledException cancellationToken)
+            | :? PipelineStoppedException -> return raise (OperationCanceledException cancellationToken)
             | e -> return Error(e.ToString())
         }
 

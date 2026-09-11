@@ -244,12 +244,12 @@ let private getSokratesUserTypes (sokratesTeachers: Sokrates.Teacher list) (sokr
 
 let calculateCreateGroupModifications existingUsers sokratesTeachers sokratesStudents =
     Set.difference (getSokratesUserTypes sokratesTeachers sokratesStudents) (getExistingUserTypes existingUsers)
-    |> Seq.map (fun userType -> (CreateGroup userType))
+    |> Seq.map (fun userType -> CreateGroup userType)
     |> Seq.toList
 
 let calculateDeleteGroupModifications existingUsers sokratesTeachers sokratesStudents =
     Set.difference (getExistingUserTypes existingUsers) (getSokratesUserTypes sokratesTeachers sokratesStudents)
-    |> Seq.map (fun userType -> (DeleteGroup userType))
+    |> Seq.map (fun userType -> DeleteGroup userType)
     |> Seq.toList
 
 let modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes =
@@ -282,7 +282,7 @@ let modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes
         (state, sokratesTeachers)
         ||> List.fold (fun (uniqueUserAttributes, modifications) sokratesTeacher ->
             let teacher = User.fromSokratesTeacherDto sokratesTeacher
-            match calculateCreateTeacherModification existingUsers teacher (sokratesTeacher.DateOfBirth.ToString("dd.MM.yyyy")) uniqueUserAttributes with
+            match calculateCreateTeacherModification existingUsers teacher (sokratesTeacher.DateOfBirth.ToString "dd.MM.yyyy") uniqueUserAttributes with
             | Some (modification, newUniqueUserAttributes) ->
                 let newUniqueUserAttributes = UniqueUserAttributes.merge uniqueUserAttributes newUniqueUserAttributes
                 (newUniqueUserAttributes, modifications @ [ modification ])
@@ -316,7 +316,7 @@ let modifications sokratesTeachers sokratesStudents adUsers uniqueUserAttributes
                 |> uniqueUserName uniqueUserAttributes.UserNames
             let student = User.fromSokratesStudentDto sokratesStudent userName
             let mailAliases = uniqueMailAliases student uniqueUserAttributes.MailAddressUserNames
-            let password = sokratesStudent.DateOfBirth.ToString("dd.MM.yyyy")
+            let password = sokratesStudent.DateOfBirth.ToString "dd.MM.yyyy"
             let newUser = NewUser.fromUser student mailAliases password
             match calculateCreateStudentModification existingUsers newUser with
             | Some (modification: DirectoryModification, newUniqueUserAttributes) ->
@@ -361,7 +361,7 @@ let getADModifications (adApi: AD.Core.ADApi) (sokratesApi: Sokrates.SokratesApi
         let timestamp =
             ctx.TryGetQueryStringValue "date"
             |> Option.map (fun date ->
-                tryDo (fun () -> (DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.CurrentCulture, DateTimeStyles.None))) ()
+                tryDo (fun () -> DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.CurrentCulture, DateTimeStyles.None)) ()
                 |> Option.defaultWith (fun () -> failwithf "Can't parse \"%s\"" date)
             )
         let! sokratesStudents = sokratesApi.FetchStudents None timestamp |> Async.StartChild
@@ -410,7 +410,7 @@ let applyADModifications (adApi: AD.Core.ADApi) : HttpHandler =
 let getADIncrementClassGroupUpdates (adApi: AD.Core.ADApi) incrementClassGroupsConfig : HttpHandler =
     fun next ctx -> task {
         let! classGroups = adApi.GetClassGroups ()
-        let classGroups = classGroups |> List.map (ClassName.fromADDto >> (fun (ClassName groupName) -> groupName))
+        let classGroups = classGroups |> List.map (ClassName.fromADDto >> fun (ClassName groupName) -> groupName)
 
         let modifications = IncrementClassGroups.Core.modifications classGroups |> Reader.run incrementClassGroupsConfig
         return! Successful.OK modifications next ctx

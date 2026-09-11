@@ -8,4 +8,4 @@ type WeatherForecast =
       Summary: string }
 
     member this.TemperatureF =
-        32.0 + (float this.TemperatureC / 0.5556)
+        32.0 + float this.TemperatureC / 0.5556

@@ -20,4 +20,4 @@ module Config =
                 .AddEnvironmentVariables()
                 .AddUserSecrets<RawConfig>()
                 .Build()
-        ConfigurationBinder.Get<RawConfig>(config.GetSection("PhotoLibrary")).Build()
+        ConfigurationBinder.Get<RawConfig>(config.GetSection "PhotoLibrary").Build()

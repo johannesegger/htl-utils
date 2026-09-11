@@ -76,18 +76,18 @@ let main args =
         .ConfigureHostConfiguration(fun configHost ->
             configHost.AddEnvironmentVariables(prefix = "ASPNETCORE_") |> ignore
         )
-        .ConfigureServices(fun ctx services ->
+        .ConfigureServices(fun _ services ->
             services.AddQuartz(fun quartz ->
                 quartz.UseMicrosoftDependencyInjectionJobFactory()
 
                 let jobKey = JobKey("query-computer-info", "default")
-                quartz.AddJob<QueryComputerInfoJob>(jobKey) |> ignore
+                quartz.AddJob<QueryComputerInfoJob> jobKey |> ignore
 
                 quartz.AddTrigger(fun trigger ->
                     trigger
                         .ForJob(jobKey)
                         .StartNow()
-                        .WithCronSchedule("0 0/30 7-21 ? * MON-FRI")
+                        .WithCronSchedule "0 0/30 7-21 ? * MON-FRI"
                     |> ignore
                 )
                 |> ignore

@@ -67,7 +67,7 @@ module Sync =
 [<ApiController>]
 [<Route("api/sync")>]
 [<Authorize>]
-type SyncController (graphClient: GraphServiceClient, sokrates: ISokratesData, config: IConfiguration, logger : ILogger<SyncController>) =
+type SyncController (graphClient: GraphServiceClient, sokrates: ISokratesData, config: IConfiguration, _logger : ILogger<SyncController>) =
     inherit ControllerBase()
 
     let tryFindStudent (sokratesStudents: Sokrates.Student list) (sokratesStudentsAddress: Map<string, Sokrates.Address>) studentsMailLookup (student: StudentIdentifier) =
@@ -112,12 +112,12 @@ type SyncController (graphClient: GraphServiceClient, sokrates: ISokratesData, c
     [<Route("students")>]
     member _.SyncStudentData ([<FromBody>]students: StudentIdentifierDto list) = async {
         let! sokratesStudents =
-            [ for offset in 0..-1..-6 do DateTime.Today.AddMonths(offset) ]
+            [ for offset in 0..-1..-6 do DateTime.Today.AddMonths offset ]
             |> List.map (fun date -> sokrates.FetchStudents None (Some date))
             |> Async.Parallel
             |> Async.map (Seq.collect id >> Seq.distinctBy _.Id >> Seq.toList)
         let! sokratesStudentAddresses =
-            [ for offset in 0..-1..-6 do DateTime.Today.AddMonths(offset) ]
+            [ for offset in 0..-1..-6 do DateTime.Today.AddMonths offset ]
             |> List.map (fun date -> sokrates.FetchStudentAddresses (Some date))
             |> Async.Parallel
             |> Async.map (
@@ -139,7 +139,7 @@ type SyncController (graphClient: GraphServiceClient, sokrates: ISokratesData, c
                 |> graphClient.ReadAll<_, Models.User>
             return users
                 |> Seq.choose (fun v ->
-                    v.AdditionalData.TryGetValue(sokratesIdAttributeName)
+                    v.AdditionalData.TryGetValue sokratesIdAttributeName
                     |> Option.fromTryPattern
                     |> Option.bind ((fun v -> v :?> string) >> Option.ofObj)
                     |> Option.map (fun sokratesId -> sokratesId, v.Mail)

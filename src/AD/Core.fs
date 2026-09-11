@@ -11,7 +11,7 @@ open System.Security.Principal
 
 module private DN =
     let private child name (DistinguishedName path) =
-        let dn = DN(path)
+        let dn = DN path
         dn.GetChild(name).ToString() |> DistinguishedName
 
     let childOU name = child (sprintf "OU=%s" name)
@@ -34,14 +34,10 @@ module private DN =
             then List.rev acc'
             else fn dn.Parent acc'
 
-        fn (DN(path)) []
-
-    let tryFindParent path filter =
-        parentsAndSelf path
-        |> Seq.tryFind (fun (DistinguishedName parentPath) -> DN(parentPath).RDNs |> Seq.head |> (fun v -> filter (v.ToString())))
+        fn (DN path) []
 
     let isOU (DistinguishedName path) =
-        let dn = DN(path)
+        let dn = DN path
         dn.RDNs
         |> Seq.tryHead
         |> Option.bind (fun v -> v.Components |> Seq.tryExactlyOne)
@@ -55,11 +51,11 @@ module private DN =
         |> Option.bind (fun v -> if CIString v.ComponentType = CIString "CN" then Some v.ComponentValue else None)
 
 type internal ADHelper(config) =
-    member this.FetchDirectoryEntry properties (DistinguishedName dn) =
+    member _.FetchDirectoryEntry properties (DistinguishedName dn) =
         let path = $"LDAP://%s{config.DomainControllerHostName}/%s{dn}"
         try
             let entry = new DirectoryEntry(path, config.UserName, config.Password)
-            entry.RefreshCache(properties)
+            entry.RefreshCache properties
             entry
         with e ->
             let properties = String.concat ", " properties
@@ -69,7 +65,7 @@ type internal ADHelper(config) =
         try
             this.FetchDirectoryEntry properties dn
             |> Some
-        with e ->
+        with _ ->
             None
 
     member _.GetGroupHomePath userType =
@@ -155,7 +151,7 @@ type internal ADHelper(config) =
         | Student _ -> let (GroupName name) = x.StudentGroupName in name
 
     member _.FetchSid (directoryEntry: DirectoryEntry) =
-        directoryEntry.RefreshCache([| "objectSid" |])
+        directoryEntry.RefreshCache [| "objectSid" |]
         let data = directoryEntry.Properties.["objectSid"].[0] :?> byte array
         SecurityIdentifier(data, 0)
 
@@ -186,7 +182,7 @@ type internal ADHelper(config) =
         use adCtx = x.FetchUserOu userType
         let searchResult = x.FindUser adCtx userName properties
         use adUser = searchResult.GetDirectoryEntry()
-        adUser.RefreshCache(properties)
+        adUser.RefreshCache properties
         fn adUser
         adUser.CommitChanges()
 
@@ -196,7 +192,7 @@ type internal ADHelper(config) =
 
 
 type ADApi(config) =
-    let adHelper = ADHelper(config)
+    let adHelper = ADHelper config
 
     let createUser (newUser: NewUser) mailAliases (password: string) =
         use adCtx = adHelper.FetchUserOu newUser.Type
@@ -219,7 +215,7 @@ type ADApi(config) =
             |> List.map (MailAlias.toProxyAddress config.MailDomain >> ProxyAddress.toString)
             |> List.map (fun v -> v :> obj)
             |> List.toArray
-        adUser.Properties.["proxyAddresses"].AddRange(proxyAddresses)
+        adUser.Properties.["proxyAddresses"].AddRange proxyAddresses
         let userHomePath = adHelper.GetUserHomePath newUser.Name newUser.Type
         adUser.Properties.["homeDirectory"].Value <- userHomePath
         adUser.Properties.["homeDrive"].Value <- config.HomeDrive
@@ -238,12 +234,12 @@ type ADApi(config) =
         let adUserSid = adHelper.FetchSid adUser
 
         do
-            let dir = Directory.CreateDirectory(userHomePath)
+            let dir = Directory.CreateDirectory userHomePath
             let acl = dir.GetAccessControl()
             acl.SetAccessRuleProtection(true, false) // Disable inheritance
             acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-            dir.SetAccessControl(acl)
+            dir.SetAccessControl acl
 
         match newUser.Type with
         | Teacher ->
@@ -253,7 +249,7 @@ type ADApi(config) =
             let studentSid = adHelper.FetchSid config.StudentGroup
             let testUserSid = adHelper.FetchSid config.TestUserGroup
 
-            let dir = Directory.CreateDirectory(exercisePath)
+            let dir = Directory.CreateDirectory exercisePath
             let acl = dir.GetAccessControl()
             acl.SetAccessRuleProtection(true, false) // Disable inheritance
             acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -261,9 +257,9 @@ type ADApi(config) =
             acl.AddAccessRule(FileSystemAccessRule(teacherSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-            dir.SetAccessControl(acl)
+            dir.SetAccessControl acl
 
-            let instructionDir = dir.CreateSubdirectory("Abgabe")
+            let instructionDir = dir.CreateSubdirectory "Abgabe"
             let acl = instructionDir.GetAccessControl()
             acl.SetAccessRuleProtection(true, false) // Disable inheritance
             acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -272,9 +268,9 @@ type ADApi(config) =
             acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-            instructionDir.SetAccessControl(acl)
+            instructionDir.SetAccessControl acl
 
-            let testInstructionDir = dir.CreateSubdirectory("Abgabe_SA")
+            let testInstructionDir = dir.CreateSubdirectory "Abgabe_SA"
             let acl = testInstructionDir.GetAccessControl()
             acl.SetAccessRuleProtection(true, false) // Disable inheritance
             acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -283,9 +279,9 @@ type ADApi(config) =
             acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit, PropagationFlags.None, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.CreateFiles ||| FileSystemRights.AppendData ||| FileSystemRights.ReadAndExecute, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-            testInstructionDir.SetAccessControl(acl)
+            testInstructionDir.SetAccessControl acl
 
-            let deliveryDir = dir.CreateSubdirectory("Angabe")
+            let deliveryDir = dir.CreateSubdirectory "Angabe"
             let acl = deliveryDir.GetAccessControl()
             acl.SetAccessRuleProtection(true, false) // Disable inheritance
             acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -294,9 +290,9 @@ type ADApi(config) =
             acl.AddAccessRule(FileSystemAccessRule(studentSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
-            deliveryDir.SetAccessControl(acl)
+            deliveryDir.SetAccessControl acl
 
-            let testDeliveryDir = dir.CreateSubdirectory("Angabe_SA")
+            let testDeliveryDir = dir.CreateSubdirectory "Angabe_SA"
             let acl = testDeliveryDir.GetAccessControl()
             acl.SetAccessRuleProtection(true, false) // Disable inheritance
             acl.AddAccessRule(FileSystemAccessRule(SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
@@ -305,7 +301,7 @@ type ADApi(config) =
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.Modify, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(adUserSid, FileSystemRights.ReadData ||| FileSystemRights.CreateFiles ||| FileSystemRights.AppendData, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow))
             acl.AddAccessRule(FileSystemAccessRule(testUserSid, FileSystemRights.ReadAndExecute, InheritanceFlags.ContainerInherit ||| InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow))
-            testDeliveryDir.SetAccessControl(acl)
+            testDeliveryDir.SetAccessControl acl
         | Student _ -> ()
 
     let changeUserName userName userType (UserName newUserName, newFirstName, newLastName, newMailAliasNames) =
@@ -350,7 +346,7 @@ type ADApi(config) =
         let newUserType = Student newClassName
         adHelper.UpdateUser userName oldUserType [| "distinguishedName"; "homeDirectory" |] (fun adUser ->
             let targetOu = adHelper.FetchUserOu newUserType
-            adUser.MoveTo(targetOu)
+            adUser.MoveTo targetOu
 
             let department = adHelper.GetDepartmentFromUserType newUserType
             adUser.Properties.["department"].Value <- department
@@ -365,8 +361,8 @@ type ADApi(config) =
                 Directory.Move(oldHomeDirectory, newHomeDirectory)
 
             let distinguishedName = adUser.Properties.["distinguishedName"].Value :?> string
-            adHelper.UpdateGroup oldUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Remove(distinguishedName))
-            adHelper.UpdateGroup newUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Add(distinguishedName) |> ignore)
+            adHelper.UpdateGroup oldUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Remove distinguishedName)
+            adHelper.UpdateGroup newUserType [| "member" |] (fun adGroup -> adGroup.Properties.["member"].Add distinguishedName |> ignore)
         )
 
     let deleteUser userName userType =
@@ -397,7 +393,7 @@ type ADApi(config) =
         do
             let groupHomePath = adHelper.GetGroupHomePath userType
             use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword groupHomePath
-            Directory.CreateDirectory(groupHomePath) |> ignore
+            Directory.CreateDirectory groupHomePath |> ignore
 
         let groupPath = adHelper.GetGroupPathFromUserType userType
         let groupName = DN.head groupPath |> snd
@@ -468,7 +464,7 @@ type ADApi(config) =
         do
             let groupHomePath = adHelper.GetGroupHomePath userType
             use __ = NetworkConnection.tryCreate config.NetworkShareUser config.NetworkSharePassword groupHomePath
-            try Directory.Delete(groupHomePath) with _ -> ()
+            try Directory.Delete groupHomePath with _ -> ()
 
         do
             use adCtx = adHelper.GetGroupPathFromUserType userType |> adHelper.FetchDirectoryEntry [||]
@@ -510,7 +506,7 @@ type ADApi(config) =
                 |> Seq.cast<string>
                 |> Seq.choose ProxyAddress.tryParse
                 |> Seq.toList
-            UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string |> (fun v -> MailAddress.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse user principal name \"%s\" as mail address (User \"%s\")" v adUser.Path))
+            UserPrincipalName = adUser.Properties.["userPrincipalName"].[0] :?> string |> fun v -> MailAddress.tryParse v |> Option.defaultWith (fun () -> failwithf "Can't parse user principal name \"%s\" as mail address (User \"%s\")" v adUser.Path)
         }
 
     let applyDirectoryModification = function
@@ -520,7 +516,7 @@ type ADApi(config) =
         | UpdateUser (userName, Student oldClassName, MoveStudentToClass newClassName) -> moveStudentToClass userName oldClassName newClassName
         | UpdateUser (_, Teacher, MoveStudentToClass _) -> failwith "Can't move teacher to student class"
         | DeleteUser (userName, userType) -> deleteUser userName userType
-        | CreateGroup (userType) -> createGroup userType
+        | CreateGroup userType -> createGroup userType
         | UpdateGroup (Teacher, ChangeGroupName _) -> failwith "Can't rename teacher group"
         | UpdateGroup (Student oldClassName, ChangeGroupName newClassName) -> changeStudentGroupName oldClassName newClassName
         | DeleteGroup userType -> deleteGroup userType

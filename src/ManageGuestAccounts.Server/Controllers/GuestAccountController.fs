@@ -88,7 +88,7 @@ module Html =
     type BrowserFactory(logger: ILogger<BrowserFactory>) =
         member _.LaunchBrowser() = task {
             if Environment.getEnvVar "DOTNET_RUNNING_IN_CONTAINER" = "true" then
-                logger.LogInformation("Launching browser in container environment")
+                logger.LogInformation "Launching browser in container environment"
                 let browserPath =
                     Directory.GetDirectories("/chromium", "linux-*")
                     |> Seq.tryPick(fun v ->
@@ -110,7 +110,7 @@ module Html =
                 )
                 |> Puppeteer.LaunchAsync
             else
-                logger.LogInformation("Launching browser in normal environment")
+                logger.LogInformation "Launching browser in normal environment"
                 let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-manage-guest-accounts-browser")
                 let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
                 let! downloadedBrowser = browserFetcher.DownloadAsync()
@@ -130,7 +130,7 @@ module Html =
 
         use! browser = browserFactory.LaunchBrowser()
         let! page = browser.NewPageAsync()
-        let! response = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
+        let! _ = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
         return! page.PdfDataAsync(PdfOptions(
             DisplayHeaderFooter = true,
             HeaderTemplate = headerTemplate,
@@ -155,10 +155,10 @@ module NewGuestAccounts =
             member _.LocalTimeZone with get (): TimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Europe/Vienna")
         }
 
-    let private culture = CultureInfo.GetCultureInfo("de-AT")
+    let private culture = CultureInfo.GetCultureInfo "de-AT"
 
     let createPdf (browserFactory: Html.BrowserFactory) htmlTemplate (group: string) (accounts: AD.Domain.NewGuestAccount list) = async {
-        let logoBase64 = File.ReadAllBytes("logo.svg") |> Convert.ToBase64String
+        let logoBase64 = File.ReadAllBytes "logo.svg" |> Convert.ToBase64String
         let headerTemplate =
             $"""<div style="width: 297mm; margin: 0 1cm; font-size: 12px; font-variant-caps: small-caps; display: flex; align-items: center; justify-content: space-between">
                 <span style="flex: 1 1 0; text-align: left;">{group.ToUpper()} Gäste-Accounts</span>
@@ -186,7 +186,7 @@ module NewGuestAccounts =
 [<ApiController>]
 [<Route("api/guest-accounts")>]
 [<Authorize("ManageGuestAccounts")>]
-type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, config: IConfiguration, logger : ILogger<GuestAccountController>) =
+type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, config: IConfiguration, _logger : ILogger<GuestAccountController>) =
     inherit ControllerBase()
 
     [<HttpGet>]
@@ -194,7 +194,7 @@ type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, con
         let! guestAccounts = ad.GetGuestAccounts()
         return
             guestAccounts
-            |> List.sortByDescending (fun (group, accounts) ->
+            |> List.sortByDescending (fun (_, accounts) ->
                 accounts
                 |> List.map _.CreatedAt
                 |> List.max
@@ -208,12 +208,12 @@ type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, con
         | Ok data ->
             let! accounts = ad.CreateGuestAccounts(data.Group, data.Count, data.WLANOnly, data.Notes)
             let htmlTemplate =
-                config.GetValue<string>("NewGuestAccountsHtmlTemplateFilePath")
+                config.GetValue<string> "NewGuestAccountsHtmlTemplateFilePath"
                 |> File.ReadAllText
             let! pdf = NewGuestAccounts.createPdf browserFactory htmlTemplate data.Group (accounts |> List.map fst)
             return this.Ok(DataTransfer.createdAccountsWithResults data.Group accounts pdf) :> IActionResult
         | Error e ->
-            return this.BadRequest(e)
+            return this.BadRequest e
     }
 
     [<HttpDelete(template = "{group}")>]
@@ -224,7 +224,7 @@ type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, con
 
 [<ApiController>]
 [<Route("api/test-pdf-generation")>]
-type TestPdfGenerationController (browserFactory: Html.BrowserFactory, logger : ILogger<TestPdfGenerationController>) =
+type TestPdfGenerationController (browserFactory: Html.BrowserFactory, _logger : ILogger<TestPdfGenerationController>) =
     inherit ControllerBase()
 
     [<HttpGet>]

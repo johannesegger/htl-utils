@@ -65,7 +65,7 @@ let tryFetchCoordinates (teacher: Sokrates.Teacher) = async {
         // let fullAddress = getSearchAddress address
         let url = searchUrl address
         use httpClient = new HttpClient()
-        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("HTL Utils Person Map 1.0");
+        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd "HTL Utils Person Map 1.0";
         let serializerOptions = JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
         let! response = httpClient.GetFromJsonAsync<SearchResult list>(url, serializerOptions) |> Async.AwaitTask
         match response with

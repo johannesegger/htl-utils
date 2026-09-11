@@ -32,7 +32,7 @@ let private resize (width, height) =
 
 let tryLoad (content: byte[]) =
     try
-        Some (Image.Load(content))
+        Some (Image.Load content)
     with _ -> None
 
 let private getPhotoFiles dir =
@@ -87,13 +87,13 @@ let getTeacherPhotos size = reader {
 let private saveTeacherPhoto name (image: Image) = reader {
     let! config = Reader.environment
     let path = Path.Combine(config.TeacherPhotosDirectory, $"%s{name}.jpg")
-    image.SaveAsJpeg(path)
+    image.SaveAsJpeg path
 }
 
 let private saveStudentPhoto name (image: Image) = reader {
     let! config = Reader.environment
     let path = Path.Combine(config.StudentPhotosDirectory, $"%s{name}.jpg")
-    image.SaveAsJpeg(path)
+    image.SaveAsJpeg path
 }
 
 let private removeTeacherPhoto name = reader {

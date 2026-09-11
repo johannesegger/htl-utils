@@ -26,7 +26,7 @@ type ReaderBuilder() =
     member _.Bind(x, f) = Reader.bind f x
     member _.ReturnFrom(m: Reader<_, _>) = m
     member _.Combine(a, b) = a |> Reader.bind (fun _ -> b)
-    member _.Delay(fn) = Reader (fun env -> Reader.run env (fn()))
+    member _.Delay fn = Reader (fun env -> Reader.run env (fn()))
     member _.TryWith (m, errorFn) =
         Reader (fun env ->
             try Reader.run env m

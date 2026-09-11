@@ -17,7 +17,7 @@ let private sendWithHeaders (ctx: HttpContext) (url: string) httpMethod body dec
     use httpClient = httpClientFactory.CreateClient()
     use requestMessage = new HttpRequestMessage(httpMethod, url)
 
-    match ctx.Request.Headers.TryGetValue("Authorization") with
+    match ctx.Request.Headers.TryGetValue "Authorization" with
     | (true, values) -> requestMessage.Headers.Add("Authorization", values)
     | (false, _) -> ()
 
@@ -26,7 +26,7 @@ let private sendWithHeaders (ctx: HttpContext) (url: string) httpMethod body dec
 
     let! response = async {
         try
-            let! response = httpClient.SendAsync(requestMessage) |> Async.AwaitTask
+            let! response = httpClient.SendAsync requestMessage |> Async.AwaitTask
             return Ok response
         with
             e -> return Error (SendError (url, e.Message))

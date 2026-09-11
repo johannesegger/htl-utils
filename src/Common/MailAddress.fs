@@ -7,7 +7,7 @@ type MailAddress = {
 
 module MailAddress =
     let tryParse (v: string) =
-        match v.IndexOf('@') with
+        match v.IndexOf '@' with
         | -1 -> None
         | idx -> Some <| { UserName = v.Substring(0, idx); Domain = v.Substring(idx + 1) }
 

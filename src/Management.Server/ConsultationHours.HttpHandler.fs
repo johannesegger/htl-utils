@@ -25,7 +25,7 @@ let getConsultationHours (sokratesApi: Sokrates.SokratesApi) (untis: Untis.Untis
                 {
                     Teacher =
                         {
-                            ShortName = (let (Untis.TeacherShortName t) = teacherShortName in t)
+                            ShortName = let (Untis.TeacherShortName t) = teacherShortName in t
                             FirstName = sokratesTeacher |> Option.map (fun t -> t.FirstName) |> Option.defaultValue ""
                             LastName = sokratesTeacher |> Option.map (fun t -> t.LastName) |> Option.defaultValue ""
                         }

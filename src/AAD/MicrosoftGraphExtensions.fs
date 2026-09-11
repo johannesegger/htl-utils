@@ -24,7 +24,7 @@ module GraphServiceClientFactory =
                 ClientId = config.AppId,
                 TenantId = config.TenantId,
                 TokenCachePersistenceOptions = TokenCachePersistenceOptions(Name = tokenCacheName),
-                DeviceCodeCallback = (fun code ct ->
+                DeviceCodeCallback = (fun code _ ->
                     Console.ForegroundColor <- ConsoleColor.Yellow
                     printfn $"%s{code.Message}"
                     Console.ResetColor()
@@ -32,15 +32,15 @@ module GraphServiceClientFactory =
                 )
             )
             let authTokenPath = Path.Combine(Path.GetTempPath(), $"%s{opts.TokenCachePersistenceOptions.Name}.token")
-            if File.Exists(authTokenPath) then
-                use fileStream = File.OpenRead(authTokenPath)
-                opts.AuthenticationRecord <- AuthenticationRecord.DeserializeAsync(fileStream) |> Async.AwaitTask |> Async.RunSynchronously
-                DeviceCodeCredential(opts)
+            if File.Exists authTokenPath then
+                use fileStream = File.OpenRead authTokenPath
+                opts.AuthenticationRecord <- AuthenticationRecord.DeserializeAsync fileStream |> Async.AwaitTask |> Async.RunSynchronously
+                DeviceCodeCredential opts
             else
-                let deviceCodeCredential = DeviceCodeCredential(opts)
-                let authenticationRecord = deviceCodeCredential.AuthenticateAsync(TokenRequestContext(scopes)) |> Async.AwaitTask |> Async.RunSynchronously
-                use fileStream = File.OpenWrite(authTokenPath)
-                authenticationRecord.SerializeAsync(fileStream) |> Async.AwaitTask |> Async.RunSynchronously
+                let deviceCodeCredential = DeviceCodeCredential opts
+                let authenticationRecord = deviceCodeCredential.AuthenticateAsync(TokenRequestContext scopes) |> Async.AwaitTask |> Async.RunSynchronously
+                use fileStream = File.OpenWrite authTokenPath
+                authenticationRecord.SerializeAsync fileStream |> Async.AwaitTask |> Async.RunSynchronously
                 deviceCodeCredential
         new GraphServiceClient(tokenCredential, scopes)
 
@@ -69,7 +69,7 @@ module TypeExtensions =
                         this,
                         firstResponse,
                         (fun item ->
-                            result.Add(item)
+                            result.Add item
                             true // continue iteration
                         )
                     )

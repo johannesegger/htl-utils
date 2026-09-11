@@ -68,4 +68,4 @@ module Config =
 
     let fromEnvironment () =
         let config = ConfigurationBuilder().AddEnvironmentVariables().Build()
-        ConfigurationBinder.Get<ADConfig>(config.GetSection("AD")).Build()
+        ConfigurationBinder.Get<ADConfig>(config.GetSection "AD").Build()

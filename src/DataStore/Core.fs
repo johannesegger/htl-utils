@@ -52,7 +52,7 @@ type DataStoreApi(config) =
                     )
             }
         let text = JsonSerializer.Serialize(data, Json.serializerOptions)
-        Directory.CreateDirectory(Path.GetDirectoryName(config.ComputerInfoFilePath)) |> ignore
+        Directory.CreateDirectory(Path.GetDirectoryName config.ComputerInfoFilePath) |> ignore
         File.WriteAllText(config.ComputerInfoFilePath, text)
 
     static member FromEnvironment () =

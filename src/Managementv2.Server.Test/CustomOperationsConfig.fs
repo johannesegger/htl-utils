@@ -12,7 +12,7 @@ let tests =
               let path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".json")
 
               try
-                  let sut = JsonFileCustomOperationsConfig(path) :> ICustomOperationsConfig
+                  let sut = JsonFileCustomOperationsConfig path :> ICustomOperationsConfig
 
                   let config =
                       Map
@@ -55,7 +55,7 @@ let tests =
 
               try
                   File.WriteAllText(path, """{ "Cred": { "userName": "u", "password": "p" } }""")
-                  let sut = JsonFileCustomOperationsConfig(path) :> ICustomOperationsConfig
+                  let sut = JsonFileCustomOperationsConfig path :> ICustomOperationsConfig
                   Expect.equal (sut.Read()) (Map [ "Cred", Credential("u", "p") ]) "Should read as Credential"
               finally
                   File.Delete path
@@ -76,7 +76,7 @@ let tests =
 
               try
                   File.WriteAllText(path, """{ "A": "1", "B": "two" }""")
-                  let sut = JsonFileCustomOperationsConfig(path) :> ICustomOperationsConfig
+                  let sut = JsonFileCustomOperationsConfig path :> ICustomOperationsConfig
                   Expect.equal (sut.Read()) (Map [ "A", Text "1"; "B", Text "two" ]) "Plain strings should read as Text"
               finally
                   File.Delete path
@@ -88,7 +88,7 @@ let tests =
               try
                   let base64 = System.Convert.ToBase64String [| 10uy; 20uy; 30uy |]
                   File.WriteAllText(path, $"""{{ "Cert": {{ "file": "{base64}" }} }}""")
-                  let sut = JsonFileCustomOperationsConfig(path) :> ICustomOperationsConfig
+                  let sut = JsonFileCustomOperationsConfig path :> ICustomOperationsConfig
 
                   Expect.equal
                       (sut.Read())

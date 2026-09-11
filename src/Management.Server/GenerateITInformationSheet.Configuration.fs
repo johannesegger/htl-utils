@@ -1,6 +1,5 @@
 namespace GenerateITInformationSheet.Configuration
 
-open System.IO
 
 type Config = {
     DocumentTemplatePath: string
