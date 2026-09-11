@@ -123,7 +123,7 @@ let syncStudentAddresses (sokratesApi: SokratesApi) = async {
     let! addresses = sokratesApi.FetchStudentAddresses None
     use connection = new MySqlConnection(connectionString)
     do! connection.OpenAsync() |> Async.AwaitTask
-    let! dbTransaction = connection.BeginTransactionAsync() |> Async.AwaitTask
+    let! dbTransaction = connection.BeginTransactionAsync().AsTask() |> Async.AwaitTask
     do! connection.ExecuteAsync("DELETE FROM address WHERE addrType='Wohnadresse'") |> Async.AwaitTask |> Async.Ignore
     let updates =
         addresses

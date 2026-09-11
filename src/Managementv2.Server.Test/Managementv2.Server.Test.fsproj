@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Update="FSharp.Core" Version="10.1.204" />
     <PackageReference Include="Expecto" Version="10.1.0" />
     <PackageReference Include="YoloDev.Expecto.TestSdk" Version="0.14.1" />

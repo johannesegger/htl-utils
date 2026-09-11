@@ -98,13 +98,14 @@ module InspectDirectory =
                     ]
 
         let rec decoder : Decoder<_> =
-            Decode.object (fun get ->
-                {
-                    Path = get.Required.Field "path" Decode.string
-                    Directories = get.Required.Field "directories" (Decode.list decoder)
-                    Files = get.Required.Field "files" (Decode.list FileInfo.decoder)
-                }
-            )
+            fun path value ->
+                Decode.object (fun get ->
+                    {
+                        Path = get.Required.Field "path" Decode.string
+                        Directories = get.Required.Field "directories" (Decode.list decoder)
+                        Files = get.Required.Field "files" (Decode.list FileInfo.decoder)
+                    }
+                ) path value
 
     module Thoth =
         let addCoders =

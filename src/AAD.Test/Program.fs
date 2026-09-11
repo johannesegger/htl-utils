@@ -1,5 +1,7 @@
 module AAD.Test.Program
 
+#nowarn "44" // UsernamePasswordCredential is deprecated, but these tests intentionally sign in non-interactively
+
 open AAD.Core
 open AAD.Domain
 open Azure.Identity

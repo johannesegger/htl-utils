@@ -189,7 +189,7 @@ const teacherLettersError = computed(() => {
     <ListView v-if="view === 'test-list' && tableData !== undefined"
       :column-names="tableData.columnNames"
       :rows="tableData.rows"
-      v-model:column-mappings="columnMappings" />
+      :column-mappings="columnMappings" />
     <TeacherView v-else-if="view === 'teacher-lists' && tableData !== undefined"
       :column-names="tableData.columnNames"
       :rows="tableData.rows"
