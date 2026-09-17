@@ -4,7 +4,7 @@ import { api, EditableCustomOperationDefinition, type FormFieldDefinition, type 
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
 
-// Monaco is big, so keep it out of the initial bundle - it's only needed when editing an operation.
+// The code editor is big, so keep it out of the initial bundle - it's only needed when editing an operation.
 const CodeEditor = defineAsyncComponent(() => import('./CodeEditor.vue'))
 
 const operation = defineModel<EditableCustomOperationDefinition>({ required: true })
