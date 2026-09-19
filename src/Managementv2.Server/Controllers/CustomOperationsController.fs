@@ -31,6 +31,10 @@ type CustomOperationsController
            Calculate = Option.toObj operation.Calculate
            Execute = operation.Execute |}
 
+    // Comments are notes for whoever edits the config; a script only ever sees the values.
+    let toScriptConfig (config: Map<string, ConfigEntry>) =
+        config |> Map.map (fun _ entry -> entry.Value)
+
     let tryGetSettingsError (settings: OperationSettings) =
         if settings.MaxParallelism < 1 then
             Some $"maxParallelism must be at least 1, but was %d{settings.MaxParallelism}."
@@ -81,7 +85,7 @@ type CustomOperationsController
                 match operation.Calculate with
                 | None -> return this.NoContent() :> IActionResult
                 | Some calculate ->
-                    let config = customOperationsConfig.Read()
+                    let config = customOperationsConfig.Read() |> toScriptConfig
                     let! result = codeExecution.Execute config calculate cancellationToken
 
                     match result with
@@ -108,7 +112,7 @@ type CustomOperationsController
         task {
             match customOperationsStore.TryGet operation.Id with
             | Some stored ->
-                let config = customOperationsConfig.Read()
+                let config = customOperationsConfig.Read() |> toScriptConfig
                 let run () = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
 
                 let! result =

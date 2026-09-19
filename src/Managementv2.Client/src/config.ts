@@ -20,19 +20,19 @@ export interface ConfigEntry {
   password: string
   fileBase64: string
   fileName: string
+  /** A note for whoever edits the config; never passed to an operation. */
+  comment: string
 }
 
 export function emptyEntry(): ConfigEntry {
-  return { key: '', kind: 'text', text: '', userName: '', password: '', fileBase64: '', fileName: '' }
+  return { key: '', kind: 'text', text: '', userName: '', password: '', fileBase64: '', fileName: '', comment: '' }
 }
 
 export function fromDto(config: WireConfig): ConfigEntry[] {
   return Object.entries(config).map(([key, value]) => {
     const entry = { ...emptyEntry(), key }
-    if (typeof value === 'string') {
-      entry.kind = 'text'
-      entry.text = value
-    } else if ('userName' in value && 'keyFile' in value) {
+    entry.comment = value.comment
+    if ('userName' in value && 'keyFile' in value) {
       entry.kind = 'sshKey'
       entry.userName = value.userName
       entry.fileBase64 = value.keyFile
@@ -47,6 +47,9 @@ export function fromDto(config: WireConfig): ConfigEntry[] {
     } else if ('file' in value) {
       entry.kind = 'file'
       entry.fileBase64 = value.file
+    } else if ('text' in value) {
+      entry.kind = 'text'
+      entry.text = value.text
     }
     return entry
   })
@@ -55,21 +58,22 @@ export function fromDto(config: WireConfig): ConfigEntry[] {
 export function toDto(entries: ConfigEntry[]): WireConfig {
   const config: WireConfig = {}
   for (const entry of entries) {
+    const comment = entry.comment
     switch (entry.kind) {
       case 'text':
-        config[entry.key] = entry.text
+        config[entry.key] = { text: entry.text, comment }
         break
       case 'file':
-        config[entry.key] = { file: entry.fileBase64 }
+        config[entry.key] = { file: entry.fileBase64, comment }
         break
       case 'credential':
-        config[entry.key] = { userName: entry.userName, password: entry.password }
+        config[entry.key] = { userName: entry.userName, password: entry.password, comment }
         break
       case 'certificate':
-        config[entry.key] = { file: entry.fileBase64, password: entry.password }
+        config[entry.key] = { file: entry.fileBase64, password: entry.password, comment }
         break
       case 'sshKey':
-        config[entry.key] = { userName: entry.userName, keyFile: entry.fileBase64 }
+        config[entry.key] = { userName: entry.userName, keyFile: entry.fileBase64, comment }
         break
     }
   }

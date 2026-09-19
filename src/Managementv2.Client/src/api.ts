@@ -1,22 +1,25 @@
 // Typed client for the custom-operations backend.
 //
-// Config values are serialized by kind (see the server's CustomOperationsConfig):
-//   text                  -> a JSON string
-//   file                  -> { file: "<base64>" }
-//   credential            -> { userName, password }
-//   protected certificate -> { file: "<base64>", password }
-//   ssh key               -> { userName, keyFile: "<base64>" }
+// Config values are serialized by kind (see the server's CustomOperationsConfig), each of
+// them carrying a `comment` that is blank when there is none:
+//   text                  -> { text, comment }
+//   file                  -> { file: "<base64>", comment }
+//   credential            -> { userName, password, comment }
+//   protected certificate -> { file: "<base64>", password, comment }
+//   ssh key               -> { userName, keyFile: "<base64>", comment }
 
 import { getFetchHeaderWithAccessToken } from "./auth";
 
 export type WireConfigValue =
-  | string
+  | { text: string }
   | { file: string }
   | { userName: string; password: string }
   | { file: string; password: string }
   | { userName: string; keyFile: string }
 
-export type WireConfig = Record<string, WireConfigValue>
+export type WireConfigEntry = WireConfigValue & { comment: string }
+
+export type WireConfig = Record<string, WireConfigEntry>
 
 export interface FormFieldDefinition {
   name: string

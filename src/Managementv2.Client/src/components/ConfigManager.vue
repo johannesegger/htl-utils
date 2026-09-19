@@ -97,7 +97,7 @@ onMounted(load)
     <p v-if="loadState.type === 'loading'" class="text-sm text-gray-500">Loading…</p>
 
     <ul v-if="loadState.type === 'loaded'" class="space-y-3">
-      <li v-for="(entry, index) in loadState.entries" :key="index" class="rounded border border-gray-500 p-3">
+      <li v-for="(entry, index) in loadState.entries" :key="index" class="rounded border border-gray-800 p-3">
         <div class="flex flex-wrap items-center gap-2">
           <input v-model="entry.key" placeholder="Key" class="input flex-1 text-orange-500" />
           <select v-model="entry.kind" class="input w-56">
@@ -143,6 +143,14 @@ onMounted(load)
               />
             </LabeledInput>
           </template>
+
+          <LabeledInput label="Comment">
+            <textarea v-model="entry.comment"
+              rows="2"
+              placeholder="Optional note — shown only here, never passed to operations"
+              class="input w-full"
+            ></textarea>
+          </LabeledInput>
         </div>
       </li>
     </ul>
