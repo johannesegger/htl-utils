@@ -146,7 +146,7 @@ defineExpose({ calculate, cancelCalculation })
       <div v-for="(calculation, index) in calculationState.calculations" :key="index" class="flex flex-col gap-1">
         <div class="flex flex-col gap-2 rounded px-3 py-2 text-sm"
           :class="{
-            'bg-gray-100': calculation.execution.type === 'notExecuted' || calculation.execution.type === 'executing',
+            'bg-gray-100': calculation.execution.type === 'notExecuted' || calculation.execution.type === 'queuedForExecution' || calculation.execution.type === 'executing',
             'bg-green-100': calculation.execution.type === 'executed',
             'bg-red-100': calculation.execution.type === 'executionError',
             }">
