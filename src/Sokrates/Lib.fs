@@ -155,20 +155,20 @@ type SokratesApi(config: Config) =
             )
             |> String.concat Environment.NewLine
         $"""<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<soap:Envelope
+    xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:wser="http://wservices.sokrateslfs.siemens.at/">
     <soap:Header>
-        <UsernameToken xmlns="http://wservices.sokrateslfs.siemens.at/">
-            <username xmlns="">%s{config.UserName}</username>
-            <password xmlns="">%s{config.Password}</password>
-        </UsernameToken>
+        <wser:UsernameToken>
+            <username>%s{config.UserName}</username>
+            <password>%s{config.Password}</password>
+        </wser:UsernameToken>
     </soap:Header>
     <soap:Body>
-        <%s{messageName} xmlns="http://wservices.sokrateslfs.siemens.at/">
-            <schoolID xmlns="">%s{config.SchoolId}</schoolID>
+        <wser:%s{messageName}>
+            <schoolID>%s{config.SchoolId}</schoolID>
 %s{xmlParameters}
-        </%s{messageName}>
+        </wser:%s{messageName}>
     </soap:Body>
 </soap:Envelope>"""
 
