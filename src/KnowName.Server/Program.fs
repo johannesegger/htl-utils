@@ -68,7 +68,8 @@ let main args =
     if app.Environment.IsProduction() then
         app.UseDefaultFiles() |> ignore
         app.UseStaticFiles() |> ignore
-        app.MapFallbackToFile "/index.html" |> ignore
+    
+    app.MapFallbackToFile "/index.html" |> ignore
 
     app.UseAuthentication() |> ignore
     app.UseAuthorization() |> ignore
