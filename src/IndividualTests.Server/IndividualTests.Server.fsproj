@@ -23,12 +23,12 @@
     <PackageReference Include="itext7" Version="9.3.0" />
     <PackageReference Include="itext7.bouncy-castle-adapter" Version="9.3.0" />
     <PackageReference Include="Microsoft.Graph.Beta" Version="6.2.0-preview" />
-    <PackageReference Include="PuppeteerSharp" Version="20.2.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Sokrates/Sokrates.fsproj" />
     <ProjectReference Include="..\AAD\AAD.fsproj" />
+    <ProjectReference Include="..\Pdf\Pdf.fsproj" />
   </ItemGroup>
 
 </Project>

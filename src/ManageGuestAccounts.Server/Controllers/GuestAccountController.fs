@@ -1,6 +1,7 @@
 namespace ManageGuestAccounts.Server.Controllers
 
 open AD.Core
+open Pdf
 open Microsoft.AspNetCore.Authorization
 open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Configuration
@@ -82,69 +83,6 @@ module Parse =
         elif v.Count < 1 then Error "InvalidSize"
         else Ok { Group = v.Group; Count = v.Count; WLANOnly = v.WLANOnly; Notes = v.Notes |> Option.bind notes }
 
-module Html =
-    open PuppeteerSharp
-
-    type BrowserFactory(logger: ILogger<BrowserFactory>) =
-        member _.LaunchBrowser() = task {
-            if Environment.getEnvVar "DOTNET_RUNNING_IN_CONTAINER" = "true" then
-                logger.LogInformation "Launching browser in container environment"
-                let browserPath =
-                    Directory.GetDirectories("/chromium", "linux-*")
-                    |> Seq.tryPick(fun v ->
-                        let path = Path.Combine(v, "chrome-linux/chrome")
-                        if File.Exists path then Some path
-                        else None
-                    )
-                    |> function
-                    | Some v ->
-                        logger.LogInformation("Browser path: {BrowserPath}", v)
-                        v
-                    | None -> failwith "Browser not found: /chromium/linux-*/chrome-linux/chrome doesn't exist"
-
-                return! LaunchOptions(
-                    Args = [| "--no-sandbox" |], // Required to run it in Docker as root
-                    Headless = true,
-                    Browser = SupportedBrowser.Chromium,
-                    ExecutablePath = browserPath
-                )
-                |> Puppeteer.LaunchAsync
-            else
-                logger.LogInformation "Launching browser in normal environment"
-                let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-manage-guest-accounts-browser")
-                let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
-                let! downloadedBrowser = browserFetcher.DownloadAsync()
-                return!
-                    LaunchOptions(
-                        Headless = true,
-                        Browser = downloadedBrowser.Browser,
-                        ExecutablePath = downloadedBrowser.GetExecutablePath()
-                    )
-                    |> Puppeteer.LaunchAsync
-        }
-
-    let convertToPdf (browserFactory: BrowserFactory) (headerTemplate, footerTemplate) (html: string) = task {
-        let tempFilePath = Path.GetTempFileName() |> fun v -> Path.ChangeExtension(v, ".html")
-        File.WriteAllText(tempFilePath, html)
-        use __ = { new IDisposable with member _.Dispose() = File.Delete tempFilePath }
-
-        use! browser = browserFactory.LaunchBrowser()
-        let! page = browser.NewPageAsync()
-        let! _ = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
-        return! page.PdfDataAsync(PdfOptions(
-            DisplayHeaderFooter = true,
-            HeaderTemplate = headerTemplate,
-            FooterTemplate = footerTemplate,
-            Format = Media.PaperFormat.A4,
-            MarginOptions = Media.MarginOptions(
-                Bottom = "2cm",
-                Left = "2cm",
-                Right = "2cm",
-                Top = "2cm"
-            )
-        ))
-    }
-
 module NewGuestAccounts =
     open Fue.Compiler
     open Fue.Data
@@ -157,7 +95,7 @@ module NewGuestAccounts =
 
     let private culture = CultureInfo.GetCultureInfo "de-AT"
 
-    let createPdf (browserFactory: Html.BrowserFactory) htmlTemplate (group: string) (accounts: AD.Domain.NewGuestAccount list) = async {
+    let createPdf (pdfPrinterFactory: PdfPrinterFactory) htmlTemplate (group: string) (accounts: AD.Domain.NewGuestAccount list) = async {
         let logoBase64 = File.ReadAllBytes "logo.svg" |> Convert.ToBase64String
         let headerTemplate =
             $"""<div style="width: 297mm; margin: 0 1cm; font-size: 12px; font-variant-caps: small-caps; display: flex; align-items: center; justify-content: space-between">
@@ -180,13 +118,20 @@ module NewGuestAccounts =
                     {| userName = userName; password = account.Password; notes = account.Notes |}
             ]
             |> fromText htmlTemplate
-        return! Html.convertToPdf browserFactory (headerTemplate, footerTemplate) html |> Async.AwaitTask
+        use! printer = pdfPrinterFactory.LaunchPrinter()
+        let printSettings = {
+            HeaderTemplate = headerTemplate
+            FooterTemplate = footerTemplate
+            Margin = PrintMargin.all "2cm"
+            Orientation = Portrait
+        }
+        return! printer.Print printSettings html |> Async.AwaitTask
     }
 
 [<ApiController>]
 [<Route("api/guest-accounts")>]
 [<Authorize("ManageGuestAccounts")>]
-type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, config: IConfiguration, _logger : ILogger<GuestAccountController>) =
+type GuestAccountController (ad: ADApi, browserFactory: PdfPrinterFactory, config: IConfiguration, _logger : ILogger<GuestAccountController>) =
     inherit ControllerBase()
 
     [<HttpGet>]
@@ -224,11 +169,18 @@ type GuestAccountController (ad: ADApi, browserFactory: Html.BrowserFactory, con
 
 [<ApiController>]
 [<Route("api/test-pdf-generation")>]
-type TestPdfGenerationController (browserFactory: Html.BrowserFactory, _logger : ILogger<TestPdfGenerationController>) =
+type TestPdfGenerationController (pdfPrinterFactory: PdfPrinterFactory, _logger : ILogger<TestPdfGenerationController>) =
     inherit ControllerBase()
 
     [<HttpGet>]
     member _.GetSamplePdf() = async {
-        let! pdfContent = Html.convertToPdf browserFactory ("", "") "<h1>Yay. That works.<h1>" |> Async.AwaitTask
+        use! printer = pdfPrinterFactory.LaunchPrinter()
+        let printSettings = {
+            HeaderTemplate = ""
+            FooterTemplate = ""
+            Margin = PrintMargin.all "2cm"
+            Orientation = Portrait
+        }
+        let! pdfContent = printer.Print printSettings "<h1>Yay. That works.<h1>" |> Async.AwaitTask
         return FileContentResult(pdfContent, Net.Mime.MediaTypeNames.Application.Pdf)
     }

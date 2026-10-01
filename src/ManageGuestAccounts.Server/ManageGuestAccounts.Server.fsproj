@@ -19,12 +19,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ADv2\ADv2.fsproj" />
+    <ProjectReference Include="..\Pdf\Pdf.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Fue" Version="2.2.0" />
     <PackageReference Include="Microsoft.Identity.Web" Version="4.0.1" />
-    <PackageReference Include="PuppeteerSharp" Version="21.1.1" />
   </ItemGroup>
 
 </Project>

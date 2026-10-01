@@ -53,7 +53,7 @@ let main args =
         new GraphServiceClient(credential, scopes)
     ) |> ignore
 
-    builder.Services.AddSingleton<Controllers.Html.BrowserFactory>() |> ignore
+    builder.Services.AddSingleton<Pdf.PdfPrinterFactory>() |> ignore
 
     let app = builder.Build()
 

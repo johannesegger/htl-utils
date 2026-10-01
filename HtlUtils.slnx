@@ -20,6 +20,7 @@
     <Project Path="src/Management.Server/Management.Server.fsproj" />
     <Project Path="src/Managementv2.Server.Test/Managementv2.Server.Test.fsproj" />
     <Project Path="src/Managementv2.Server/Managementv2.Server.fsproj" />
+    <Project Path="src/Pdf/Pdf.fsproj" />
     <Project Path="src/PhotoLibrary/PhotoLibrary.fsproj" />
     <Project Path="src/QueryComputerInfo.Service/QueryComputerInfo.Service.fsproj" />
     <Project Path="src/Sokrates.PowerShell/Sokrates.PowerShell.fsproj" />

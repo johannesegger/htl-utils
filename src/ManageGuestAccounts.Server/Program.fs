@@ -38,7 +38,7 @@ let main args =
     builder.Services.AddTransient<ADApi>(fun _ ->
         new ADApi(Config.fromEnvironment())
     ) |> ignore
-    builder.Services.AddSingleton<Controllers.Html.BrowserFactory>() |> ignore
+    builder.Services.AddSingleton<Pdf.PdfPrinterFactory>() |> ignore
 
     let app = builder.Build()
 
