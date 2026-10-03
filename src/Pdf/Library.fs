@@ -83,7 +83,7 @@ type PdfPrinterFactory(logger: ILogger<PdfPrinterFactory>) =
             return new PdfPrinter(browser)
         else
             logger.LogInformation "Launching browser in normal environment"
-            let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-manage-guest-accounts-browser")
+            let browserDownloadPath = Path.Combine(Path.GetTempPath(), "htlutils-browser")
             let browserFetcher = BrowserFetcher(BrowserFetcherOptions(Path = browserDownloadPath, Browser = SupportedBrowser.Chromium))
             let! downloadedBrowser = browserFetcher.DownloadAsync() |> Async.AwaitTask
             let! browser =
