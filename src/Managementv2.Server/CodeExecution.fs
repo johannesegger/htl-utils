@@ -10,6 +10,30 @@ open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
 
+// Per-run temp directory for File/SshKey values materialized as real files.
+// Disposing deletes it, so a run cleans up on every exit (success, error or
+// cancellation).
+type private SecretsDirectory() =
+    let path = IO.Path.Combine(IO.Path.GetTempPath(), Guid.NewGuid().ToString "N")
+
+    do
+        IO.Directory.CreateDirectory path |> ignore
+
+        if not (OperatingSystem.IsWindows()) then
+            IO.File.SetUnixFileMode(
+                path,
+                IO.UnixFileMode.UserRead ||| IO.UnixFileMode.UserWrite ||| IO.UnixFileMode.UserExecute
+            )
+
+    member _.Path = path
+
+    interface IDisposable with
+        member _.Dispose() =
+            try
+                IO.Directory.Delete(path, recursive = true)
+            with _ ->
+                ()
+
 type CodeExecution() =
 
     // Path to the Sokrates PowerShell module, imported into every session so its
@@ -76,25 +100,8 @@ type CodeExecution() =
         task {
             cancellationToken.ThrowIfCancellationRequested()
 
-            // Per-run temp directory for File/SshKey values materialized as real files.
-            // The disposable deletes it on every exit (success, error or cancellation),
-            // and being declared first it runs after the runspace is torn down.
-            let secretsDirectory = IO.Path.Combine(IO.Path.GetTempPath(), Guid.NewGuid().ToString "N")
-            IO.Directory.CreateDirectory secretsDirectory |> ignore
-
-            if not (OperatingSystem.IsWindows()) then
-                IO.File.SetUnixFileMode(
-                    secretsDirectory,
-                    IO.UnixFileMode.UserRead ||| IO.UnixFileMode.UserWrite ||| IO.UnixFileMode.UserExecute
-                )
-
-            use _secrets =
-                { new IDisposable with
-                    member _.Dispose() =
-                        try
-                            IO.Directory.Delete(secretsDirectory, recursive = true)
-                        with _ ->
-                            () }
+            // Being declared first, its cleanup runs after the runspace is torn down.
+            use secrets = new SecretsDirectory()
 
             let initialState = InitialSessionState.CreateDefault()
             initialState.ImportPSModule [| sokratesModulePath |]
@@ -106,7 +113,7 @@ type CodeExecution() =
             ps.AddScript code |> ignore
 
             // Pass the secrets to the script's -Config parameter.
-            ps.AddParameter("Config", buildConfig secretsDirectory config) |> ignore
+            ps.AddParameter("Config", buildConfig secrets.Path config) |> ignore
 
             // Pass the JSON input to the script's param block as a PSCustomObject.
             match input with
