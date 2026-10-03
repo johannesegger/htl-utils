@@ -25,6 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Pdf.PowerShell\Pdf.PowerShell.fsproj" />
     <ProjectReference Include="..\Sokrates.PowerShell\Sokrates.PowerShell.fsproj" />
   </ItemGroup>
 

@@ -88,6 +88,16 @@ let tests =
               | Ok result -> failtestf "Expected an error, but got %A" result
               | Error error -> Expect.stringContains error "Boom" "Should carry the error message"
 
+          testCase "ConvertTo-Pdf renders a PDF"
+          <| fun () ->
+              match run "New-FileResult -Name 'report.pdf' -Content (ConvertTo-Pdf -Html '<h1>Hello</h1>')"
+                    |> expectOk with
+              | ExecutionResult.File file ->
+                  Expect.equal file.ContentType "application/pdf" "Should be a PDF"
+                  // Every PDF starts with this signature.
+                  Expect.stringStarts (Encoding.ASCII.GetString(file.Content, 0, 5)) "%PDF-" "Should be PDF content"
+              | result -> failtestf "Expected a file result, but got %A" result
+
           testCase "A calculation without output is an empty list"
           <| fun () -> Expect.equal (calculate "" |> expectOk) [] "Should be empty"
 

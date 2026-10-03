@@ -36,10 +36,12 @@ type private SecretsDirectory() =
 
 type CodeExecution() =
 
-    // Path to the Sokrates PowerShell module, imported into every session so its
-    // cmdlets (Connect-Sokrates, Get-SokratesTeacher, ...) are available to scripts.
-    let sokratesModulePath =
-        typeof<SokratesPowerShell.SokratesSession>.Assembly.Location
+    // The PowerShell modules imported into every session, so their cmdlets are
+    // available to scripts: Connect-Sokrates, Get-SokratesTeacher, ... from the
+    // Sokrates module and ConvertTo-Pdf from the PDF one.
+    let modulePaths =
+        [| typeof<SokratesPowerShell.SokratesSession>.Assembly.Location
+           typeof<PdfPowerShell.ConvertToPdfCommand>.Assembly.Location |]
 
     let toSecureString (text: string) =
         let secure = new SecureString()
@@ -143,7 +145,7 @@ type CodeExecution() =
     // run concurrently without locking.
     let createRunspace () =
         let initialState = InitialSessionState.CreateDefault()
-        initialState.ImportPSModule [| sokratesModulePath |]
+        initialState.ImportPSModule modulePaths
 
         // A single cmdlet rather than a module of its own: it lives in this assembly,
         // next to the result type it produces.
