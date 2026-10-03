@@ -89,7 +89,7 @@ type ConvertToPdfCommand() =
         let pdf =
             async {
                 use! printer = factory.LaunchPrinter()
-                return! printer.Print printSettings html |> Async.AwaitTask
+                return! printer.Print printSettings html
             }
             |> Async.RunSynchronously
 

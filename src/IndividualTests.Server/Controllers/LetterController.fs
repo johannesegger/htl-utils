@@ -391,7 +391,7 @@ module Letter =
                 Margin = PrintMargin.all "1cm"
                 Orientation = Landscape
             }
-            return! pdfPrinter.Print printSettings htmlLetter |> Async.AwaitTask
+            return! pdfPrinter.Print printSettings htmlLetter
         }
 
         let studentLetterToPdf (pdfPrinter: PdfPrinter) (student: Student) (htmlLetter: string) = async {
@@ -403,7 +403,7 @@ module Letter =
                 Margin = { PrintMargin.all "0cm" with Bottom = "1cm" }
                 Orientation = Portrait
             }
-            return! pdfPrinter.Print printSettings htmlLetter |> Async.AwaitTask
+            return! pdfPrinter.Print printSettings htmlLetter
         }
 
         let combinePdfs docs =

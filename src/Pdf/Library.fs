@@ -29,13 +29,13 @@ type PrintSettings = {
 }
 
 type PdfPrinter(browser: IBrowser) =
-    member _.Print printSettings (html: string) = task {
+    member _.Print printSettings (html: string) = async {
         let tempFilePath = Path.GetTempFileName() |> fun v -> Path.ChangeExtension(v, ".html")
         File.WriteAllText(tempFilePath, html)
         use __ = { new IDisposable with member _.Dispose() = File.Delete tempFilePath }
 
-        let! page = browser.NewPageAsync()
-        let! _ = page.GoToAsync(Uri(tempFilePath).AbsoluteUri)
+        let! page = browser.NewPageAsync() |> Async.AwaitTask
+        let! _ = page.GoToAsync(Uri(tempFilePath).AbsoluteUri) |> Async.AwaitTask
         return! page.PdfDataAsync(PdfOptions(
             PrintBackground = true,
             DisplayHeaderFooter = true,
@@ -49,7 +49,7 @@ type PdfPrinter(browser: IBrowser) =
                 Right = printSettings.Margin.Right,
                 Top = printSettings.Margin.Top
             )
-        ))
+        )) |> Async.AwaitTask
     }
     interface IDisposable with
         member _.Dispose () = browser.Dispose()

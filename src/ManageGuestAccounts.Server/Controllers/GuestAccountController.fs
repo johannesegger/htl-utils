@@ -125,7 +125,7 @@ module NewGuestAccounts =
             Margin = PrintMargin.all "2cm"
             Orientation = Portrait
         }
-        return! printer.Print printSettings html |> Async.AwaitTask
+        return! printer.Print printSettings html
     }
 
 [<ApiController>]
@@ -181,6 +181,6 @@ type TestPdfGenerationController (pdfPrinterFactory: PdfPrinterFactory, _logger 
             Margin = PrintMargin.all "2cm"
             Orientation = Portrait
         }
-        let! pdfContent = printer.Print printSettings "<h1>Yay. That works.<h1>" |> Async.AwaitTask
+        let! pdfContent = printer.Print printSettings "<h1>Yay. That works.<h1>"
         return FileContentResult(pdfContent, Net.Mime.MediaTypeNames.Application.Pdf)
     }
