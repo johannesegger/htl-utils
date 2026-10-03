@@ -88,32 +88,86 @@ type CodeExecution() =
 
         psConfig
 
+    let errorText (ps: PowerShell) =
+        ps.Streams.Error
+        |> Seq.map (fun e -> $"* %O{e.Exception}")
+        |> String.concat Environment.NewLine
+
+    // Converts output to JSON in the script's own runspace, so PowerShell's conversion
+    // rules apply exactly as they did when the script piped into ConvertTo-Json itself.
+    // Only called with output to convert.
+    let toJson (runspace: Runspace) (results: PSObject seq) : Result<JsonNode, string> =
+        use converter = PowerShell.Create()
+        converter.Runspace <- runspace
+        converter.AddCommand("ConvertTo-Json").AddParameter("Depth", 64) |> ignore
+
+        // Fed as pipeline input, so a single object converts to a JSON object and
+        // several to an array, just as in a single pipeline.
+        let converted = converter.Invoke results
+
+        if converter.HadErrors then
+            Error(errorText converter)
+        else
+            converted |> Seq.tryHead |> Option.map (fun r -> JsonNode.Parse(string r)) |> Option.toObj |> Ok
+
+    // A calculate script's output is the list of items to execute, so a lone object is
+    // still a list of one.
+    let toCalculations (runspace: Runspace) (results: PSObject seq) : Result<JsonNode list, string> =
+        if Seq.isEmpty results then
+            Ok []
+        else
+            toJson runspace results
+            |> Result.map (fun node ->
+                match node with
+                | :? JsonArray as items -> List.ofSeq items
+                | node -> [ node ])
+
+    // An execute script's output decides the kind of result: a lone file result (from
+    // New-FileResult) is a download and a lone string is plain text; anything else is
+    // JSON.
+    let toExecutionResult (runspace: Runspace) (results: PSObject seq) : Result<ExecutionResult, string> =
+        let toJsonResult () =
+            toJson runspace results |> Result.map ExecutionResult.Json
+
+        match List.ofSeq results with
+        | [] -> Ok ExecutionResult.Empty
+        | [ single ] when not (isNull single) ->
+            match single.BaseObject with
+            | :? ResultFile as file -> Ok(ExecutionResult.File file)
+            | :? string as text -> Ok(ExecutionResult.Text text)
+            | _ -> toJsonResult ()
+        | _ -> toJsonResult ()
+
     // No shared mutable state: each call gets its own runspace, and the Sokrates
     // module keeps its default session in per-runspace session state, so calls can
     // run concurrently without locking.
+    let createRunspace () =
+        let initialState = InitialSessionState.CreateDefault()
+        initialState.ImportPSModule [| sokratesModulePath |]
+
+        // A single cmdlet rather than a module of its own: it lives in this assembly,
+        // next to the result type it produces.
+        initialState.Commands.Add(SessionStateCmdletEntry("New-FileResult", typeof<NewFileResultCommand>, null))
+
+        let runspace = RunspaceFactory.CreateRunspace initialState
+        runspace.Open()
+        runspace
+
+    // Runs the script and hands back whatever it wrote. The caller turns that into its
+    // own kind of result, while the runspace is still open to convert in.
     let execute
+        (runspace: Runspace)
         (code: string)
         (input: JsonNode option)
-        (config: Map<string, ConfigValue>)
+        (config: PSObject)
         (cancellationToken: CancellationToken)
-        : Task<Result<JsonNode option, string>> =
+        : Task<Result<PSObject seq, string>> =
         task {
-            cancellationToken.ThrowIfCancellationRequested()
-
-            // Being declared first, its cleanup runs after the runspace is torn down.
-            use secrets = new SecretsDirectory()
-
-            let initialState = InitialSessionState.CreateDefault()
-            initialState.ImportPSModule [| sokratesModulePath |]
-            use runspace = RunspaceFactory.CreateRunspace initialState
-            runspace.Open()
-
             use ps = PowerShell.Create()
             ps.Runspace <- runspace
             ps.AddScript code |> ignore
 
-            // Pass the secrets to the script's -Config parameter.
-            ps.AddParameter("Config", buildConfig secrets.Path config) |> ignore
+            ps.AddParameter("Config", config) |> ignore
 
             // Pass the JSON input to the script's param block as a PSCustomObject.
             match input with
@@ -127,9 +181,6 @@ type CodeExecution() =
                 ps.AddParameter("InputData", inputObject) |> ignore
             | None -> ()
 
-            // Convert the script's output to JSON so it can be returned as a JsonNode.
-            ps.AddCommand("ConvertTo-Json").AddParameter("Depth", 64) |> ignore
-
             // InvokeAsync runs the pipeline off the request thread. Cancellation still
             // works by stopping the pipeline, which either faults the task or leaves the
             // invocation state Stopped; both are handled below.
@@ -141,14 +192,9 @@ type CodeExecution() =
                 if ps.InvocationStateInfo.State = PSInvocationState.Stopped then
                     return raise (OperationCanceledException cancellationToken)
                 elif ps.HadErrors then
-                    let errorText =
-                        ps.Streams.Error
-                        |> Seq.map (fun e -> $"* %O{e.Exception}")
-                        |> String.concat Environment.NewLine
-
-                    return Error errorText
+                    return Error(errorText ps)
                 else
-                    return results |> Seq.tryHead |> Option.map (fun r -> JsonNode.Parse(string r)) |> Ok
+                    return Ok(results :> PSObject seq)
             with
             // A stop surfaces as either of these; treat it as cancellation, not an error.
             | :? OperationCanceledException -> return raise (OperationCanceledException cancellationToken)
@@ -156,8 +202,30 @@ type CodeExecution() =
             | e -> return Error(e.ToString())
         }
 
-    member _.Execute config code cancellationToken =
-        execute code None config cancellationToken
+    /// Runs a calculate script, whose output is the list of items to execute.
+    member _.ExecuteCalculation config code (cancellationToken: CancellationToken) =
+        task {
+            cancellationToken.ThrowIfCancellationRequested()
 
-    member _.ExecuteWithInput config code data cancellationToken =
-        execute code (Some data) config cancellationToken
+            // Declared first, so the secrets are removed after the runspace is torn down.
+            use secrets = new SecretsDirectory()
+            use runspace = createRunspace ()
+
+            let executionConfig = buildConfig secrets.Path config
+            let! results = execute runspace code None executionConfig cancellationToken
+            return results |> Result.bind (toCalculations runspace)
+        }
+
+    /// Runs an execute script for one item.
+    member _.ExecuteOperation config code data (cancellationToken: CancellationToken) =
+        task {
+            cancellationToken.ThrowIfCancellationRequested()
+
+            // Declared first, so the secrets are removed after the runspace is torn down.
+            use secrets = new SecretsDirectory()
+            use runspace = createRunspace ()
+
+            let executionConfig = buildConfig secrets.Path config
+            let! results = execute runspace code (Some data) executionConfig cancellationToken
+            return results |> Result.bind (toExecutionResult runspace)
+        }

@@ -4,6 +4,7 @@ import { api, type OperationSettings, type FormFieldDefinition } from '@/api'
 import { runExecution, type ExecutionState } from '@/execution'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue'
+import ExecutionOutput from './ExecutionOutput.vue'
 
 type FormField = FormFieldDefinition & { value: string }
 
@@ -112,10 +113,9 @@ onMounted(load)
       </button>
 
       <ErrorMessage v-if="operation.executionState.type === 'executionError'" :message="operation.executionState.message" />
-      <pre
+      <ExecutionOutput
         v-if="operation.executionState.type === 'executed'"
-        class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
-        >{{ operation.executionState.output ? JSON.stringify(operation.executionState.output, null, 2) : 'Execution succeeded' }}</pre>
+        :output="operation.executionState.output" />
     </form>
   </section>
 </template>

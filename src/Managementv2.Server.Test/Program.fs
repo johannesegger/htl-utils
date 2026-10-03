@@ -7,6 +7,8 @@ let tests =
     testList "All" [
         CustomOperationsConfig.tests
         CustomOperationsStore.tests
+        ExecutionResult.tests
+        CodeExecution.tests
     ]
 
 [<EntryPoint>]

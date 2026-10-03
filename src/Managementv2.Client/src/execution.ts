@@ -1,11 +1,11 @@
 import type { Ref } from 'vue'
-import { api } from '@/api'
+import { api, type ExecutionOutput } from '@/api'
 
 export type ExecutionState =
   | { type: 'notExecuted' }
   | { type: 'queuedForExecution' }
   | { type: 'executing' }
-  | { type: 'executed'; output: unknown }
+  | { type: 'executed'; output: ExecutionOutput }
   | { type: 'executionError'; message: string }
 
 export async function runExecution(id: string, data: unknown, state: Ref<ExecutionState>): Promise<void> {

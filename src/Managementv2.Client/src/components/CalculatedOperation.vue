@@ -4,6 +4,7 @@ import pLimit from 'p-limit'
 import { api, type CustomOperation } from '@/api'
 import { runExecution, type ExecutionState } from '@/execution'
 import ErrorMessage from './ErrorMessage.vue'
+import ExecutionOutput from './ExecutionOutput.vue'
 import { pluralize } from '@/utils.ts'
 
 const { operation } = defineProps<{ operation: CustomOperation }>()
@@ -167,9 +168,8 @@ defineExpose({ calculate, cancelCalculation })
               class="btn-secondary"
               @click="executeOne(calculation)">Execute</button>
           </div>
-          <pre v-if="calculation.execution.type === 'executed'"
-            class="rounded bg-gray-900 p-3 text-xs text-gray-100 whitespace-pre overflow-x-auto"
-            >{{ calculation.execution.output ? JSON.stringify(calculation.execution.output, null, 2) : 'Execution succeeded' }}</pre>
+          <ExecutionOutput v-if="calculation.execution.type === 'executed'"
+            :output="calculation.execution.output" />
           <pre v-else-if="calculation.execution.type === 'executionError'"
             class="rounded bg-gray-900 p-3 text-xs text-red-300 whitespace-pre overflow-x-auto">{{ calculation.execution.message }}</pre>
         </div>

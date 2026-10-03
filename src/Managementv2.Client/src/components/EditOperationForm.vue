@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, onUnmounted } from 'vue'
 import { api, EditableCustomOperationDefinition, type FormFieldDefinition, type OperationSettings } from '@/api.ts'
 import LabeledInput from './LabeledInput.vue'
 import ErrorMessage from './ErrorMessage.vue';
+import ExecutionOutput from './ExecutionOutput.vue';
 
 // The code editor is big, so keep it out of the initial bundle - it's only needed when editing an operation.
 const CodeEditor = defineAsyncComponent(() => import('./CodeEditor.vue'))
@@ -120,7 +121,7 @@ async function runExecute() {
   try {
     const data = parseJson(operation.value.inputText, 'The input data')
     const result = await api.execute(operation.value.id, data, controller.signal)
-    operation.value.executeResult = result ? JSON.stringify(result, null, 2) : '<No output>'
+    operation.value.executeResult = result
   } catch (e) {
     if (!isAbort(e)) operation.value.executeError = (e as Error).message
   } finally {
@@ -186,7 +187,8 @@ onUnmounted(() => {
     </LabeledInput>
     <button v-if="operation.runningExecute" class="btn-danger" @click="cancelExecute">Cancel</button>
     <button v-else class="btn-secondary" :disabled="running" @click="runExecute">Run execute</button>
-    <pre v-if="operation.executeResult" class="max-h-80 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100">{{ operation.executeResult }}</pre>
+    <ExecutionOutput v-if="operation.executeResult" class="max-h-80 overflow-auto"
+      :output="operation.executeResult" empty-message="<No output>" />
     <ErrorMessage :message="operation.executeError" />
   </div>
 </template>

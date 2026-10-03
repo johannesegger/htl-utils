@@ -9,6 +9,8 @@
   <ItemGroup>
     <Compile Include="CustomOperationsConfig.fs" />
     <Compile Include="CustomOperationsStore.fs" />
+    <Compile Include="ExecutionResult.fs" />
+    <Compile Include="CodeExecution.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

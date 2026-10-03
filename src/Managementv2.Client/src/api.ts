@@ -21,6 +21,16 @@ export type WireConfigEntry = WireConfigValue & { comment: string }
 
 export type WireConfig = Record<string, WireConfigEntry>
 
+/**
+ * The result of executing an operation (see the server's ExecutionResult), tagged with
+ * the kind of output the script produced. A file is carried inline as base64.
+ */
+export type ExecutionOutput =
+  | { kind: 'empty' }
+  | { kind: 'text'; text: string }
+  | { kind: 'json'; data: unknown }
+  | { kind: 'file'; name: string; contentType: string; content: string }
+
 export interface FormFieldDefinition {
   name: string
   title: string
@@ -73,7 +83,7 @@ export interface EditableCustomOperationDefinition {
   execute: string
 
   inputText: string
-  executeResult: string | null
+  executeResult: ExecutionOutput | null
   calculateResult: string | null
   runningCalculate: boolean
   runningExecute: boolean
@@ -176,5 +186,5 @@ export const api = {
       headers: jsonHeaders,
       body: JSON.stringify({ id, data }),
       signal,
-    }).then((r) => handle<unknown>(r)),
+    }).then((r) => handle<ExecutionOutput>(r)),
 }

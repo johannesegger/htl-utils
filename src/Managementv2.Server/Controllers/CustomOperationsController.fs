@@ -3,7 +3,6 @@
 open Managementv2.Server
 open Microsoft.AspNetCore.Authorization
 open Microsoft.AspNetCore.Mvc
-open System.Text.Json
 open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
@@ -72,6 +71,9 @@ type CustomOperationsController
                         "    [Parameter(Mandatory = $true)] $InputData"
                         ")"
                         ""
+                        "# The script's output is the result: nothing, a string shown as text, or any other object shown as JSON."
+                        "# For a download, return New-FileResult -Path ... or New-FileResult -Name ... -Content ... instead."
+                        ""
                     ]
             |}
         |}
@@ -86,12 +88,10 @@ type CustomOperationsController
                 | None -> return this.NoContent() :> IActionResult
                 | Some calculate ->
                     let config = customOperationsConfig.Read() |> toScriptConfig
-                    let! result = codeExecution.Execute config calculate cancellationToken
+                    let! result = codeExecution.ExecuteCalculation config calculate cancellationToken
 
                     match result with
-                    | Ok (Some data) when data.GetValueKind() = JsonValueKind.Array -> return this.Ok data :> IActionResult
-                    | Ok (Some data) -> return this.Ok [data] :> IActionResult
-                    | Ok None -> return this.Ok [] :> IActionResult
+                    | Ok calculations -> return this.Ok calculations :> IActionResult
                     | Error error -> return this.StatusCode(500, error) :> IActionResult
         }
 
@@ -113,13 +113,13 @@ type CustomOperationsController
             match customOperationsStore.TryGet operation.Id with
             | Some stored ->
                 let config = customOperationsConfig.Read() |> toScriptConfig
-                let run () = codeExecution.ExecuteWithInput config stored.Execute operation.Data cancellationToken
+                let run () = codeExecution.ExecuteOperation config stored.Execute operation.Data cancellationToken
 
                 let! result =
                     executionGate.Run(stored.Id, stored.Settings.MaxParallelism, run, cancellationToken)
 
                 match result with
-                | Ok data -> return this.Ok data :> IActionResult
+                | Ok executionResult -> return this.Ok(ExecutionResult.toJson executionResult) :> IActionResult
                 | Error error -> return this.StatusCode(500, error)
             | None -> return this.NotFound()
         }
